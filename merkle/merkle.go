@@ -19,6 +19,7 @@ import (
 
 var ErrEmpty = errors.New("empty merkle branch")
 
+// XXX debate wrapping this in type and make the merkle tree opaque.
 type sortableSlice []*[sha256.Size]byte
 
 func (s sortableSlice) Len() int      { return len(s) }
@@ -71,15 +72,16 @@ func nextPowerOfTwo(n int) int {
 	return 1 << uint64(bits.Len(uint(n)))
 }
 
-// Tree creates a merkle tree from a slice of transactions,
-// stores it using a linear array, and returns a slice of the backing array.  A
-// linear array was chosen as opposed to an actual tree structure since it uses
-// about half as much memory.  The following describes a merkle tree and how it
-// is stored in a linear array.
+// tree creates a merkle tree from a slice of hash pointers.
+//
+// It stores it using a linear array, and returns a slice of the backing array.
+// A linear array was chosen as opposed to an actual tree structure since it
+// uses about half as much memory.  The following describes a merkle tree and
+// how it is stored in a linear array.
 //
 // A merkle tree is a tree in which every non-leaf node is the hash of its
 // children nodes.  A diagram depicting how this works for decred transactions
-// where h(x) is a blake256 hash follows:
+// where h(x) is a shas256 hash follows:
 //
 //	         root = h1234 = h(h12 + h34)
 //	        /                           \
@@ -100,15 +102,17 @@ func nextPowerOfTwo(n int) int {
 // Since this function uses nodes that are pointers to the hashes, empty nodes
 // will be nil.
 //
-// We always sort the incoming hashes array in order to always generate the
-// same merkle tree regardless of input order.
-func Tree(hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
+// If the sorted flag is true we sort the incoming hashes array in order to
+// always generate the same merkle tree regardless of input order.
+func tree(hashes []*[sha256.Size]byte, sorted bool) []*[sha256.Size]byte {
 	if len(hashes) == 0 {
 		return nil
 	}
 
-	// Sort hashes.
-	sort.Sort(sortableSlice(hashes))
+	if sorted {
+		// Sort hashes.
+		sort.Sort(sortableSlice(hashes))
+	}
 
 	// Calculate how many entries are required to hold the binary merkle
 	// tree as a linear array and create an array of that size.
@@ -146,13 +150,28 @@ func Tree(hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
 	return merkles
 }
 
+// Sorted returns a merkle tree from the hashes. The hashes will be sorted
+// prior to generating the tree.  Regardless of insertion order, given the same
+// hashes the merkle root will always be the same.  It returns the tree and the
+// last element is the merkle root.
+func Sorted(hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
+	return tree(hashes, true)
+}
+
+// Ordered returns a merkle tree from the hashes that maintains insertion
+// order. This function must be called to deal with with odd number of hashes
+// and other corner cases per the spec. it returns the tree and the last
+// element is the merkle root.
+func Ordered(hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
+	return tree(hashes, false)
+}
+
 // Root returns only the merkle root of an array of digests.
-func Root(hashes []*[sha256.Size]byte) *[sha256.Size]byte {
-	h := Tree(hashes)
-	if h == nil {
+func Root(tree []*[sha256.Size]byte) *[sha256.Size]byte {
+	if tree == nil {
 		return nil
 	}
-	return h[len(h)-1]
+	return tree[len(tree)-1]
 }
 
 // authPath is used to house intermediate information needed to generate a

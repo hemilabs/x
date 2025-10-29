@@ -97,7 +97,7 @@ func TestMerkle(t *testing.T) {
 
 	// Calculate merkle tree and root.
 	hashes := makeHashes(left, right)
-	merkleRoot2 := Root(hashes)
+	merkleRoot2 := Root(Sorted(hashes))
 	if !bytes.Equal(merkleRoot, merkleRoot2[:]) {
 		t.Fatalf("unexpected merkle root got %x expected %x",
 			merkleRoot2[:], merkleRoot)
@@ -105,7 +105,7 @@ func TestMerkle(t *testing.T) {
 
 	// Flip input hashes and make sure we get the same answer.
 	hashes = makeHashes(right, left)
-	merkleRoot3 := Root(hashes)
+	merkleRoot3 := Root(Sorted(hashes))
 	if !bytes.Equal(merkleRoot, merkleRoot3[:]) {
 		t.Fatalf("unexpected merkle root got %x expected %x",
 			merkleRoot3[:], merkleRoot)
@@ -125,8 +125,8 @@ func TestAuthPathSort(t *testing.T) {
 		binary.LittleEndian.PutUint64(hash2[:], i)
 		hashes2 = append(hashes2, hash2)
 	}
-	mt := Tree(hashes)
-	mt2 := Tree(hashes2)
+	mt := Sorted(hashes)
+	mt2 := Sorted(hashes2)
 
 	for k, v := range mt[:count] {
 		if *v != *mt2[k] {
@@ -143,7 +143,7 @@ func TestAuthPath(t *testing.T) {
 			hash := &[sha256.Size]byte{byte(i)}
 			hashes = append(hashes, hash)
 		}
-		mt := Tree(hashes)
+		mt := Sorted(hashes)
 
 		for find := 0; find < count; find++ {
 			mb := AuthPath(hashes, hashes[find])
@@ -168,7 +168,7 @@ func TestAuthPathInvalid(t *testing.T) {
 		binary.LittleEndian.PutUint64(hash[:], count-i-1)
 		hashes = append(hashes, hash)
 	}
-	mt := Tree(hashes)
+	mt := Sorted(hashes)
 
 	findHash := &[sha256.Size]byte{}
 	binary.LittleEndian.PutUint64(findHash[:], count)
@@ -187,7 +187,7 @@ func TestAuthPathInvalid(t *testing.T) {
 
 func TestAuthPathEmpty(t *testing.T) {
 	hashes := make([]*[sha256.Size]byte, 0)
-	mt := Tree(hashes)
+	mt := Sorted(hashes)
 	if mt != nil {
 		t.Fatalf("Should have gotten nil")
 	}
