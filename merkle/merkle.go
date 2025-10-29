@@ -20,6 +20,7 @@ import (
 var ErrEmpty = errors.New("empty merkle branch")
 
 // XXX debate wrapping this in type and make the merkle tree opaque.
+// XXX this needs some encoding stuff as well.
 type sortableSlice []*[sha256.Size]byte
 
 func (s sortableSlice) Len() int      { return len(s) }
