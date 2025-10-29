@@ -23,13 +23,9 @@ var ErrEmpty = errors.New("empty merkle branch")
 // XXX this needs some encoding stuff as well.
 type sortableSlice []*[sha256.Size]byte
 
-func (s sortableSlice) Len() int      { return len(s) }
-func (s sortableSlice) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s sortableSlice) Less(i, j int) bool {
-	ii := *s[i]
-	jj := *s[j]
-	return bytes.Compare(ii[:], jj[:]) < 0
-}
+func (s sortableSlice) Len() int           { return len(s) }
+func (s sortableSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortableSlice) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
 
 // bytes2bits converts merkle tree bitmap into a byte array.
 func bytes2bits(b []byte) []byte {
