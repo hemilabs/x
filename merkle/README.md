@@ -36,6 +36,9 @@ generate the same merkle tree regardless of input order.
 
 # Origin
 
-This code was forked from https://github.com/decred/dcrtime
+This package is a derivative of work originally available at
+https://github.com/decred/dcrtime/tree/master/merkle, copied at commit
+`e35b14e324c3b30f96f53b05383d5cd1ed62abb6`.
 
-It is distributed under an ISC [LICENSE](LICENSE).
+The contents of this package are distributed under the [ISC LICENSE](LICENSE)
+file.
