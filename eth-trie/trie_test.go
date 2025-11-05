@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 
-	"github.com/hemilabs/x/eth-trie/testutil"
+	"github.com/hemilabs/x/eth-trie/internal/testutil"
 	"github.com/hemilabs/x/eth-trie/triedb"
 	"github.com/hemilabs/x/eth-trie/triedb/pathdb"
 )

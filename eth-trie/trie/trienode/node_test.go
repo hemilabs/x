@@ -27,7 +27,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/hemilabs/x/eth-trie/testutil"
+	"github.com/hemilabs/x/eth-trie/internal/testutil"
 )
 
 func makeTestSet(owner common.Hash, n int, paths [][]byte) *NodeSet {

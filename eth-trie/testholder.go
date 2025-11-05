@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/hemilabs/x/eth-trie/testutil"
+	"github.com/hemilabs/x/eth-trie/internal/testutil"
 	"github.com/hemilabs/x/eth-trie/triedb"
 
 	"github.com/ethereum/go-ethereum/core/types"

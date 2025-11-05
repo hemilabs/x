@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/hemilabs/x/eth-trie/testutil"
+	"github.com/hemilabs/x/eth-trie/internal/testutil"
 )
 
 // randomStateSet generates a random state change set.

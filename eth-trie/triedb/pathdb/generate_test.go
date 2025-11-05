@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/hemilabs/x/eth-trie/testutil"
+	"github.com/hemilabs/x/eth-trie/internal/testutil"
 	"github.com/hemilabs/x/eth-trie/trie"
 	"github.com/hemilabs/x/eth-trie/trie/trienode"
 	"github.com/holiman/uint256"
