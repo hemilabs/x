@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hemilabs/x/eth-trie/trie"
 	"github.com/hemilabs/x/eth-trie/trie/trienode"
 	"github.com/hemilabs/x/eth-trie/triedb"
@@ -43,15 +44,22 @@ type ZKBlock struct {
 	// Storage information. Automatically updates the AccountState
 	// that each storage is associated with. The inner map's keys
 	// are Keccak256 hashes of []byte values.
+	//
+	// When the value passed is nil, the associated key is deleted
+	// from the Trie. Nil should only be passed if the key exists
+	// in the previous state.
 	Storage map[common.Address]map[common.Hash][]byte
 
 	// Accounts information. Overrides any values passed for the
 	// same address in storage.
+	//
+	// When the StateAccount passed is nil, the associated address
+	// is deleted from the Trie. Nil should only be passed if the
+	// address exists in the previous state.
 	Accounts map[common.Address]types.StateAccount
 }
 
-// ZKTrie is used to perform operation on
-// a ZK trie and its underlying database.
+// ZKTrie is used to perform operation on a ZK trie and its database.
 type ZKTrie struct {
 	mtx        sync.RWMutex
 	stateRoots []common.Hash
@@ -204,7 +212,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		if stateVal != nil {
 			sa, err = types.FullAccount(stateVal)
 			if err != nil {
-				return types.EmptyRootHash, fmt.Errorf("stored value for %v != stateAccount: %w", addr, err)
+				panic(fmt.Errorf("decode stored state value: %w", err))
 			}
 		}
 		na := types.StateAccount{
@@ -243,7 +251,11 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		}
 		na.Root = newStorageRoot
 
-		mutatedAcc[addrHash] = types.SlimAccountRLP(na)
+		full, err := rlp.EncodeToBytes(&na)
+		if err != nil {
+			return types.EmptyRootHash, err
+		}
+		mutatedAcc[addrHash] = full
 		originAcc[addr] = stateVal
 	}
 
@@ -253,8 +265,12 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		if err != nil {
 			return types.EmptyRootHash, fmt.Errorf("get account state: %w", err)
 		}
+		full, err := rlp.EncodeToBytes(&sa)
+		if err != nil {
+			return types.EmptyRootHash, err
+		}
+		mutatedAcc[addrHash] = full
 		originAcc[addr] = stateVal
-		mutatedAcc[addrHash] = types.SlimAccountRLP(sa)
 	}
 
 	for key, val := range mutatedAcc {

@@ -5,7 +5,9 @@
 package zktrie
 
 import (
+	"bytes"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"testing"
 
@@ -13,39 +15,54 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 )
 
 func TestZKTrie(t *testing.T) {
 	const (
-		blockCount  uint64 = 10
+		blockCount  uint64 = 11
 		storageKeys uint64 = 5
 	)
+	var (
+		home       = t.TempDir()
+		cacheField = []byte("current block")
+		accounts   = make(map[common.Address][][]byte, blockCount+1)
+		manualAcc  = common.BytesToAddress(random(20))
+	)
+	accounts[manualAcc] = nil
 
-	home := t.TempDir()
 	zkt, err := NewZKTrie(t.Context(), home)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if err := zkt.Put([]byte("hello"), []byte("world")); err != nil {
 		t.Fatal(err)
 	}
-
-	_, err = zkt.Get([]byte("hello"))
+	v, err := zkt.Get([]byte("hello"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !bytes.Equal(v, []byte("world")) {
+		t.Fatalf("got %s, wanted %s", v, []byte("world"))
+	}
 
-	accounts := make(map[common.Address][][]byte, blockCount)
 	for i := range blockCount {
 		blk := ZKBlock{
-			Height:  i,
-			Storage: make(map[common.Address]map[common.Hash][]byte),
+			Height:   i,
+			Storage:  make(map[common.Address]map[common.Hash][]byte, 1),
+			Accounts: make(map[common.Address]types.StateAccount, 1),
 		}
 
-		var randAcc common.Address
-		randAcc.SetBytes(random(20))
+		var md []byte
+		if i%2 == 0 {
+			// delete and create every other block
+			md = fmt.Appendf(nil, "%d", blk.Height)
+		}
+		blk.Storage[MetadataAddress] = map[common.Hash][]byte{
+			crypto.Keccak256Hash(cacheField): md,
+		}
 
+		randAcc := common.BytesToAddress(random(20))
 		blk.Storage[randAcc] = make(map[common.Hash][]byte, storageKeys)
 		accounts[randAcc] = make([][]byte, storageKeys)
 		for i := range storageKeys {
@@ -55,11 +72,14 @@ func TestZKTrie(t *testing.T) {
 			blk.Storage[randAcc][hash] = random(32)
 		}
 
+		manualState := types.NewEmptyStateAccount()
+		manualState.Balance = uint256.NewInt(10 * (i + 1))
+		blk.Accounts[manualAcc] = *manualState
+
 		sr, err := zkt.InsertBlock(&blk)
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		t.Logf("inserted block %d, new state root: %v", blk.Height, sr)
 	}
 
@@ -72,7 +92,6 @@ func TestZKTrie(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		spew.Dump(sa)
 
 		for _, k := range keys {
@@ -83,6 +102,13 @@ func TestZKTrie(t *testing.T) {
 			t.Logf("address %x, key %x, value %x", ac, k, v)
 		}
 	}
+
+	md, err := zkt.MetadataGet(cacheField)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("stored metadata: %s", md)
+
 	if err := zkt.Recover(types.EmptyRootHash); err != nil {
 		t.Fatal(err)
 	}
