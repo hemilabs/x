@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -21,7 +22,10 @@ import (
 	"github.com/hemilabs/x/eth-trie/triedb/pathdb"
 )
 
-var metadataAddress common.Address
+// XXX probably need a way to be able to differentiate between account
+// types so when we insert a block, they update fields in different ways.
+// Maybe we can use the CodeHash field of StateAccount?
+var MetadataAddress common.Address
 
 func init() {
 	const reserved string = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
@@ -29,7 +33,7 @@ func init() {
 	if err != nil {
 		panic(fmt.Errorf("error parsing address %v: %w", reserved, err))
 	}
-	metadataAddress.SetBytes(ab)
+	MetadataAddress.SetBytes(ab)
 }
 
 // ZKBlock holds information on a block used for a ZK Trie state transition.
@@ -37,7 +41,8 @@ type ZKBlock struct {
 	Height uint64
 
 	// Storage information. Automatically updates the AccountState
-	// that each storage is associated with.
+	// that each storage is associated with. The inner map's keys
+	// are Keccak256 hashes of []byte values.
 	Storage map[common.Address]map[common.Hash][]byte
 
 	// Accounts information. Overrides any values passed for the
@@ -45,9 +50,10 @@ type ZKBlock struct {
 	Accounts map[common.Address]types.StateAccount
 }
 
-// ZKTrie is used to perform operation on a ZK trie
-// and its underlying database. It is not concurrency safe.
+// ZKTrie is used to perform operation on
+// a ZK trie and its underlying database.
 type ZKTrie struct {
+	mtx        sync.RWMutex
 	stateRoots []common.Hash
 	tdb        *triedb.Database
 }
@@ -82,11 +88,15 @@ func NewZKTrie(_ context.Context, home string) (*ZKTrie, error) {
 
 // Close closes the underlying database for ZKTrie.
 func (t *ZKTrie) Close() error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	return t.tdb.Close()
 }
 
 // Recover rollbacks the ZKTrie database to a specified historical point.
 func (t *ZKTrie) Recover(stateRoot common.Hash) error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	return t.tdb.Recover(stateRoot)
 }
 
@@ -100,10 +110,16 @@ func (t *ZKTrie) Get(key []byte) ([]byte, error) {
 	return t.tdb.Disk().Get(key)
 }
 
-func (t *ZKTrie) GetStorage(addr common.Address, key common.Hash) ([]byte, error) {
+// MetadataGet retrieves values from the reserved metadata state account.
+func (t *ZKTrie) MetadataGet(key []byte) ([]byte, error) {
+	return t.GetStorage(MetadataAddress, key)
+}
+
+func (t *ZKTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
 	var (
 		stateRoot = t.currentState()
 		addrHash  = crypto.Keccak256Hash(addr.Bytes())
+		keyHash   = crypto.Keccak256Hash(key)
 	)
 	sa, err := t.GetAccount(addr)
 	if err != nil {
@@ -118,7 +134,7 @@ func (t *ZKTrie) GetStorage(addr common.Address, key common.Hash) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to load trie, err: %w", err)
 	}
-	return storeTrie.Get(key[:])
+	return storeTrie.Get(keyHash[:])
 }
 
 func (t *ZKTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
@@ -147,6 +163,9 @@ func (t *ZKTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 
 // currentState gets the most recent State Root.
 func (t *ZKTrie) currentState() common.Hash {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+
 	if len(t.stateRoots) == 0 {
 		return types.EmptyRootHash
 	}
@@ -259,6 +278,9 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		RawStorageKey:  false,
 	}
 
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
 	// performs a state transition
 	if err := t.tdb.Update(newStateRoot, stateRoot, block.Height, mergeSet, &s); err != nil {
 		return types.EmptyRootHash, fmt.Errorf("update db: %w", err)
@@ -271,6 +293,9 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 // Commit commits performed state trasitions from memory to disk.
 func (t *ZKTrie) Commit() error {
 	currState := t.currentState()
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
 	if err := t.tdb.Commit(currState, true); err != nil {
 		return fmt.Errorf("commit db: %w", err)
 	}
