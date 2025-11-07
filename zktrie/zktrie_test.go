@@ -12,6 +12,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestZKTrie(t *testing.T) {
@@ -35,7 +36,7 @@ func TestZKTrie(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	accounts := make(map[common.Address][]common.Hash, blockCount)
+	accounts := make(map[common.Address][][]byte, blockCount)
 	for i := range blockCount {
 		blk := ZKBlock{
 			Height:  i,
@@ -46,11 +47,11 @@ func TestZKTrie(t *testing.T) {
 		randAcc.SetBytes(random(20))
 
 		blk.Storage[randAcc] = make(map[common.Hash][]byte, storageKeys)
-		accounts[randAcc] = make([]common.Hash, storageKeys)
+		accounts[randAcc] = make([][]byte, storageKeys)
 		for i := range storageKeys {
-			var hash common.Hash
-			hash.SetBytes(random(32))
-			accounts[randAcc][i] = hash
+			newKey := random(10)
+			hash := crypto.Keccak256Hash(newKey)
+			accounts[randAcc][i] = newKey
 			blk.Storage[randAcc][hash] = random(32)
 		}
 
@@ -82,7 +83,6 @@ func TestZKTrie(t *testing.T) {
 			t.Logf("address %x, key %x, value %x", ac, k, v)
 		}
 	}
-
 	if err := zkt.Recover(types.EmptyRootHash); err != nil {
 		t.Fatal(err)
 	}
