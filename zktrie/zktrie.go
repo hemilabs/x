@@ -5,11 +5,11 @@
 package zktrie
 
 import (
-	"context"
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,18 +26,18 @@ import (
 // XXX probably need a way to be able to differentiate between account
 // types so when we insert a block, they update fields in different ways.
 // Maybe we can use the CodeHash field of StateAccount?
-var MetadataAddress common.Address
+var (
+	MetadataAddress common.Address
+	ErrNotFound     = errors.New("key not found")
+)
 
 func init() {
-	const reserved string = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-	ab, err := hex.DecodeString(reserved)
-	if err != nil {
-		panic(fmt.Errorf("error parsing address %v: %w", reserved, err))
-	}
-	MetadataAddress.SetBytes(ab)
+	const reserved string = "0xffffffffffffffffffffffffffffffffffffffff"
+	MetadataAddress = common.BytesToAddress([]byte(reserved))
+	spew.Dump(MetadataAddress)
 }
 
-// ZKBlock holds information on a block used for a ZK Trie state transition.
+// ZKBlock holds informati∂on on a block used for a ZK Trie state transition.
 type ZKBlock struct {
 	Height uint64
 
@@ -59,6 +59,59 @@ type ZKBlock struct {
 	Accounts map[common.Address]types.StateAccount
 }
 
+func NewZKBlock(height uint64) *ZKBlock {
+	return &ZKBlock{
+		Height: height,
+	}
+}
+
+func (b *ZKBlock) AddStorage(addr common.Address, key common.Hash, value []byte) {
+	if b.Storage == nil {
+		b.Storage = make(map[common.Address]map[common.Hash][]byte)
+	}
+	if _, ok := b.Storage[addr]; !ok {
+		b.Storage[addr] = make(map[common.Hash][]byte)
+	}
+	b.Storage[addr][key] = value
+}
+
+func (b *ZKBlock) GetStorage(addr common.Address, key common.Hash) ([]byte, error) {
+	if b.Storage == nil || b.Storage[addr] == nil {
+		return nil, ErrNotFound
+	}
+	val, ok := b.Storage[addr][key]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return val, nil
+}
+
+func (b *ZKBlock) AddAccount(addr common.Address, state types.StateAccount) {
+	if b.Accounts == nil {
+		b.Accounts = make(map[common.Address]types.StateAccount)
+	}
+	b.Accounts[addr] = state
+}
+
+func (b *ZKBlock) GetAccount(addr common.Address) (types.StateAccount, error) {
+	if b.Accounts == nil {
+		return *types.NewEmptyStateAccount(), ErrNotFound
+	}
+	val, ok := b.Accounts[addr]
+	if !ok {
+		return val, ErrNotFound
+	}
+	return val, nil
+}
+
+func (b *ZKBlock) AddMetadata(key common.Hash, value []byte) {
+	b.AddStorage(MetadataAddress, key, value)
+}
+
+func (b *ZKBlock) GetMetadata(key common.Hash) ([]byte, error) {
+	return b.GetStorage(MetadataAddress, key)
+}
+
 // ZKTrie is used to perform operation on a ZK trie and its database.
 type ZKTrie struct {
 	mtx        sync.RWMutex
@@ -67,7 +120,7 @@ type ZKTrie struct {
 }
 
 // TODO: set database cache and handles
-func NewZKTrie(_ context.Context, home string) (*ZKTrie, error) {
+func NewZKTrie(home string) (*ZKTrie, error) {
 	db, err := leveldb.New(home, 0, 0, "", false)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)

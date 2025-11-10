@@ -31,7 +31,7 @@ func TestZKTrie(t *testing.T) {
 	)
 	accounts[manualAcc] = nil
 
-	zkt, err := NewZKTrie(t.Context(), home)
+	zkt, err := NewZKTrie(home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,36 +47,28 @@ func TestZKTrie(t *testing.T) {
 	}
 
 	for i := range blockCount {
-		blk := ZKBlock{
-			Height:   i,
-			Storage:  make(map[common.Address]map[common.Hash][]byte, 1),
-			Accounts: make(map[common.Address]types.StateAccount, 1),
-		}
-
+		blk := NewZKBlock(i)
 		var md []byte
 		if i%2 == 0 {
 			// delete and create every other block
 			md = fmt.Appendf(nil, "%d", blk.Height)
 		}
-		blk.Storage[MetadataAddress] = map[common.Hash][]byte{
-			crypto.Keccak256Hash(cacheField): md,
-		}
+		blk.AddMetadata(crypto.Keccak256Hash(cacheField), md)
 
 		randAcc := common.BytesToAddress(random(20))
-		blk.Storage[randAcc] = make(map[common.Hash][]byte, storageKeys)
 		accounts[randAcc] = make([][]byte, storageKeys)
 		for i := range storageKeys {
 			newKey := random(10)
 			hash := crypto.Keccak256Hash(newKey)
 			accounts[randAcc][i] = newKey
-			blk.Storage[randAcc][hash] = random(32)
+			blk.AddStorage(randAcc, hash, random(32))
 		}
 
 		manualState := types.NewEmptyStateAccount()
 		manualState.Balance = uint256.NewInt(10 * (i + 1))
-		blk.Accounts[manualAcc] = *manualState
+		blk.AddAccount(manualAcc, *manualState)
 
-		sr, err := zkt.InsertBlock(&blk)
+		sr, err := zkt.InsertBlock(blk)
 		if err != nil {
 			t.Fatal(err)
 		}
