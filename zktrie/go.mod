@@ -3,6 +3,7 @@ module github.com/hemilabs/x/zktrie
 go 1.25.1
 
 require (
+	github.com/btcsuite/btcd v0.25.0
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.16.7

@@ -23,6 +23,7 @@ import (
 	"github.com/hemilabs/x/eth-trie/trie/trienode"
 	"github.com/hemilabs/x/eth-trie/triedb"
 	"github.com/hemilabs/x/eth-trie/triedb/pathdb"
+	"github.com/holiman/uint256"
 )
 
 // XXX probably need a way to be able to differentiate between account
@@ -30,7 +31,10 @@ import (
 // Maybe we can use the CodeHash field of StateAccount?
 var (
 	MetadataAddress common.Address
-	ErrNotFound     = errors.New("key not found")
+
+	ErrAddressNotFound  = errors.New("address not found")
+	ErrBlockNotFound    = errors.New("block information not found")
+	ErrOutpointNotFound = errors.New("key not found")
 )
 
 func init() {
@@ -48,7 +52,7 @@ func NewOutpoint(txid [32]byte, index uint32) (op Outpoint) {
 	return op
 }
 
-// blockhash + txId + txInIdx + value
+// blockhash + txId + txInIdx
 type SpentOutput [32 + 32 + 4]byte
 
 func NewSpentOutput(blockHash, txId [32]byte, index uint32) (so SpentOutput) {
@@ -76,11 +80,11 @@ func NewSpendableOutput(blockHash, txId [32]byte, index uint32, value uint64) (s
 // prev_stateroot + prev_blockhash + height
 type BlockInfo [32 + 32 + 8]byte
 
-func (bi *BlockInfo) PrevStateRoot() common.Hash {
+func (bi BlockInfo) PrevStateRoot() common.Hash {
 	return common.BytesToHash(bi[:32])
 }
 
-func (bi *BlockInfo) PrevBlockHash() chainhash.Hash {
+func (bi BlockInfo) PrevBlockHash() chainhash.Hash {
 	ch, err := chainhash.NewHash(bi[32:64])
 	if err != nil {
 		panic("stored value is not blockhash")
@@ -88,7 +92,7 @@ func (bi *BlockInfo) PrevBlockHash() chainhash.Hash {
 	return *ch
 }
 
-func (bi *BlockInfo) Height() uint64 {
+func (bi BlockInfo) Height() uint64 {
 	return binary.BigEndian.Uint64(bi[64:])
 }
 
@@ -99,24 +103,24 @@ func NewBlockInfo(prevStateRoot common.Hash, prevBlockHash chainhash.Hash, heigh
 	return bi
 }
 
-// ZKBlock holds informati∂on on a block used for a ZK Trie state transition.
+// ZKBlock holds information on a block used for a ZK Trie state transition.
 type ZKBlock struct {
-	blockInfo BlockInfo
+	blockHash common.Hash
 
-	// Storage information. Automatically updates the AccountState
-	// that each storage is associated with. The inner map's keys
-	// are Keccak256 hashes of []byte values.
-	//
-	// When the value passed is nil, the associated key is deleted
-	// from the Trie. Nil should only be passed if the key exists
-	// in the previous state.
+	// Storage information. Automatically managed using the utility methods.
 	storage map[common.Address]map[common.Hash][]byte
 }
 
-func NewZKBlock(prevStateRoot common.Hash, prevBlockHash chainhash.Hash, height uint64) *ZKBlock {
+func NewZKBlock(blockHash, prevBlockHash chainhash.Hash, prevStateRoot common.Hash, height uint64) *ZKBlock {
 	bi := NewBlockInfo(prevStateRoot, prevBlockHash, height)
+	bh := common.Hash(blockHash)
 	return &ZKBlock{
-		blockInfo: bi,
+		blockHash: bh,
+		storage: map[common.Address]map[common.Hash][]byte{
+			MetadataAddress: {
+				bh: bi[:],
+			},
+		},
 	}
 }
 
@@ -158,11 +162,8 @@ func (b *ZKBlock) GetOutpoint(pkScript []byte, out Outpoint) []byte {
 }
 
 func (b *ZKBlock) GetMetadata() BlockInfo {
-	return b.blockInfo
+	return BlockInfo(b.storage[MetadataAddress][b.blockHash])
 }
-
-// func (b *ZKBlock) GetMetadata(key common.Hash) ([]byte, error) {
-// }
 
 // ZKTrie is used to perform operation on a ZK trie and its database.
 type ZKTrie struct {
@@ -223,23 +224,48 @@ func (t *ZKTrie) Get(key []byte) ([]byte, error) {
 	return t.tdb.Disk().Get(key)
 }
 
-// MetadataGet retrieves values from the reserved metadata state account.
-func (t *ZKTrie) MetadataGet(key []byte) ([]byte, error) {
-	return t.GetStorage(MetadataAddress, key)
-}
-
-func (t *ZKTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
+// GetBlockInfo retrieves Block information from the reserved
+// metadata state account.
+func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash) (BlockInfo, error) {
 	var (
 		stateRoot = t.currentState()
+		addrHash  = crypto.Keccak256Hash(MetadataAddress.Bytes())
+		keyHash   = blockHash
+	)
+	sa, err := t.GetAccount(MetadataAddress)
+	if err != nil {
+		return BlockInfo{}, fmt.Errorf("get state account: %w", err)
+	}
+
+	storeID := trie.StorageTrieID(stateRoot, addrHash, sa.Root)
+	storeTrie, err := trie.New(storeID, t.tdb)
+	if err != nil {
+		return BlockInfo{}, fmt.Errorf("failed to load trie, err: %w", err)
+	}
+	val, err := storeTrie.Get(keyHash[:])
+	if err != nil {
+		return BlockInfo{}, err
+	}
+	if val == nil {
+		return BlockInfo{}, ErrBlockNotFound
+	}
+
+	if len(val) != len(BlockInfo{}) {
+		return BlockInfo{}, fmt.Errorf("unexpected stored value size: %d", len(val))
+	}
+	return BlockInfo(val), nil
+}
+
+func (t *ZKTrie) GetOutpoint(pkScript []byte, out Outpoint) ([]byte, error) {
+	var (
+		addr      = common.BytesToAddress(pkScript)
+		stateRoot = t.currentState()
 		addrHash  = crypto.Keccak256Hash(addr.Bytes())
-		keyHash   = crypto.Keccak256Hash(key)
+		keyHash   = crypto.Keccak256Hash(out[:])
 	)
 	sa, err := t.GetAccount(addr)
 	if err != nil {
 		return nil, fmt.Errorf("get state account: %w", err)
-	}
-	if sa == nil {
-		return nil, nil
 	}
 
 	storeID := trie.StorageTrieID(stateRoot, addrHash, sa.Root)
@@ -247,7 +273,14 @@ func (t *ZKTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load trie, err: %w", err)
 	}
-	return storeTrie.Get(keyHash[:])
+	val, err := storeTrie.Get(keyHash[:])
+	if err != nil {
+		return nil, err
+	}
+	if val == nil {
+		return nil, ErrOutpointNotFound
+	}
+	return val, nil
 }
 
 func (t *ZKTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
@@ -265,7 +298,7 @@ func (t *ZKTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 		return nil, fmt.Errorf("get account state: %w", err)
 	}
 	if stateVal == nil {
-		return nil, nil
+		return nil, ErrAddressNotFound
 	}
 	sa, err := types.FullAccount(stateVal)
 	if err != nil {
@@ -289,7 +322,7 @@ func (t *ZKTrie) currentState() common.Hash {
 // InsertBlock performs a state transition for a given block.
 func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 	var (
-		stateRoot    = block.blockInfo.PrevStateRoot()
+		stateRoot    = block.GetMetadata().PrevStateRoot()
 		mergeSet     = trienode.NewMergedNodeSet()
 		stateID      = trie.StateTrieID(stateRoot)
 		mutatedAcc   = make(map[common.Hash][]byte, len(block.storage))
@@ -343,7 +376,24 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 			if err := storeTrie.Update(k[:], v); err != nil {
 				return types.EmptyRootHash, fmt.Errorf("update storage trie: %w", err)
 			}
-
+			switch len(v) {
+			case len(SpendableOutput{}):
+				p := uint256.NewInt(binary.BigEndian.Uint64(v[68:76]))
+				na.Balance.Add(na.Balance, p)
+			case len(SpentOutput{}):
+				val := originStore[addr][k]
+				if val == nil {
+					// If out was created and spent in the same block,
+					// then don't update the balance.
+					continue
+				}
+				pr := originStore[addr][k][68:76]
+				p := uint256.NewInt(binary.BigEndian.Uint64(pr))
+				na.Balance.Sub(na.Balance, p)
+			case len(BlockInfo{}):
+			default:
+				panic("unknown storage value passed")
+			}
 		}
 
 		// commit the trie, get storage trie root and node set
@@ -386,7 +436,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 	defer t.mtx.Unlock()
 
 	// performs a state transition
-	if err := t.tdb.Update(newStateRoot, stateRoot, block.blockInfo.Height(), mergeSet, &s); err != nil {
+	if err := t.tdb.Update(newStateRoot, stateRoot, block.GetMetadata().Height(), mergeSet, &s); err != nil {
 		return types.EmptyRootHash, fmt.Errorf("update db: %w", err)
 	}
 
