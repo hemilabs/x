@@ -5,10 +5,12 @@
 package zktrie
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -37,9 +39,69 @@ func init() {
 	spew.Dump(MetadataAddress)
 }
 
+// txId + index
+type Outpoint [32 + 4]byte
+
+func NewOutpoint(txid [32]byte, index uint32) (op Outpoint) {
+	copy(op[:32], txid[:])
+	binary.BigEndian.PutUint32(op[32:], index)
+	return op
+}
+
+// blockhash + txId + txInIdx + value
+type SpentOutput [32 + 32 + 4]byte
+
+func NewSpentOutput(blockHash, txId [32]byte, index uint32) (so SpentOutput) {
+	copy(so[:32], blockHash[:])
+	copy(so[32:64], txId[:])
+	binary.BigEndian.PutUint32(so[64:], index)
+	return so
+}
+
+// blockhash + txId + txOutIdx + value
+type SpendableOutput [32 + 32 + 4 + 8]byte
+
+func (so SpendableOutput) Value() uint64 {
+	return binary.BigEndian.Uint64(so[68:])
+}
+
+func NewSpendableOutput(blockHash, txId [32]byte, index uint32, value uint64) (so SpendableOutput) {
+	copy(so[:32], blockHash[:])
+	copy(so[32:64], txId[:])
+	binary.BigEndian.PutUint32(so[64:68], index)
+	binary.BigEndian.PutUint64(so[68:], value)
+	return so
+}
+
+// prev_stateroot + prev_blockhash + height
+type BlockInfo [32 + 32 + 8]byte
+
+func (bi *BlockInfo) PrevStateRoot() common.Hash {
+	return common.BytesToHash(bi[:32])
+}
+
+func (bi *BlockInfo) PrevBlockHash() chainhash.Hash {
+	ch, err := chainhash.NewHash(bi[32:64])
+	if err != nil {
+		panic("stored value is not blockhash")
+	}
+	return *ch
+}
+
+func (bi *BlockInfo) Height() uint64 {
+	return binary.BigEndian.Uint64(bi[64:])
+}
+
+func NewBlockInfo(prevStateRoot common.Hash, prevBlockHash chainhash.Hash, height uint64) (bi BlockInfo) {
+	copy(bi[:32], prevStateRoot[:])
+	copy(bi[32:64], prevBlockHash[:])
+	binary.BigEndian.PutUint64(bi[64:], height)
+	return bi
+}
+
 // ZKBlock holds informati∂on on a block used for a ZK Trie state transition.
 type ZKBlock struct {
-	Height uint64
+	blockInfo BlockInfo
 
 	// Storage information. Automatically updates the AccountState
 	// that each storage is associated with. The inner map's keys
@@ -48,69 +110,59 @@ type ZKBlock struct {
 	// When the value passed is nil, the associated key is deleted
 	// from the Trie. Nil should only be passed if the key exists
 	// in the previous state.
-	Storage map[common.Address]map[common.Hash][]byte
-
-	// Accounts information. Overrides any values passed for the
-	// same address in storage.
-	//
-	// When the StateAccount passed is nil, the associated address
-	// is deleted from the Trie. Nil should only be passed if the
-	// address exists in the previous state.
-	Accounts map[common.Address]types.StateAccount
+	storage map[common.Address]map[common.Hash][]byte
 }
 
-func NewZKBlock(height uint64) *ZKBlock {
+func NewZKBlock(prevStateRoot common.Hash, prevBlockHash chainhash.Hash, height uint64) *ZKBlock {
+	bi := NewBlockInfo(prevStateRoot, prevBlockHash, height)
 	return &ZKBlock{
-		Height: height,
+		blockInfo: bi,
 	}
 }
 
-func (b *ZKBlock) AddStorage(addr common.Address, key common.Hash, value []byte) {
-	if b.Storage == nil {
-		b.Storage = make(map[common.Address]map[common.Hash][]byte)
+func (b *ZKBlock) NewOut(pkScript []byte, out Outpoint, so SpendableOutput) {
+	if b.storage == nil {
+		b.storage = make(map[common.Address]map[common.Hash][]byte)
 	}
-	if _, ok := b.Storage[addr]; !ok {
-		b.Storage[addr] = make(map[common.Hash][]byte)
+
+	addr := common.BytesToAddress(pkScript)
+	if _, ok := b.storage[addr]; !ok {
+		b.storage[addr] = make(map[common.Hash][]byte)
 	}
-	b.Storage[addr][key] = value
+
+	key := crypto.Keccak256Hash(out[:])
+	b.storage[addr][key] = so[:]
 }
 
-func (b *ZKBlock) GetStorage(addr common.Address, key common.Hash) ([]byte, error) {
-	if b.Storage == nil || b.Storage[addr] == nil {
-		return nil, ErrNotFound
+func (b *ZKBlock) NewIn(pkScript []byte, out Outpoint, so SpentOutput) {
+	if b.storage == nil {
+		b.storage = make(map[common.Address]map[common.Hash][]byte)
 	}
-	val, ok := b.Storage[addr][key]
-	if !ok {
-		return nil, ErrNotFound
+
+	addr := common.BytesToAddress(pkScript)
+	if _, ok := b.storage[addr]; !ok {
+		b.storage[addr] = make(map[common.Hash][]byte)
 	}
-	return val, nil
+
+	key := crypto.Keccak256Hash(out[:])
+	b.storage[addr][key] = so[:]
 }
 
-func (b *ZKBlock) AddAccount(addr common.Address, state types.StateAccount) {
-	if b.Accounts == nil {
-		b.Accounts = make(map[common.Address]types.StateAccount)
+func (b *ZKBlock) GetOutpoint(pkScript []byte, out Outpoint) []byte {
+	addr := common.BytesToAddress(pkScript)
+	if b.storage == nil || b.storage[addr] == nil {
+		return nil
 	}
-	b.Accounts[addr] = state
+	key := crypto.Keccak256Hash(out[:])
+	return b.storage[addr][key]
 }
 
-func (b *ZKBlock) GetAccount(addr common.Address) (types.StateAccount, error) {
-	if b.Accounts == nil {
-		return *types.NewEmptyStateAccount(), ErrNotFound
-	}
-	val, ok := b.Accounts[addr]
-	if !ok {
-		return val, ErrNotFound
-	}
-	return val, nil
+func (b *ZKBlock) GetMetadata() BlockInfo {
+	return b.blockInfo
 }
 
-func (b *ZKBlock) AddMetadata(key common.Hash, value []byte) {
-	b.AddStorage(MetadataAddress, key, value)
-}
-
-func (b *ZKBlock) GetMetadata(key common.Hash) ([]byte, error) {
-	return b.GetStorage(MetadataAddress, key)
-}
+// func (b *ZKBlock) GetMetadata(key common.Hash) ([]byte, error) {
+// }
 
 // ZKTrie is used to perform operation on a ZK trie and its database.
 type ZKTrie struct {
@@ -237,24 +289,20 @@ func (t *ZKTrie) currentState() common.Hash {
 // InsertBlock performs a state transition for a given block.
 func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 	var (
-		stateRoot    = t.currentState()
+		stateRoot    = block.blockInfo.PrevStateRoot()
 		mergeSet     = trienode.NewMergedNodeSet()
 		stateID      = trie.StateTrieID(stateRoot)
-		mutatedAcc   = make(map[common.Hash][]byte, len(block.Storage)+len(block.Accounts))
-		originAcc    = make(map[common.Address][]byte, len(block.Storage)+len(block.Accounts))
-		mutatedStore = make(map[common.Hash]map[common.Hash][]byte, len(block.Storage))
-		originStore  = make(map[common.Address]map[common.Hash][]byte, len(block.Storage))
+		mutatedAcc   = make(map[common.Hash][]byte, len(block.storage))
+		originAcc    = make(map[common.Address][]byte, len(block.storage))
+		mutatedStore = make(map[common.Hash]map[common.Hash][]byte, len(block.storage))
+		originStore  = make(map[common.Address]map[common.Hash][]byte, len(block.storage))
 	)
 	stateTrie, err := trie.New(stateID, t.tdb)
 	if err != nil {
 		return types.EmptyRootHash, fmt.Errorf("failed to load state trie, err: %w", err)
 	}
 
-	for addr, storage := range block.Storage {
-		if _, ok := block.Accounts[addr]; ok {
-			continue
-		}
-
+	for addr, storage := range block.storage {
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
 		stateVal, err := stateTrie.Get(addrHash[:])
 		if err != nil {
@@ -280,8 +328,8 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 			return types.EmptyRootHash, fmt.Errorf("failed to load trie, err: %w", err)
 		}
 
-		mutatedStore[addrHash] = make(map[common.Hash][]byte, len(block.Storage[addr]))
-		originStore[addr] = make(map[common.Hash][]byte, len(block.Storage[addr]))
+		mutatedStore[addrHash] = make(map[common.Hash][]byte, len(block.storage[addr]))
+		originStore[addr] = make(map[common.Hash][]byte, len(block.storage[addr]))
 		for key, value := range storage {
 			prev, err := storeTrie.Get(key[:])
 			if err != nil {
@@ -295,6 +343,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 			if err := storeTrie.Update(k[:], v); err != nil {
 				return types.EmptyRootHash, fmt.Errorf("update storage trie: %w", err)
 			}
+
 		}
 
 		// commit the trie, get storage trie root and node set
@@ -305,20 +354,6 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		na.Root = newStorageRoot
 
 		full, err := rlp.EncodeToBytes(&na)
-		if err != nil {
-			return types.EmptyRootHash, err
-		}
-		mutatedAcc[addrHash] = full
-		originAcc[addr] = stateVal
-	}
-
-	for addr, sa := range block.Accounts {
-		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		stateVal, err := stateTrie.Get(addrHash[:])
-		if err != nil {
-			return types.EmptyRootHash, fmt.Errorf("get account state: %w", err)
-		}
-		full, err := rlp.EncodeToBytes(&sa)
 		if err != nil {
 			return types.EmptyRootHash, err
 		}
@@ -351,7 +386,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 	defer t.mtx.Unlock()
 
 	// performs a state transition
-	if err := t.tdb.Update(newStateRoot, stateRoot, block.Height, mergeSet, &s); err != nil {
+	if err := t.tdb.Update(newStateRoot, stateRoot, block.blockInfo.Height(), mergeSet, &s); err != nil {
 		return types.EmptyRootHash, fmt.Errorf("update db: %w", err)
 	}
 

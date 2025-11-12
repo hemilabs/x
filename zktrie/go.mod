@@ -3,9 +3,11 @@ module github.com/hemilabs/x/zktrie
 go 1.25.1
 
 require (
+	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.16.7
 	github.com/hemilabs/x/eth-trie v0.0.0-20251105164544-95cd47e9e738
+	github.com/holiman/uint256 v1.3.2
 )
 
 require (
@@ -25,7 +27,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
-	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
