@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,7 +36,6 @@ var (
 func init() {
 	const reserved string = "0xffffffffffffffffffffffffffffffffffffffff"
 	MetadataAddress = common.BytesToAddress([]byte(reserved))
-	spew.Dump(MetadataAddress)
 }
 
 // txId + index
