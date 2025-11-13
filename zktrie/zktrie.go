@@ -225,6 +225,11 @@ func (t *ZKTrie) Get(key []byte) ([]byte, error) {
 	return t.tdb.Disk().Get(key)
 }
 
+// Del performs a delete on the underlying ZKTrie database.
+func (t *ZKTrie) Del(key []byte) error {
+	return t.tdb.Disk().Delete(key)
+}
+
 // GetBlockInfo retrieves Block information from the reserved
 // metadata state account.
 func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash) (BlockInfo, error) {
