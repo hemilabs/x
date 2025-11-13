@@ -26,9 +26,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// XXX probably need a way to be able to differentiate between account
-// types so when we insert a block, they update fields in different ways.
-// Maybe we can use the CodeHash field of StateAccount?
 var (
 	MetadataAddress common.Address
 
@@ -167,9 +164,9 @@ func (b *ZKBlock) GetMetadata() BlockInfo {
 
 // ZKTrie is used to perform operation on a ZK trie and its database.
 type ZKTrie struct {
-	mtx        sync.RWMutex
-	stateRoots []common.Hash
-	tdb        *triedb.Database
+	mtx       sync.RWMutex
+	stateRoot common.Hash
+	tdb       *triedb.Database
 }
 
 // TODO: set database cache and handles
@@ -194,8 +191,8 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 	})
 
 	t := &ZKTrie{
-		tdb:        tdb,
-		stateRoots: make([]common.Hash, 0),
+		tdb:       tdb,
+		stateRoot: types.EmptyRootHash,
 	}
 	return t, nil
 }
@@ -211,7 +208,11 @@ func (t *ZKTrie) Close() error {
 func (t *ZKTrie) Recover(stateRoot common.Hash) error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
-	return t.tdb.Recover(stateRoot)
+	if err := t.tdb.Recover(stateRoot); err != nil {
+		return err
+	}
+	t.stateRoot = stateRoot
+	return nil
 }
 
 // Put performs an insert into the underlying ZKTrie database.
@@ -312,10 +313,7 @@ func (t *ZKTrie) currentState() common.Hash {
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
 
-	if len(t.stateRoots) == 0 {
-		return types.EmptyRootHash
-	}
-	return t.stateRoots[len(t.stateRoots)-1]
+	return t.stateRoot
 }
 
 // TODO: update StateAccount balance
@@ -440,7 +438,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		return types.EmptyRootHash, fmt.Errorf("update db: %w", err)
 	}
 
-	t.stateRoots = append(t.stateRoots, newStateRoot)
+	t.stateRoot = newStateRoot
 	return newStateRoot, nil
 }
 
@@ -453,6 +451,5 @@ func (t *ZKTrie) Commit() error {
 	if err := t.tdb.Commit(currState, true); err != nil {
 		return fmt.Errorf("commit db: %w", err)
 	}
-	t.stateRoots = []common.Hash{currState}
 	return nil
 }
