@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -178,7 +179,9 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 	var kv ethdb.KeyValueStore = db
 
 	// high-level database wrapper for the given key-value store
-	disk, err := rawdb.Open(kv, rawdb.OpenOptions{})
+	disk, err := rawdb.Open(kv, rawdb.OpenOptions{
+		Ancient: filepath.Join(home, "ancients"),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("open rawdb: %w", err)
 	}
