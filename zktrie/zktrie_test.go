@@ -43,6 +43,7 @@ func TestZKTrie(t *testing.T) {
 	prevBlock := *chaincfg.TestNet3Params.GenesisHash
 	prevStateRoot := types.EmptyRootHash
 	outpoints := make(map[uint64][]Outpoint)
+	states := make([]common.Hash, blockCount)
 	for i := range blockCount {
 		bh := chainhash.Hash(random(32))
 		blk := NewZKBlock(bh, prevBlock, prevStateRoot, i)
@@ -79,32 +80,35 @@ func TestZKTrie(t *testing.T) {
 		t.Logf("inserted block %d, new state root: %v", blk.GetMetadata().Height(), sr)
 		prevBlock = bh
 		prevStateRoot = sr
+		states[i] = sr
 	}
 
 	if err := zkt.Commit(); err != nil {
 		t.Fatal(err)
 	}
 
-	for ac, keys := range outpoints {
-		var pkScript [8]byte
-		binary.BigEndian.PutUint64(pkScript[:], ac)
-		addr := common.BytesToAddress(pkScript[:])
-		sa, err := zkt.GetAccount(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		spew.Dump(sa)
-
-		for _, k := range keys {
-			v, err := zkt.GetOutpoint(pkScript[:], k)
+	for _, state := range states {
+		for ac, keys := range outpoints {
+			var pkScript [8]byte
+			binary.BigEndian.PutUint64(pkScript[:], ac)
+			addr := common.BytesToAddress(pkScript[:])
+			sa, err := zkt.GetAccount(addr, &state)
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Logf("address %x, key %x, value %x", ac, k, v)
+			spew.Dump(sa)
+
+			for _, k := range keys {
+				v, err := zkt.GetOutpoint(pkScript[:], k, &state)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("address %x, key %x, value %x", ac, k, v)
+			}
 		}
 	}
 
-	md, err := zkt.GetBlockInfo(prevBlock)
+	md, err := zkt.GetBlockInfo(prevBlock, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

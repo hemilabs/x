@@ -164,9 +164,10 @@ func (b *ZKBlock) GetMetadata() BlockInfo {
 
 // ZKTrie is used to perform operation on a ZK trie and its database.
 type ZKTrie struct {
-	mtx       sync.RWMutex
-	stateRoot common.Hash
-	tdb       *triedb.Database
+	mtx             sync.RWMutex
+	stateRoot       common.Hash
+	uncommitedRoots map[common.Hash]struct{}
+	tdb             *triedb.Database
 }
 
 // TODO: set database cache and handles
@@ -188,25 +189,17 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 	}
 	tdb := triedb.NewDatabase(disk, &triedb.Config{
 		PathDB: &pathdb.Config{
-			NoAsyncFlush: true,
+			NoAsyncFlush:        true,
+			EnableStateIndexing: true,
 		},
 	})
 
 	t := &ZKTrie{
-		tdb:       tdb,
-		stateRoot: types.EmptyRootHash,
+		tdb:             tdb,
+		stateRoot:       types.EmptyRootHash,
+		uncommitedRoots: make(map[common.Hash]struct{}),
 	}
 	return t, nil
-}
-
-func (t *ZKTrie) SetCurrentState(state common.Hash) error {
-	start, end, err := t.tdb.HistoryRange()
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%d, %d\n", start, end)
-	t.stateRoot = state
-	return nil
 }
 
 // Close closes the underlying database for ZKTrie.
@@ -224,6 +217,7 @@ func (t *ZKTrie) Recover(stateRoot common.Hash) error {
 		return err
 	}
 	t.stateRoot = stateRoot
+	t.uncommitedRoots = make(map[common.Hash]struct{})
 	return nil
 }
 
@@ -242,94 +236,98 @@ func (t *ZKTrie) Del(key []byte) error {
 	return t.tdb.Disk().Delete(key)
 }
 
-// GetBlockInfo retrieves Block information from the reserved
-// metadata state account.
-func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash) (BlockInfo, error) {
-	var (
-		stateRoot = t.currentState()
-		addrHash  = crypto.Keccak256Hash(MetadataAddress.Bytes())
-		keyHash   = blockHash
-	)
-	sa, err := t.GetAccount(MetadataAddress)
-	if err != nil {
-		return BlockInfo{}, fmt.Errorf("get state account: %w", err)
-	}
-
-	storeID := trie.StorageTrieID(stateRoot, addrHash, sa.Root)
-	storeTrie, err := trie.New(storeID, t.tdb)
-	if err != nil {
-		return BlockInfo{}, fmt.Errorf("failed to load trie, err: %w", err)
-	}
-	val, err := storeTrie.Get(keyHash[:])
-	if err != nil {
-		return BlockInfo{}, err
-	}
-	if val == nil {
-		return BlockInfo{}, ErrBlockNotFound
-	}
-
-	if len(val) != len(BlockInfo{}) {
-		return BlockInfo{}, fmt.Errorf("unexpected stored value size: %d", len(val))
-	}
-	return BlockInfo(val), nil
+func (t *ZKTrie) inMemory(state common.Hash) bool {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+	_, ok := t.uncommitedRoots[state]
+	return ok || state.Cmp(t.stateRoot) == 0
 }
 
-func (t *ZKTrie) GetOutpoint(pkScript []byte, out Outpoint) ([]byte, error) {
+// GetBlockInfo retrieves Block information from the reserved
+// metadata state account.
+func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash, state *common.Hash) (BlockInfo, error) {
+	var (
+		addrHash  = crypto.Keccak256Hash(MetadataAddress[:])
+		stateRoot = t.currentState()
+	)
+	if state != nil {
+		stateRoot = *state
+	}
+	var b []byte
+	if t.inMemory(stateRoot) {
+		r, err := t.tdb.StateReader(stateRoot)
+		if err != nil {
+			return BlockInfo{}, err
+		}
+		b, err = r.Storage(addrHash, common.BytesToHash(blockHash[:]))
+		if err != nil {
+			return BlockInfo{}, err
+		}
+	} else {
+		r, err := t.tdb.HistoricReader(stateRoot)
+		if err != nil {
+			return BlockInfo{}, err
+		}
+		b, err = r.Storage(MetadataAddress, common.BytesToHash(blockHash[:]))
+		if err != nil {
+			return BlockInfo{}, err
+		}
+	}
+	if b == nil {
+		return BlockInfo{}, ErrBlockNotFound
+	}
+	if len(b) != len(BlockInfo{}) {
+		return BlockInfo{}, fmt.Errorf("unexpected stored value size: %d", len(b))
+	}
+	return BlockInfo(b), nil
+}
+
+func (t *ZKTrie) GetOutpoint(pkScript []byte, out Outpoint, state *common.Hash) ([]byte, error) {
 	var (
 		addr      = common.BytesToAddress(pkScript)
 		stateRoot = t.currentState()
-		addrHash  = crypto.Keccak256Hash(addr.Bytes())
 		keyHash   = crypto.Keccak256Hash(out[:])
 	)
-	sa, err := t.GetAccount(addr)
-	if err != nil {
-		return nil, fmt.Errorf("get state account: %w", err)
+	if state != nil {
+		stateRoot = *state
 	}
-
-	storeID := trie.StorageTrieID(stateRoot, addrHash, sa.Root)
-	storeTrie, err := trie.New(storeID, t.tdb)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load trie, err: %w", err)
+	if t.inMemory(stateRoot) {
+		r, err := t.tdb.StateReader(stateRoot)
+		if err != nil {
+			return nil, err
+		}
+		return r.Storage(crypto.Keccak256Hash(addr[:]), keyHash)
 	}
-	val, err := storeTrie.Get(keyHash[:])
+	r, err := t.tdb.HistoricReader(stateRoot)
 	if err != nil {
 		return nil, err
 	}
-	if val == nil {
-		return nil, ErrOutpointNotFound
-	}
-	return val, nil
+	return r.Storage(addr, keyHash)
 }
 
-func (t *ZKTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
-	var (
-		stateRoot = t.currentState()
-		stateID   = trie.StateTrieID(stateRoot)
-		addrHash  = crypto.Keccak256Hash(addr.Bytes())
-	)
-	stateTrie, err := trie.New(stateID, t.tdb)
+func (t *ZKTrie) GetAccount(addr common.Address, state *common.Hash) (*types.SlimAccount, error) {
+	var stateRoot = t.currentState()
+	if state != nil {
+		stateRoot = *state
+	}
+	if t.inMemory(stateRoot) {
+		r, err := t.tdb.StateReader(stateRoot)
+		if err != nil {
+			return nil, err
+		}
+		return r.Account(crypto.Keccak256Hash(addr[:]))
+	}
+	r, err := t.tdb.HistoricReader(stateRoot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load state trie, err: %w", err)
+		return nil, err
 	}
-	stateVal, err := stateTrie.Get(addrHash[:])
-	if err != nil {
-		return nil, fmt.Errorf("get account state: %w", err)
-	}
-	if stateVal == nil {
-		return nil, ErrAddressNotFound
-	}
-	sa, err := types.FullAccount(stateVal)
-	if err != nil {
-		return nil, fmt.Errorf("error restoring account: %w", err)
-	}
-	return sa, nil
+	return r.Account(addr)
 }
 
 // currentState gets the most recent State Root.
 func (t *ZKTrie) currentState() common.Hash {
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
-
 	return t.stateRoot
 }
 
@@ -458,6 +456,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 	}
 
 	t.stateRoot = newStateRoot
+	t.uncommitedRoots[newStateRoot] = struct{}{}
 	return newStateRoot, nil
 }
 
@@ -466,9 +465,9 @@ func (t *ZKTrie) Commit() error {
 	currState := t.currentState()
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
-
 	if err := t.tdb.Commit(currState, true); err != nil {
 		return fmt.Errorf("commit db: %w", err)
 	}
+	t.uncommitedRoots = make(map[common.Hash]struct{})
 	return nil
 }
