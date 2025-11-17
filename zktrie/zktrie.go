@@ -282,6 +282,10 @@ func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash, state *common.Hash) (Blo
 	return BlockInfo(b), nil
 }
 
+func (t *ZKTrie) Sync() error {
+	return t.tdb.Disk().SyncAncient()
+}
+
 func (t *ZKTrie) GetOutpoint(pkScript []byte, out Outpoint, state *common.Hash) ([]byte, error) {
 	var (
 		addr      = common.BytesToAddress(pkScript)
