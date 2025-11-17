@@ -200,10 +200,11 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 }
 
 func (t *ZKTrie) SetCurrentState(state common.Hash) error {
-	_, err := t.tdb.HistoricReader(state)
+	start, end, err := t.tdb.HistoryRange()
 	if err != nil {
 		return err
 	}
+	fmt.Printf("%d, %d\n", start, end)
 	t.stateRoot = state
 	return nil
 }
