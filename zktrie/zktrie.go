@@ -200,12 +200,9 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 }
 
 func (t *ZKTrie) SetCurrentState(state common.Hash) error {
-	ok, err := t.tdb.Recoverable(state)
+	_, err := t.tdb.HistoricReader(state)
 	if err != nil {
 		return err
-	}
-	if !ok {
-		return errors.New("state not available")
 	}
 	t.stateRoot = state
 	return nil
