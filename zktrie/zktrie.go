@@ -199,6 +199,18 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 	return t, nil
 }
 
+func (t *ZKTrie) SetCurrentState(state common.Hash) error {
+	ok, err := t.tdb.Recoverable(state)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("state not available")
+	}
+	t.stateRoot = state
+	return nil
+}
+
 // Close closes the underlying database for ZKTrie.
 func (t *ZKTrie) Close() error {
 	t.mtx.Lock()
