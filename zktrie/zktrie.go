@@ -189,7 +189,7 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 	}
 	tdb := triedb.NewDatabase(disk, &triedb.Config{
 		PathDB: &pathdb.Config{
-			NoAsyncFlush:        true,
+			//	NoAsyncFlush:        true,
 			EnableStateIndexing: true,
 		},
 	})
@@ -282,8 +282,8 @@ func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash, state *common.Hash) (Blo
 	return BlockInfo(b), nil
 }
 
-func (t *ZKTrie) Sync() error {
-	return t.tdb.Disk().SyncAncient()
+func (t *ZKTrie) SyncProgress() (uint64, error) {
+	return t.tdb.IndexProgress()
 }
 
 func (t *ZKTrie) GetOutpoint(pkScript []byte, out Outpoint, state *common.Hash) ([]byte, error) {
