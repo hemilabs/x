@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -345,6 +346,8 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		if err != nil {
 			return types.EmptyRootHash, fmt.Errorf("get account state: %w", err)
 		}
+
+		spew.Dump(addr)
 
 		sa := types.NewEmptyStateAccount()
 		if stateVal != nil {
