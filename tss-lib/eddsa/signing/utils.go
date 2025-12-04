@@ -13,7 +13,7 @@ import (
 
 	"github.com/binance-chain/edwards25519"
 
-	"github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v2/common"
 )
 
 func encodedBytesToBigInt(s *[32]byte) *big.Int {
