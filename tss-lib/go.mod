@@ -3,7 +3,7 @@ module github.com/bnb-chain/tss-lib/v2
 go 1.16
 
 require (
-	github.com/agl/ed25519 v0.0.0-20200225211852-fd4d107ace12
+	github.com/binance-chain/edwards25519 v0.0.0-20200305024217-f36fc4b53d43
 	github.com/btcsuite/btcd v0.23.4
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcutil v1.0.2
@@ -16,5 +16,3 @@ require (
 	golang.org/x/crypto v0.13.0
 	google.golang.org/protobuf v1.31.0
 )
-
-replace github.com/agl/ed25519 => github.com/binance-chain/edwards25519 v0.0.0-20200305024217-f36fc4b53d43

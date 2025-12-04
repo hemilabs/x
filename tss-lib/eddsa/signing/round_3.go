@@ -10,9 +10,10 @@ import (
 	"crypto/sha512"
 	"math/big"
 
-	"github.com/agl/ed25519/edwards25519"
-	"github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/binance-chain/edwards25519"
 	"github.com/pkg/errors"
+
+	"github.com/bnb-chain/tss-lib/v2/common"
 
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/bnb-chain/tss-lib/v2/crypto/commitments"
@@ -83,7 +84,7 @@ func (round *round3) Start() *tss.Error {
 	if round.temp.fullBytesLen == 0 {
 		h.Write(round.temp.m.Bytes())
 	} else {
-		var mBytes = make([]byte, round.temp.fullBytesLen)
+		mBytes := make([]byte, round.temp.fullBytesLen)
 		round.temp.m.FillBytes(mBytes)
 		h.Write(mBytes)
 	}

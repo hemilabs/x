@@ -11,9 +11,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/agl/ed25519/edwards25519"
-	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/binance-chain/edwards25519"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
+
+	"github.com/bnb-chain/tss-lib/v2/tss"
 )
 
 func (round *finalization) Start() *tss.Error {
@@ -45,7 +46,7 @@ func (round *finalization) Start() *tss.Error {
 	if round.temp.fullBytesLen == 0 {
 		round.data.M = round.temp.m.Bytes()
 	} else {
-		var mBytes = make([]byte, round.temp.fullBytesLen)
+		mBytes := make([]byte, round.temp.fullBytesLen)
 		round.temp.m.FillBytes(mBytes)
 		round.data.M = mBytes
 	}
