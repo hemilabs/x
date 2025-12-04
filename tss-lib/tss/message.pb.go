@@ -27,7 +27,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-//
 // Wrapper for TSS messages, often read by the transport layer and not itself sent over the wire
 type MessageWrapper struct {
 	state         protoimpl.MessageState

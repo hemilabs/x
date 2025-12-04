@@ -13,11 +13,11 @@ import (
 	"github.com/binance-chain/edwards25519"
 	"github.com/pkg/errors"
 
-	"github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v2/common"
 
-	"github.com/bnb-chain/tss-lib/v2/crypto"
-	"github.com/bnb-chain/tss-lib/v2/crypto/commitments"
-	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v2/crypto"
+	"github.com/hemilabs/x/tss-lib/v2/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
 
 func (round *round3) Start() *tss.Error {
