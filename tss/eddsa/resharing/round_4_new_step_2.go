@@ -11,11 +11,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/bnb-chain/tss-lib/v2/common"
-	"github.com/bnb-chain/tss-lib/v2/crypto"
-	"github.com/bnb-chain/tss-lib/v2/crypto/commitments"
-	"github.com/bnb-chain/tss-lib/v2/crypto/vss"
-	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss/v2/common"
+	"github.com/hemilabs/x/tss/v2/crypto"
+	"github.com/hemilabs/x/tss/v2/crypto/commitments"
+	"github.com/hemilabs/x/tss/v2/crypto/vss"
+	"github.com/hemilabs/x/tss/v2/tss"
 )
 
 func (round *round4) Start() *tss.Error {

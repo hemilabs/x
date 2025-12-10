@@ -10,15 +10,15 @@ import (
 	"crypto/elliptic"
 	"math/big"
 
-	"github.com/bnb-chain/tss-lib/v2/common"
-	"github.com/bnb-chain/tss-lib/v2/crypto"
-	cmt "github.com/bnb-chain/tss-lib/v2/crypto/commitments"
-	"github.com/bnb-chain/tss-lib/v2/crypto/dlnproof"
-	"github.com/bnb-chain/tss-lib/v2/crypto/facproof"
-	"github.com/bnb-chain/tss-lib/v2/crypto/modproof"
-	"github.com/bnb-chain/tss-lib/v2/crypto/paillier"
-	"github.com/bnb-chain/tss-lib/v2/crypto/vss"
-	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss/v2/common"
+	"github.com/hemilabs/x/tss/v2/crypto"
+	cmt "github.com/hemilabs/x/tss/v2/crypto/commitments"
+	"github.com/hemilabs/x/tss/v2/crypto/dlnproof"
+	"github.com/hemilabs/x/tss/v2/crypto/facproof"
+	"github.com/hemilabs/x/tss/v2/crypto/modproof"
+	"github.com/hemilabs/x/tss/v2/crypto/paillier"
+	"github.com/hemilabs/x/tss/v2/crypto/vss"
+	"github.com/hemilabs/x/tss/v2/tss"
 )
 
 // These messages were generated from Protocol Buffers definitions into ecdsa-resharing.pb.go

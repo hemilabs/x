@@ -13,9 +13,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/bnb-chain/tss-lib/v2/common"
-	. "github.com/bnb-chain/tss-lib/v2/crypto/vss"
-	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss/v2/common"
+	. "github.com/hemilabs/x/tss/v2/crypto/vss"
+	"github.com/hemilabs/x/tss/v2/tss"
 )
 
 func TestCheckIndexesDup(t *testing.T) {

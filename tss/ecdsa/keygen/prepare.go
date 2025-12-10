@@ -15,8 +15,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/bnb-chain/tss-lib/v2/common"
-	"github.com/bnb-chain/tss-lib/v2/crypto/paillier"
+	"github.com/hemilabs/x/tss/v2/common"
+	"github.com/hemilabs/x/tss/v2/crypto/paillier"
 )
 
 const (
