@@ -189,6 +189,7 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 	tdb := triedb.NewDatabase(disk, &triedb.Config{
 		PathDB: &pathdb.Config{
 			//	NoAsyncFlush:        true,
+			StateHistory:        1000, // store last 1000 blocks
 			EnableStateIndexing: true,
 		},
 	})
@@ -361,12 +362,18 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 			return types.EmptyRootHash, fmt.Errorf("get account state: %w", err)
 		}
 
-		sa := types.NewEmptyStateAccount()
+		var (
+			sa      *types.StateAccount
+			skipGet bool
+		)
 		if stateVal != nil {
 			sa, err = types.FullAccount(stateVal)
 			if err != nil {
 				panic(fmt.Errorf("decode stored state value: %w", err))
 			}
+		} else {
+			sa = types.NewEmptyStateAccount()
+			skipGet = true
 		}
 		na := types.StateAccount{
 			Balance:  sa.Balance,
@@ -382,31 +389,31 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 
 		mutatedStore[addrHash] = make(map[common.Hash][]byte, len(block.storage[addr]))
 		originStore[addr] = make(map[common.Hash][]byte, len(block.storage[addr]))
-		for key, value := range storage {
-			prev, err := storeTrie.Get(key[:])
-			if err != nil {
-				return types.EmptyRootHash, fmt.Errorf("get storage trie value: %w", err)
+		for key, v := range storage {
+			var prev []byte
+			if !skipGet {
+				prev, err = storeTrie.Get(key[:])
+				if err != nil {
+					return types.EmptyRootHash, fmt.Errorf("get storage trie value: %w", err)
+				}
 			}
-			originStore[addr][key] = prev
-			mutatedStore[addrHash][key] = value
-		}
-
-		for k, v := range mutatedStore[addrHash] {
-			if err := storeTrie.Update(k[:], v); err != nil {
+			if err := storeTrie.Update(key[:], v); err != nil {
 				return types.EmptyRootHash, fmt.Errorf("update storage trie: %w", err)
 			}
+			mutatedStore[addrHash][key] = v
+			originStore[addr][key] = prev
+
 			switch len(v) {
 			case len(SpendableOutput{}):
 				p := uint256.NewInt(binary.BigEndian.Uint64(v[68:76]))
 				na.Balance.Add(na.Balance, p)
 			case len(SpentOutput{}):
-				val := originStore[addr][k]
-				if val == nil {
+				if prev == nil {
 					// If out was created and spent in the same block,
 					// then don't update the balance.
 					continue
 				}
-				pr := originStore[addr][k][68:76]
+				pr := prev[68:76]
 				p := uint256.NewInt(binary.BigEndian.Uint64(pr))
 				na.Balance.Sub(na.Balance, p)
 			case len(BlockInfo{}):
@@ -428,10 +435,8 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		}
 		mutatedAcc[addrHash] = full
 		originAcc[addr] = stateVal
-	}
 
-	for key, val := range mutatedAcc {
-		if err := stateTrie.Update(key.Bytes(), val); err != nil {
+		if err := stateTrie.Update(addrHash[:], full); err != nil {
 			return types.EmptyRootHash, fmt.Errorf("update accounts trie: %w", err)
 		}
 	}

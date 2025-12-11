@@ -119,6 +119,105 @@ func TestZKTrie(t *testing.T) {
 	}
 }
 
+func BenchmarkZKTrie(b *testing.B) {
+	const (
+		newAddressNum         uint64 = 100
+		reuseAddressNum       uint64 = 100
+		outpointPerReusedAddr uint64 = 5
+		outpointPerNewAddr    uint64 = 5
+	)
+	home := b.TempDir()
+
+	zkt, err := NewZKTrie(home)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Pre-insert N outs for reuse
+	prevBlock := *chaincfg.TestNet3Params.GenesisHash
+	prevStateRoot := types.EmptyRootHash
+	outpoints := make(map[uint64][]Outpoint)
+
+	bh := chainhash.Hash(random(32))
+	blk := NewZKBlock(bh, prevBlock, prevStateRoot, 0)
+
+	// simulate outs
+	for i := range reuseAddressNum {
+		var pkScript [8]byte
+		binary.BigEndian.PutUint64(pkScript[:], i)
+		outpoints[i] = make([]Outpoint, outpointPerReusedAddr)
+		for j := range outpointPerReusedAddr {
+			o := NewOutpoint([32]byte(random(32)), 1)
+			so := NewSpendableOutput(blk.blockHash, [32]byte(random(32)), 1, 100)
+			blk.NewOut(pkScript[:], o, so)
+			outpoints[i][j] = o
+		}
+	}
+
+	sr, err := zkt.InsertBlock(blk)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Logf("inserted block %d, new state root: %v", blk.GetMetadata().Height(), sr)
+
+	if err := zkt.Commit(); err != nil {
+		b.Fatal(err)
+	}
+
+	bhIn := chainhash.Hash(random(32))
+	blkIn := NewZKBlock(bhIn, bh, sr, 1)
+
+	for i := range reuseAddressNum {
+		var pkScript [8]byte
+		binary.BigEndian.PutUint64(pkScript[:], i)
+		for _, o := range outpoints[i] {
+			so := NewSpentOutput(blkIn.blockHash, [32]byte(random(32)), 100)
+			blkIn.NewIn(pkScript[:], o, so)
+		}
+	}
+
+	for i := range newAddressNum {
+		var pkScript [8]byte
+		binary.BigEndian.PutUint64(pkScript[:], i+reuseAddressNum)
+		for range outpointPerNewAddr {
+			o := NewOutpoint([32]byte(random(32)), 1)
+			so := NewSpendableOutput(blkIn.blockHash, [32]byte(random(32)), 1, 100)
+			blkIn.NewOut(pkScript[:], o, so)
+		}
+	}
+
+	b.Run("Block Insert", func(b *testing.B) {
+		for b.Loop() {
+			_, err := zkt.InsertBlock(blkIn)
+			if err != nil {
+				b.Fatal(err)
+			}
+			// if err := zkt.Commit(); err != nil {
+			// 	b.Fatal(err)
+			// }
+			// if err := zkt.Recover(sr); err != nil {
+			// 	b.Fatal(err)
+			// }
+		}
+	})
+
+	b.Run("Block Commit And Revert", func(b *testing.B) {
+		for b.Loop() {
+			_, err := zkt.InsertBlock(blkIn)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if err := zkt.Commit(); err != nil {
+				b.Fatal(err)
+			}
+			if err := zkt.Recover(sr); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+}
+
 // Random returns a variable number of random bytes.
 func random(n int) []byte {
 	buffer := make([]byte, n)
