@@ -121,8 +121,8 @@ func TestZKTrie(t *testing.T) {
 
 func BenchmarkZKTrie(b *testing.B) {
 	const (
-		newAddressNum         uint64 = 100
-		reuseAddressNum       uint64 = 100
+		newAddressNum         uint64 = 10000
+		reuseAddressNum       uint64 = 10000
 		outpointPerReusedAddr uint64 = 5
 		outpointPerNewAddr    uint64 = 5
 	)

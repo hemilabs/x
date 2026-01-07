@@ -48,6 +48,7 @@ func NewOutpoint(txid [32]byte, index uint32) (op Outpoint) {
 	return op
 }
 
+// TODO: encode with value and then crop to prevent get for balance update?
 // blockhash + txId + txInIdx
 type SpentOutput [32 + 32 + 4]byte
 
@@ -390,6 +391,9 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		mutatedStore[addrHash] = make(map[common.Hash][]byte, len(block.storage[addr]))
 		originStore[addr] = make(map[common.Hash][]byte, len(block.storage[addr]))
 		for key, v := range storage {
+			if len(v) == len(SpendableOutput{}) {
+				skipGet = true
+			}
 			var prev []byte
 			if !skipGet {
 				prev, err = storeTrie.Get(key[:])
