@@ -364,8 +364,8 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		}
 
 		var (
-			sa      *types.StateAccount
-			skipGet bool
+			sa         *types.StateAccount
+			newAccount bool
 		)
 		if stateVal != nil {
 			sa, err = types.FullAccount(stateVal)
@@ -374,7 +374,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 			}
 		} else {
 			sa = types.NewEmptyStateAccount()
-			skipGet = true
+			newAccount = true
 		}
 		na := types.StateAccount{
 			Balance:  sa.Balance,
@@ -391,6 +391,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		mutatedStore[addrHash] = make(map[common.Hash][]byte, len(block.storage[addr]))
 		originStore[addr] = make(map[common.Hash][]byte, len(block.storage[addr]))
 		for key, v := range storage {
+			skipGet := newAccount
 			if len(v) == len(SpendableOutput{}) {
 				skipGet = true
 			}
