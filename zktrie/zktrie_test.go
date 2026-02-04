@@ -24,8 +24,10 @@ func TestZKTrie(t *testing.T) {
 		storageKeys uint64 = 5
 	)
 	home := t.TempDir()
+	cfg := NewDefaultConfig(home)
+	cfg.KeepSpentOuts = true
 
-	zkt, err := NewZKTrie(home)
+	zkt, err := NewZKTrie(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +54,8 @@ func TestZKTrie(t *testing.T) {
 
 	prevBlock := chainhash.Hash([32]byte{})
 	prevStateRoot := initialStateRoot
-	outpoints := make(map[uint64][]Outpoint)
+	newOutpoints := make(map[uint64][]Outpoint)
+	usedOutpoints := make(map[uint64][]Outpoint, 0)
 	states := make([]common.Hash, blockCount)
 	blocks := make([]chainhash.Hash, blockCount)
 	for i := range blockCount {
@@ -62,25 +65,29 @@ func TestZKTrie(t *testing.T) {
 		// simulate outs
 		var pkScript [8]byte
 		binary.BigEndian.PutUint64(pkScript[:], i)
-		outpoints[i] = make([]Outpoint, 0)
+		newOutpoints[i] = make([]Outpoint, 0)
 		for range storageKeys {
 			o := NewOutpoint([32]byte(random(32)), 1)
 			so := NewSpendableOutput(blk.blockHash, [32]byte(random(32)), 1, 100)
 			blk.NewOut(pkScript[:], o, so)
-			outpoints[i] = append(outpoints[i], o)
+			newOutpoints[i] = append(newOutpoints[i], o)
 		}
 
 		// simulate an in
-		for ac, keys := range outpoints {
+		for ac, keys := range newOutpoints {
 			if len(keys) <= 1 {
 				continue
 			}
 			var pkScript [8]byte
 			binary.BigEndian.PutUint64(pkScript[:], ac)
 			o := keys[0]
-			outpoints[ac] = keys[1:]
+			newOutpoints[ac] = keys[1:]
 			so := NewSpentOutput(blk.blockHash, [32]byte(random(32)), 1)
 			blk.NewIn(pkScript[:], o, so)
+			if _, ok := usedOutpoints[ac]; !ok {
+				usedOutpoints[ac] = make([]Outpoint, 0)
+			}
+			usedOutpoints[ac] = append(usedOutpoints[ac], o)
 			break
 		}
 
@@ -99,9 +106,9 @@ func TestZKTrie(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, state := range states {
+	for n, state := range states {
 		var found int
-		for ac, keys := range outpoints {
+		for ac, keys := range newOutpoints {
 			var pkScript [8]byte
 			binary.BigEndian.PutUint64(pkScript[:], ac)
 			addr := common.BytesToAddress(pkScript[:])
@@ -115,14 +122,32 @@ func TestZKTrie(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if v != nil {
+				if len(v) != 0 {
 					found++
 					t.Logf("address %x, key %x, value %x", ac, k, v)
 				}
 			}
 		}
-		if found < 1 {
-			t.Fatalf("no outpoints retrieved for state %x", state)
+
+		for ac, keys := range usedOutpoints {
+			var pkScript [8]byte
+			binary.BigEndian.PutUint64(pkScript[:], ac)
+			for _, k := range keys {
+				v, err := zkt.GetOutpoint(pkScript[:], k, &state)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(v) != 0 {
+					found++
+					t.Logf("address %x, key %x, value %x", ac, k, v)
+				}
+			}
+		}
+
+		expected := int(storageKeys) + (n * int(storageKeys))
+		if found != expected {
+			t.Errorf("expected %d outpoints for state %v, got %d",
+				expected, state, found)
 		}
 	}
 
@@ -154,8 +179,10 @@ func BenchmarkZKTrie(b *testing.B) {
 		outpointPerNewAddr    uint64 = 5
 	)
 	home := b.TempDir()
+	cfg := NewDefaultConfig(home)
+	cfg.KeepSpentOuts = true
 
-	zkt, err := NewZKTrie(home)
+	zkt, err := NewZKTrie(cfg)
 	if err != nil {
 		b.Fatal(err)
 	}

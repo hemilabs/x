@@ -164,17 +164,41 @@ func (b *ZKBlock) GetMetadata() BlockInfo {
 	return BlockInfo(b.storage[MetadataAddress][rawKey])
 }
 
+type Config struct {
+	Home string
+
+	// Trie
+	KeepSpentOuts bool // Keep spent outputs in Trie or delete spendable ones
+
+	// LevelDB
+	OpenFilesCache int // capacity of the open files caching
+	CacheSize      int // Block cache and Write buffer capacity
+
+	// PathDB
+	StateIndexing uint64 // Blocks to maintain state history for, 0: full chain
+}
+
+func NewDefaultConfig(home string) *Config {
+	return &Config{
+		Home:          home,
+		KeepSpentOuts: false,
+		StateIndexing: 1000,
+	}
+}
+
 // ZKTrie is used to perform operation on a ZK trie and its database.
 type ZKTrie struct {
-	mtx             sync.RWMutex
+	mtx sync.RWMutex
+
+	cfg *Config
+
 	stateRoot       common.Hash
 	uncommitedRoots map[common.Hash]struct{}
 	tdb             *triedb.Database
 }
 
-// TODO: set database cache and handles
-func NewZKTrie(home string) (*ZKTrie, error) {
-	db, err := leveldb.New(home, 0, 0, "", false)
+func NewZKTrie(cfg *Config) (*ZKTrie, error) {
+	db, err := leveldb.New(cfg.Home, cfg.CacheSize, cfg.OpenFilesCache, "", false)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -184,16 +208,15 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 
 	// high-level database wrapper for the given key-value store
 	disk, err := rawdb.Open(kv, rawdb.OpenOptions{
-		Ancient: filepath.Join(home, "ancients"),
+		Ancient: filepath.Join(cfg.Home, "ancients"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open rawdb: %w", err)
 	}
 	tdb := triedb.NewDatabase(disk, &triedb.Config{
 		PathDB: &pathdb.Config{
-			//	NoAsyncFlush:        true,
-			StateHistory:        1000, // store last 1000 blocks
-			EnableStateIndexing: true,
+			StateHistory:        cfg.StateIndexing,
+			EnableStateIndexing: cfg.StateIndexing > 0,
 		},
 	})
 
@@ -201,6 +224,7 @@ func NewZKTrie(home string) (*ZKTrie, error) {
 		tdb:             tdb,
 		stateRoot:       types.EmptyRootHash,
 		uncommitedRoots: make(map[common.Hash]struct{}),
+		cfg:             cfg,
 	}
 	return t, nil
 }
@@ -414,14 +438,18 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 					return types.EmptyRootHash, fmt.Errorf("get storage trie value: %w", err)
 				}
 			}
-			if err := storeTrie.Update(trieKey[:], value); err != nil {
-				return types.EmptyRootHash, fmt.Errorf("update storage trie: %w", err)
+
+			if len(value) == len(SpentOutput{}) && !t.cfg.KeepSpentOuts {
+				if err := storeTrie.Delete(trieKey[:]); err != nil {
+					return types.EmptyRootHash, fmt.Errorf("delete storage key: %w", err)
+				}
+				mutatedStore[addrHash][trieKey] = nil
+			} else {
+				if err := storeTrie.Update(trieKey[:], value); err != nil {
+					return types.EmptyRootHash, fmt.Errorf("update storage trie: %w", err)
+				}
+				mutatedStore[addrHash][trieKey] = value
 			}
-			// mutatedStore (storageData) uses the hashed key (trieKey) for state lookups.
-			// originStore uses the raw key.
-			// With RawStorageKey=true, the raw key is stored in state history and
-			// will be hashed during rollback to produce the correct trie key.
-			mutatedStore[addrHash][trieKey] = value
 			originStore[addr][rawKey] = prev
 
 			switch len(value) {
