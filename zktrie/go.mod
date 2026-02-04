@@ -2,6 +2,8 @@ module github.com/hemilabs/x/zktrie
 
 go 1.25.1
 
+replace github.com/hemilabs/x/eth-trie => ../eth-trie
+
 require (
 	github.com/btcsuite/btcd v0.25.0
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0

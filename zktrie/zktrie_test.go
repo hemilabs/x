@@ -40,10 +40,21 @@ func TestZKTrie(t *testing.T) {
 		t.Fatalf("got %s, wanted %s", v, []byte("world"))
 	}
 
-	prevBlock := *chaincfg.TestNet3Params.GenesisHash
-	prevStateRoot := types.EmptyRootHash
+	// Create an initial empty block to establish the empty state in the database
+	emptyBlock := NewZKBlock(chainhash.Hash([32]byte{}), *chaincfg.TestNet3Params.GenesisHash, types.EmptyRootHash, 0)
+	initialStateRoot, err := zkt.InsertBlock(emptyBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := zkt.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	prevBlock := chainhash.Hash([32]byte{})
+	prevStateRoot := initialStateRoot
 	outpoints := make(map[uint64][]Outpoint)
 	states := make([]common.Hash, blockCount)
+	blocks := make([]chainhash.Hash, blockCount)
 	for i := range blockCount {
 		bh := chainhash.Hash(random(32))
 		blk := NewZKBlock(bh, prevBlock, prevStateRoot, i)
@@ -81,6 +92,7 @@ func TestZKTrie(t *testing.T) {
 		prevBlock = bh
 		prevStateRoot = sr
 		states[i] = sr
+		blocks[i] = bh
 	}
 
 	if err := zkt.Commit(); err != nil {
@@ -88,6 +100,7 @@ func TestZKTrie(t *testing.T) {
 	}
 
 	for _, state := range states {
+		var found int
 		for ac, keys := range outpoints {
 			var pkScript [8]byte
 			binary.BigEndian.PutUint64(pkScript[:], ac)
@@ -97,24 +110,38 @@ func TestZKTrie(t *testing.T) {
 				t.Fatal(err)
 			}
 			spew.Dump(sa)
-
 			for _, k := range keys {
 				v, err := zkt.GetOutpoint(pkScript[:], k, &state)
 				if err != nil {
 					t.Fatal(err)
 				}
-				t.Logf("address %x, key %x, value %x", ac, k, v)
+				if v != nil {
+					found++
+					t.Logf("address %x, key %x, value %x", ac, k, v)
+				}
 			}
+		}
+		if found < 1 {
+			t.Fatalf("no outpoints retrieved for state %x", state)
 		}
 	}
 
-	md, err := zkt.GetBlockInfo(prevBlock, nil)
-	if err != nil {
-		t.Fatal(err)
+	for _, blk := range blocks {
+		md, err := zkt.GetBlockInfo(blk, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		spew.Dump(md)
 	}
-	spew.Dump(md)
 
-	if err := zkt.Recover(types.EmptyRootHash); err != nil {
+	for i := len(states) - 2; i >= 0; i-- {
+		if err := zkt.Recover(states[i]); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Rolled back to state %v", states[i])
+	}
+
+	if err := zkt.Recover(initialStateRoot); err != nil {
 		t.Fatal(err)
 	}
 }

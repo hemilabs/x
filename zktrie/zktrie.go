@@ -105,6 +105,7 @@ type ZKBlock struct {
 	blockHash common.Hash
 
 	// Storage information. Automatically managed using the utility methods.
+	// The map key is the hashed storage key (crypto.Keccak256Hash of the raw key).
 	storage map[common.Address]map[common.Hash][]byte
 }
 
@@ -131,8 +132,8 @@ func (b *ZKBlock) NewOut(pkScript []byte, out Outpoint, so SpendableOutput) {
 		b.storage[addr] = make(map[common.Hash][]byte)
 	}
 
-	key := crypto.Keccak256Hash(out[:])
-	b.storage[addr][key] = so[:]
+	rawKey := crypto.Keccak256Hash(out[:])
+	b.storage[addr][rawKey] = so[:]
 }
 
 func (b *ZKBlock) NewIn(pkScript []byte, out Outpoint, so SpentOutput) {
@@ -145,8 +146,8 @@ func (b *ZKBlock) NewIn(pkScript []byte, out Outpoint, so SpentOutput) {
 		b.storage[addr] = make(map[common.Hash][]byte)
 	}
 
-	key := crypto.Keccak256Hash(out[:])
-	b.storage[addr][key] = so[:]
+	rawKey := crypto.Keccak256Hash(out[:])
+	b.storage[addr][rawKey] = so[:]
 }
 
 func (b *ZKBlock) GetOutpoint(pkScript []byte, out Outpoint) []byte {
@@ -154,12 +155,13 @@ func (b *ZKBlock) GetOutpoint(pkScript []byte, out Outpoint) []byte {
 	if b.storage == nil || b.storage[addr] == nil {
 		return nil
 	}
-	key := crypto.Keccak256Hash(out[:])
-	return b.storage[addr][key]
+	rawKey := crypto.Keccak256Hash(out[:])
+	return b.storage[addr][rawKey]
 }
 
 func (b *ZKBlock) GetMetadata() BlockInfo {
-	return BlockInfo(b.storage[MetadataAddress][b.blockHash])
+	rawKey := b.blockHash
+	return BlockInfo(b.storage[MetadataAddress][rawKey])
 }
 
 // ZKTrie is used to perform operation on a ZK trie and its database.
@@ -250,6 +252,10 @@ func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash, state *common.Hash) (Blo
 	var (
 		addrHash  = crypto.Keccak256Hash(MetadataAddress[:])
 		stateRoot = t.currentState()
+		// Use the same key derivation as NewZKBlock:
+		// rawKey = blockHash, trieKey = keccak256(blockHash)
+		rawKey  = common.BytesToHash(blockHash[:])
+		trieKey = crypto.Keccak256Hash(rawKey[:])
 	)
 	if state != nil {
 		stateRoot = *state
@@ -260,7 +266,8 @@ func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash, state *common.Hash) (Blo
 		if err != nil {
 			return BlockInfo{}, err
 		}
-		b, err = r.Storage(addrHash, common.BytesToHash(blockHash[:]))
+		// StateReader expects hashed keys
+		b, err = r.Storage(addrHash, trieKey)
 		if err != nil {
 			return BlockInfo{}, err
 		}
@@ -269,7 +276,8 @@ func (t *ZKTrie) GetBlockInfo(blockHash chainhash.Hash, state *common.Hash) (Blo
 		if err != nil {
 			return BlockInfo{}, err
 		}
-		b, err = r.Storage(MetadataAddress, common.BytesToHash(blockHash[:]))
+		// HistoricReader expects raw address and raw key (which will be hashed internally)
+		b, err = r.Storage(MetadataAddress, rawKey)
 		if err != nil {
 			return BlockInfo{}, err
 		}
@@ -295,7 +303,8 @@ func (t *ZKTrie) GetOutpoint(pkScript []byte, out Outpoint, state *common.Hash) 
 	var (
 		addr      = common.BytesToAddress(pkScript)
 		stateRoot = t.currentState()
-		keyHash   = crypto.Keccak256Hash(out[:])
+		rawKey    = crypto.Keccak256Hash(out[:])
+		trieKey   = crypto.Keccak256Hash(rawKey[:])
 	)
 	if state != nil {
 		stateRoot = *state
@@ -305,13 +314,15 @@ func (t *ZKTrie) GetOutpoint(pkScript []byte, out Outpoint, state *common.Hash) 
 		if err != nil {
 			return nil, err
 		}
-		return r.Storage(crypto.Keccak256Hash(addr[:]), keyHash)
+		// StateReader expects hashed keys
+		return r.Storage(crypto.Keccak256Hash(addr[:]), trieKey)
 	}
 	r, err := t.tdb.HistoricReader(stateRoot)
 	if err != nil {
 		return nil, err
 	}
-	return r.Storage(addr, keyHash)
+	// HistoricReader expects raw address and raw key (which will be hashed internally)
+	return r.Storage(addr, rawKey)
 }
 
 func (t *ZKTrie) GetAccount(addr common.Address, state *common.Hash) (*types.SlimAccount, error) {
@@ -390,27 +401,32 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 
 		mutatedStore[addrHash] = make(map[common.Hash][]byte, len(block.storage[addr]))
 		originStore[addr] = make(map[common.Hash][]byte, len(block.storage[addr]))
-		for key, v := range storage {
+		for rawKey, value := range storage {
+			trieKey := crypto.Keccak256Hash(rawKey[:])
 			skipGet := newAccount
-			if len(v) == len(SpendableOutput{}) {
+			if len(value) == len(SpendableOutput{}) {
 				skipGet = true
 			}
 			var prev []byte
 			if !skipGet {
-				prev, err = storeTrie.Get(key[:])
+				prev, err = storeTrie.Get(trieKey[:])
 				if err != nil {
 					return types.EmptyRootHash, fmt.Errorf("get storage trie value: %w", err)
 				}
 			}
-			if err := storeTrie.Update(key[:], v); err != nil {
+			if err := storeTrie.Update(trieKey[:], value); err != nil {
 				return types.EmptyRootHash, fmt.Errorf("update storage trie: %w", err)
 			}
-			mutatedStore[addrHash][key] = v
-			originStore[addr][key] = prev
+			// mutatedStore (storageData) uses the hashed key (trieKey) for state lookups.
+			// originStore uses the raw key.
+			// With RawStorageKey=true, the raw key is stored in state history and
+			// will be hashed during rollback to produce the correct trie key.
+			mutatedStore[addrHash][trieKey] = value
+			originStore[addr][rawKey] = prev
 
-			switch len(v) {
+			switch len(value) {
 			case len(SpendableOutput{}):
-				p := uint256.NewInt(binary.BigEndian.Uint64(v[68:76]))
+				p := uint256.NewInt(binary.BigEndian.Uint64(value[68:76]))
 				na.Balance.Add(na.Balance, p)
 			case len(SpentOutput{}):
 				if prev == nil {
@@ -458,7 +474,7 @@ func (t *ZKTrie) InsertBlock(block *ZKBlock) (common.Hash, error) {
 		AccountsOrigin: originAcc,
 		Storages:       mutatedStore,
 		StoragesOrigin: originStore,
-		RawStorageKey:  false,
+		RawStorageKey:  true,
 	}
 
 	t.mtx.Lock()
