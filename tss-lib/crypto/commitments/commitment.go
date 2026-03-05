@@ -55,7 +55,10 @@ func NewHashDeCommitmentFromBytes(marshalled [][]byte) HashDeCommitment {
 
 func (cmt *HashCommitDecommit) Verify() bool {
 	C, D := cmt.C, cmt.D
-	if C == nil || D == nil {
+	// [FORK] Upstream only checks `C == nil || D == nil`. Added len(D) < 2 check:
+	// D must contain at least the randomness element plus one secret. Without this,
+	// a decommitment with only the randomness (no secret) could pass verification.
+	if C == nil || D == nil || len(D) < 2 {
 		return false
 	}
 	hash := common.SHA512_256i(D...)

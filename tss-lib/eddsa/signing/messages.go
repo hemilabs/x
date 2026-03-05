@@ -46,9 +46,13 @@ func NewSignRound1Message(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream checked `m.Commitment != nil` (field-level, panics on nil
+// receiver) and NonEmptyBytes. Changed to `m != nil` (receiver-level) and added upper-bound
+// on commitment length to reject oversized payloads.
 func (m *SignRound1Message) ValidateBasic() bool {
-	return m.Commitment != nil &&
-		common.NonEmptyBytes(m.GetCommitment())
+	return m != nil &&
+		common.NonEmptyBytes(m.GetCommitment()) &&
+		len(m.GetCommitment()) <= 32 // SHA-512/256 commitment hash
 }
 
 func (m *SignRound1Message) UnmarshalCommitment() *big.Int {
@@ -77,12 +81,18 @@ func NewSignRound2Message(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream checked NonEmptyBytes on proof fields but not size bounds.
+// Hardened with upper-bound checks on Schnorr proof fields (32 bytes for Edwards25519
+// coordinates and scalars) to reject oversized payloads before they reach crypto deserialization.
 func (m *SignRound2Message) ValidateBasic() bool {
 	return m != nil &&
 		common.NonEmptyMultiBytes(m.DeCommitment, 3) &&
 		common.NonEmptyBytes(m.ProofAlphaX) &&
+		len(m.ProofAlphaX) <= 32 && // Edwards25519 coordinate max (32 bytes)
 		common.NonEmptyBytes(m.ProofAlphaY) &&
-		common.NonEmptyBytes(m.ProofT)
+		len(m.ProofAlphaY) <= 32 &&
+		common.NonEmptyBytes(m.ProofT) &&
+		len(m.ProofT) <= 32 // scalar max
 }
 
 func (m *SignRound2Message) UnmarshalDeCommitment() []*big.Int {
@@ -121,9 +131,12 @@ func NewSignRound3Message(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream did not bound S length. Hardened with 32-byte upper bound
+// matching the ed25519 scalar size to prevent oversized payloads from reaching ScMulAdd.
 func (m *SignRound3Message) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.S)
+		common.NonEmptyBytes(m.S) &&
+		len(m.S) <= 32
 }
 
 func (m *SignRound3Message) UnmarshalS() *big.Int {

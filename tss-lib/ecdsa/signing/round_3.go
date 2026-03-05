@@ -7,6 +7,7 @@
 package signing
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 	"sync"
@@ -31,6 +32,18 @@ func (round *round3) Start() *tss.Error {
 
 	i := round.PartyID().Index
 
+	// [FORK] ReceiverID verification on Round 2 P2P messages (same rationale as round_2.go).
+	myKey := round.PartyID().KeyInt().Bytes()
+	for j, Pj := range round.Parties().IDs() {
+		if j == i {
+			continue
+		}
+		r2msg := round.temp.signRound2Messages[j].Content().(*SignRound2Message)
+		if !bytes.Equal(r2msg.GetReceiverId(), myKey) {
+			return round.WrapError(errors.New("receiverId mismatch: message not intended for this party"), Pj)
+		}
+	}
+
 	errChs := make(chan *tss.Error, (len(round.Parties().IDs())-1)*2)
 	wg := sync.WaitGroup{}
 	wg.Add((len(round.Parties().IDs()) - 1) * 2)
@@ -38,7 +51,9 @@ func (round *round3) Start() *tss.Error {
 		if j == i {
 			continue
 		}
-		ContextJ := append(round.temp.ssid, new(big.Int).SetUint64(uint64(j)).Bytes()...)
+		// [FORK] Session-tagged proof verification: ContextJ = SSID || j is passed to
+		// AliceEnd/AliceEndWC to verify Bob's proofs under the correct session context.
+		ContextJ := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(j)))
 		// Alice_end
 		go func(j int, Pj *tss.PartyID) {
 			defer wg.Done()
@@ -59,10 +74,11 @@ func (round *round3) Start() *tss.Error {
 				new(big.Int).SetBytes(r2msg.GetC1()),
 				round.key.NTildej[i],
 				round.key.PaillierSK)
-			alphas[j] = alphaIj
 			if err != nil {
 				errChs <- round.WrapError(err, Pj)
+				return
 			}
+			alphas[j] = alphaIj
 		}(j, Pj)
 		// Alice_end_wc
 		go func(j int, Pj *tss.PartyID) {
@@ -85,10 +101,11 @@ func (round *round3) Start() *tss.Error {
 				round.key.H1j[i],
 				round.key.H2j[i],
 				round.key.PaillierSK)
-			us[j] = uIj
 			if err != nil {
 				errChs <- round.WrapError(err, Pj)
+				return
 			}
+			us[j] = uIj
 		}(j, Pj)
 	}
 
@@ -111,8 +128,8 @@ func (round *round3) Start() *tss.Error {
 		if j == round.PartyID().Index {
 			continue
 		}
-		thelta = modN.Add(thelta, alphas[j].Add(alphas[j], round.temp.betas[j]))
-		sigma = modN.Add(sigma, us[j].Add(us[j], round.temp.vs[j]))
+		thelta = modN.Add(thelta, new(big.Int).Add(alphas[j], round.temp.betas[j]))
+		sigma = modN.Add(sigma, new(big.Int).Add(us[j], round.temp.vs[j]))
 	}
 
 	round.temp.theta = thelta

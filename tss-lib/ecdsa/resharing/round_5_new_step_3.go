@@ -7,6 +7,7 @@
 package resharing
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -30,7 +31,7 @@ func (round *round5) Start() *tss.Error {
 	if round.IsNewCommittee() {
 		// 21.
 		// for this P: SAVE data
-		ContextI := append(round.temp.ssid, big.NewInt(int64(i)).Bytes()...)
+		ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, big.NewInt(int64(i)))
 		round.save.BigXj = round.temp.newBigXjs
 		round.save.ShareID = round.PartyID().KeyInt()
 		round.save.Xi = round.temp.newXi
@@ -49,23 +50,36 @@ func (round *round5) Start() *tss.Error {
 				continue
 			}
 			r4msg1 := msg.Content().(*DGRound4Message1)
-			proof, err := r4msg1.UnmarshalFacProof()
-			if err != nil && round.Parameters.NoProofFac() {
-				common.Logger.Warningf("facProof verify failed for party %s", msg.GetFrom(), err)
-			} else {
-				if err != nil {
-					common.Logger.Warningf("facProof verify failed for party %s", msg.GetFrom(), err)
-					return round.WrapError(err, round.NewParties().IDs()[j])
-				}
-				if ok := proof.Verify(ContextI, round.EC(), round.save.PaillierPKs[j].N, round.save.NTildei,
-					round.save.H1i, round.save.H2i); !ok {
-					common.Logger.Warningf("facProof verify failed for party %s", msg.GetFrom(), err)
-					return round.WrapError(err, round.NewParties().IDs()[j])
-				}
+			// [FORK] ReceiverID binding check on DGRound4Message1: upstream did not include
+			// or verify a receiver identifier. We verify the ReceiverId matches our Key to
+			// prevent fac proof redirection attacks (same pattern as share misdirection in round 4).
+			receiverId := r4msg1.UnmarshalReceiverId()
+			if !bytes.Equal(receiverId, round.PartyID().GetKey()) {
+				return round.WrapError(errors.New("DGRound4Message1 receiverId does not match our key"), round.NewParties().IDs()[j])
 			}
-
+			// [FORK] FacProof verification gated by NoProofFac(). In SNARK mode, classical
+			// fac proofs are replaced by per-participant SNARKs.
+			if round.Parameters.NoProofFac() {
+				continue
+			}
+			proof, err := r4msg1.UnmarshalFacProof()
+			if err != nil {
+				common.Logger.Warningf("facProof unmarshal failed for party %s: %v", msg.GetFrom(), err)
+				return round.WrapError(err, round.NewParties().IDs()[j])
+			}
+			if ok := proof.Verify(ContextI, round.EC(), round.save.PaillierPKs[j].N, round.save.NTildei,
+				round.save.H1i, round.save.H2i); !ok {
+				common.Logger.Warningf("facProof verify failed for party %s", msg.GetFrom())
+				return round.WrapError(errors.New("facProof verify failed"), round.NewParties().IDs()[j])
+			}
 		}
-	} else if round.IsOldCommittee() {
+	}
+	// [FORK] Unconditionally zero old Xi for any party in the old committee.
+	// Upstream used an `else if` branch that missed dual-committee parties (members in both
+	// old and new committees), leaving their old Xi in memory after resharing completed.
+	// This correctness fix ensures the old secret share is wiped regardless of committee
+	// membership configuration.
+	if round.IsOldCommittee() {
 		round.input.Xi.SetInt64(0)
 	}
 

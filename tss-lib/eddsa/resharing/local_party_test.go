@@ -7,6 +7,7 @@
 package resharing_test
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -227,4 +228,84 @@ signing:
 			}
 		}
 	}
+}
+
+// TestEdDSAReshareSSIDGoldenVector verifies that the [FORK] SSID computation in
+// EdDSA resharing produces a stable, expected hash value. The EdDSA resharing SSID
+// is entirely new code (upstream had no SSID for resharing at all). This test
+// constructs the SSID inputs manually — matching the formula in rounds.go getSSID() —
+// and asserts the SHA-512/256 output matches a hardcoded golden vector.
+func TestEdDSAReshareSSIDGoldenVector(t *testing.T) {
+	ec := tss.Edwards()
+
+	// Fixed inputs for reproducibility.
+	// Old party keys (small known values, sorted ascending).
+	oldK1 := big.NewInt(100)
+	oldK2 := big.NewInt(200)
+
+	// New party keys (small known values, sorted ascending).
+	newK1 := big.NewInt(300)
+	newK2 := big.NewInt(400)
+
+	// EDDSAPub: use 5*G on the Edwards curve for a reproducible public key point.
+	gx := ec.Params().Gx
+	gy := ec.Params().Gy
+	pubX, pubY := ec.ScalarMult(gx, gy, big.NewInt(5).Bytes())
+	eddsaPub, err := crypto.NewECPoint(ec, pubX, pubY)
+	assert.NoError(t, err, "NewECPoint for 5*G on Edwards")
+
+	computeEdDSAReshareSSID := func(nonce int64) string {
+		ssidList := []*big.Int{
+			new(big.Int).SetBytes([]byte("eddsa-resharing")),
+			ec.Params().P,
+			ec.Params().N,
+			ec.Params().B,
+			ec.Params().Gx,
+			ec.Params().Gy,
+		}
+		// Old party keys
+		ssidList = append(ssidList, oldK1, oldK2)
+		// New party keys
+		ssidList = append(ssidList, newK1, newK2)
+		// EDDSAPub (X, Y)
+		ssidList = append(ssidList, eddsaPub.X(), eddsaPub.Y())
+		// old party count, old threshold, new party count, new threshold
+		ssidList = append(ssidList, big.NewInt(2)) // old n
+		ssidList = append(ssidList, big.NewInt(0)) // old threshold
+		ssidList = append(ssidList, big.NewInt(2)) // new n
+		ssidList = append(ssidList, big.NewInt(0)) // new threshold
+		// round number, ssidNonce
+		ssidList = append(ssidList, big.NewInt(1))     // round number
+		ssidList = append(ssidList, big.NewInt(nonce))  // nonce
+
+		return fmt.Sprintf("%x", common.SHA512_256i(ssidList...).Bytes())
+	}
+
+	actualNonce0 := computeEdDSAReshareSSID(0)
+	actualNonce42 := computeEdDSAReshareSSID(42)
+
+	t.Logf("EdDSA ReshareSSID(nonce=0)  = %s", actualNonce0)
+	t.Logf("EdDSA ReshareSSID(nonce=42) = %s", actualNonce42)
+
+	// Verify they differ by nonce.
+	assert.NotEqual(t, actualNonce0, actualNonce42, "nonce 0 and 42 should produce different SSIDs")
+
+	// Verify determinism.
+	assert.Equal(t, actualNonce0, computeEdDSAReshareSSID(0), "SSID computation should be deterministic")
+
+	// Verify expected length: SHA-512/256 produces 32 bytes.
+	assert.Equal(t, 64, len(actualNonce0), "hex-encoded SHA-512/256 should be 64 chars (32 bytes)")
+
+	// Golden vectors (captured from first run, frozen for regression detection).
+	expectedNonce0 := "e37f615e54af8a3e5c67725c965261015758134cee4c42dea54abed1ddcaaf10"
+	expectedNonce42 := "ccb1416bff9cb5b41ceab6e459a49faaad4fd38611e78f74f4131e5c32013a64"
+
+	if actualNonce0 != expectedNonce0 {
+		t.Fatalf("EdDSA Reshare SSID golden vector mismatch (nonce=0):\n  got:  %s\n  want: %s", actualNonce0, expectedNonce0)
+	}
+	if actualNonce42 != expectedNonce42 {
+		t.Fatalf("EdDSA Reshare SSID golden vector mismatch (nonce=42):\n  got:  %s\n  want: %s", actualNonce42, expectedNonce42)
+	}
+
+	t.Logf("EdDSA Reshare SSID golden vectors verified (nonce=0 and nonce=42)")
 }

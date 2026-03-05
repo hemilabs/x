@@ -70,7 +70,14 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 	binary.LittleEndian.PutUint64(inLenBz, uint64(inLen))
 	ptrs := make([][]byte, inLen)
 	for i, n := range in {
-		ptrs[i] = n.Bytes()
+		// [FORK] Nil guard: upstream panics on nil big.Int input. Protocol fields
+		// (e.g., optional SSID components) may legitimately be nil; we hash the
+		// encoding of zero instead, matching the behaviour of big.NewInt(0).Bytes().
+		if n == nil {
+			ptrs[i] = zero.Bytes()
+		} else {
+			ptrs[i] = n.Bytes()
+		}
 		bzSize += len(ptrs[i])
 	}
 	dataCap := len(inLenBz) + bzSize + inLen + (inLen * 8)
@@ -93,7 +100,10 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 	return new(big.Int).SetBytes(state.Sum(nil))
 }
 
-// SHA512_256i_TAGGED tagged version of SHA512_256i
+// SHA512_256i_TAGGED implements a tagged hash (double-prefix construction per BIP-340)
+// for SSID domain separation. All proof constructors/verifiers pass Session tags through
+// this function to bind proofs to a specific ceremony session, preventing cross-ceremony
+// replay attacks.
 func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 	tagBz := SHA512_256(tag)
 	var data []byte
@@ -112,6 +122,7 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 	binary.LittleEndian.PutUint64(inLenBz, uint64(inLen))
 	ptrs := make([][]byte, inLen)
 	for i, n := range in {
+		// Nil guard (same as SHA512_256i above, present in both upstream and fork).
 		if n == nil {
 			ptrs[i] = zero.Bytes()
 		} else {

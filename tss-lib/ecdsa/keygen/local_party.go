@@ -55,6 +55,10 @@ type (
 		ssidNonce     *big.Int
 		shares        vss.Shares
 		deCommitPolyG cmt.HashDeCommitment
+		// [FORK] Store VSS polynomial coefficients for SNARK witness extraction.
+		// Upstream does not expose the polynomial; we need it so the SP1 per-participant
+		// prover can reconstruct the party's secret share commitment.
+		Poly []*big.Int
 	}
 )
 
@@ -124,6 +128,14 @@ func (p *LocalParty) ValidateMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 		return false, p.WrapError(fmt.Errorf("received msg with a sender index too great (%d <= %d)",
 			p.params.PartyCount(), msg.GetFrom().Index), msg.GetFrom())
 	}
+	// [FORK] Key-at-Index verification: upstream only checked index bounds. We additionally
+	// verify that the sender's Key matches the party registered at the claimed Index. Without
+	// this, an attacker could impersonate another party by sending a valid index with a
+	// different Key, causing messages to be stored under the wrong party's slot.
+	knownParty := p.params.Parties().IDs()[msg.GetFrom().Index]
+	if knownParty.KeyInt().Cmp(msg.GetFrom().KeyInt()) != 0 {
+		return false, p.WrapError(fmt.Errorf("sender Key does not match party at claimed Index %d", msg.GetFrom().Index), msg.GetFrom())
+	}
 	return true, nil
 }
 
@@ -135,15 +147,47 @@ func (p *LocalParty) StoreMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 	fromPIdx := msg.GetFrom().Index
 
 	// switch/case is necessary to store any messages beyond current round
-	// this does not handle message replays. we expect the caller to apply replay and spoofing protection.
+	// [FORK] Reject duplicate messages for the same (round, sender) pair. Upstream would
+	// silently overwrite stored messages, which breaks commit-then-reveal guarantees (an
+	// attacker could replace a commitment after seeing the decommitment). We also validate
+	// the broadcast/P2P flag at storage time to prevent slot poisoning (a P2P message
+	// stored in a broadcast slot or vice versa).
 	switch msg.Content().(type) {
-	case *KGRound1Message:
+	case *KGRound1Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("KGRound1Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.kgRound1Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate KGRound1Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.kgRound1Messages[fromPIdx] = msg
-	case *KGRound2Message1:
+	case *KGRound2Message1: // P2P
+		if msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("KGRound2Message1 expected P2P but got broadcast"), msg.GetFrom())
+		}
+		if p.temp.kgRound2Message1s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate KGRound2Message1 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.kgRound2Message1s[fromPIdx] = msg
-	case *KGRound2Message2:
+	case *KGRound2Message2: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("KGRound2Message2 expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.kgRound2Message2s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate KGRound2Message2 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.kgRound2Message2s[fromPIdx] = msg
-	case *KGRound3Message:
+	case *KGRound3Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("KGRound3Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.kgRound3Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate KGRound3Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.kgRound3Messages[fromPIdx] = msg
 	default: // unrecognised message, just ignore!
 		common.Logger.Warningf("unrecognised message ignored: %v", msg)
@@ -167,6 +211,13 @@ func (save LocalPartySaveData) OriginalIndex() (int, error) {
 		return -1, errors.New("a party index could not be recovered from Ks")
 	}
 	return index, nil
+}
+
+// [FORK] GetPoly returns the VSS polynomial coefficients stored during Round 1.
+// Returns nil if Round 1 has not completed yet. This method does not exist in
+// upstream; it is used by the SP1 per-participant prover for witness extraction.
+func (p *LocalParty) GetPoly() []*big.Int {
+	return p.temp.Poly
 }
 
 func (p *LocalParty) PartyID() *tss.PartyID {

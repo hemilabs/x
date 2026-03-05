@@ -7,6 +7,7 @@
 package keygen
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -42,6 +43,12 @@ func (round *round3) Start() *tss.Error {
 		xi = new(big.Int).Add(xi, share)
 	}
 	round.save.Xi = new(big.Int).Mod(xi, round.Params().EC().Params().N)
+	// [FORK] Xi=0 check: upstream did not validate. A zero private key share means the party
+	// contributes nothing to the aggregate secret, and its public key share BigXj would be
+	// the identity point.
+	if round.save.Xi.Sign() == 0 {
+		return round.WrapError(errors.New("Xi is zero"))
+	}
 
 	// 2-3.
 	Vc := make(vss.Vs, round.Threshold()+1)
@@ -83,12 +90,11 @@ func (round *round3) Start() *tss.Error {
 				ch <- vssOut{err, nil}
 				return
 			}
-			modProof, err := r2msg2.UnmarshalModProof()
-			if err != nil && round.Parameters.NoProofMod() {
-				// For old parties, the modProof could be not exist
-				// Not return error for compatibility reason
-				common.Logger.Warningf("modProof not exist:%s", Ps[j])
-			} else {
+			// [FORK] ModProof gating: upstream also gates by NoProofMod(), but uses it for
+			// backward-compatible error tolerance (attempts unmarshal, then logs a warning
+			// and continues if it fails). We skip unmarshal entirely in SNARK mode.
+			if !round.Params().NoProofMod() {
+				modProof, err := r2msg2.UnmarshalModProof()
 				if err != nil {
 					ch <- vssOut{errors.New("modProof verify failed"), nil}
 					return
@@ -99,6 +105,15 @@ func (round *round3) Start() *tss.Error {
 				}
 			}
 			r2msg1 := round.temp.kgRound2Message1s[j].Content().(*KGRound2Message1)
+			// [FORK] ReceiverID binding check: upstream did not include or verify a receiver
+			// identifier in P2P messages. We verify the ReceiverId field matches our Key to
+			// prevent share misdirection attacks where a compromised transport layer routes
+			// party A's share to party B.
+			myKey := round.PartyID().KeyInt().Bytes()
+			if !bytes.Equal(r2msg1.GetReceiverId(), myKey) {
+				ch <- vssOut{errors.New("receiverId mismatch: message not intended for this party"), nil}
+				return
+			}
 			PjShare := vss.Share{
 				Threshold: round.Threshold(),
 				ID:        round.PartyID().KeyInt(),
@@ -108,12 +123,11 @@ func (round *round3) Start() *tss.Error {
 				ch <- vssOut{errors.New("vss verify failed"), nil}
 				return
 			}
-			facProof, err := r2msg1.UnmarshalFacProof()
-			if err != nil && round.NoProofFac() {
-				// For old parties, the facProof could be not exist
-				// Not return error for compatibility reason
-				common.Logger.Warningf("facProof not exist:%s", Ps[j])
-			} else {
+			// [FORK] FacProof gating: upstream also gates by NoProofFac(), but uses it for
+			// backward-compatible error tolerance (attempts unmarshal, then logs a warning
+			// and continues if it fails). We skip unmarshal entirely in SNARK mode.
+			if !round.Params().NoProofFac() {
+				facProof, err := r2msg1.UnmarshalFacProof()
 				if err != nil {
 					ch <- vssOut{errors.New("facProof verify failed"), nil}
 					return
@@ -193,10 +207,18 @@ func (round *round3) Start() *tss.Error {
 					culprits = append(culprits, Pj)
 				}
 			}
-			bigXj[j] = BigXj
+			// [FORK] BigXj identity-point check: upstream did not validate. A public key share
+			// at the identity point (point at infinity) breaks threshold ECDSA verification.
+			// Defense-in-depth: on Weierstrass curves, Add() calls NewECPoint which rejects (0,0),
+			// so this is unreachable. Essential on Edwards curves where identity (0,1) passes.
+			if BigXj.IsIdentity() {
+				culprits = append(culprits, Pj)
+			} else {
+				bigXj[j] = BigXj
+			}
 		}
 		if len(culprits) > 0 {
-			return round.WrapError(errors.New("adding Vc[c].ScalarMult(z) to BigXj resulted in a point not on the curve"), culprits...)
+			return round.WrapError(errors.New("BigXj is the identity point or could not be computed"), culprits...)
 		}
 		round.save.BigXj = bigXj
 	}
@@ -205,6 +227,13 @@ func (round *round3) Start() *tss.Error {
 	ecdsaPubKey, err := crypto.NewECPoint(round.Params().EC(), Vc[0].X(), Vc[0].Y())
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "public key is not on the curve"))
+	}
+	// [FORK] ECDSAPub identity-point check: upstream did not validate. An identity-point
+	// public key means the aggregate secret is zero, which is catastrophic for ECDSA.
+	// Defense-in-depth: on Weierstrass curves, NewECPoint above rejects (0,0), making
+	// this unreachable. Essential on Edwards curves where (0,1) passes IsOnCurve.
+	if ecdsaPubKey.IsIdentity() {
+		return round.WrapError(errors.New("public key is the identity point"))
 	}
 	round.save.ECDSAPub = ecdsaPubKey
 

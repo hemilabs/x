@@ -37,14 +37,20 @@ func (round *round1) Start() *tss.Error {
 	// but considered different blockchain use different hash function we accept the converted big.Int
 	// if this big.Int is not belongs to Zq, the client might not comply with common rule (for ECDSA):
 	// https://github.com/btcsuite/btcd/blob/c26ffa870fd817666a857af1bf6498fabba1ffe3/btcec/signature.go#L263
-	if round.temp.m.Cmp(round.Params().EC().Params().N) >= 0 {
+	// [FORK] Message range check: upstream validates m < N but does not check m >= 0.
+	// A negative m (possible if the caller constructs one explicitly) would cause
+	// undefined behavior in modular arithmetic below.
+	if round.temp.m.Sign() < 0 || round.temp.m.Cmp(round.Params().EC().Params().N) >= 0 {
 		return round.WrapError(errors.New("hashed message is not valid"))
 	}
 
 	round.number = 1
 	round.started = true
 	round.resetOK()
-	round.temp.ssidNonce = new(big.Int).SetUint64(0)
+	// [FORK] SSID computation: upstream computes SSID from curve params, party keys, BigXj,
+	// NTilde, H1, H2, round number, and nonce. Our getSSID() additionally includes a protocol
+	// tag ("ecdsa-signing"), party count, threshold, and the message being signed.
+	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(round.Params().SSIDNonce()))
 	ssid, err := round.getSSID()
 	if err != nil {
 		return round.WrapError(err)
@@ -64,11 +70,16 @@ func (round *round1) Start() *tss.Error {
 	i := round.PartyID().Index
 	round.ok[i] = true
 
+	// [FORK] Session-tagged MtA: upstream passes no session context to AliceInit.
+	// ContextI = SSID || i binds the range proof to this specific session and party,
+	// preventing cross-session proof replay. Uses AppendBigIntToBytesSlice for
+	// length-prefixed encoding (see common/int.go [FORK] comment).
+	ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(i)))
 	for j, Pj := range round.Parties().IDs() {
 		if j == i {
 			continue
 		}
-		cA, pi, err := mta.AliceInit(round.Params().EC(), round.key.PaillierPKs[i], k, round.key.NTildej[j], round.key.H1j[j], round.key.H2j[j], round.Rand())
+		cA, pi, err := mta.AliceInit(ContextI, round.Params().EC(), round.key.PaillierPKs[i], k, round.key.NTildej[j], round.key.H1j[j], round.key.H2j[j], round.Rand())
 		if err != nil {
 			return round.WrapError(fmt.Errorf("failed to init mta: %v", err))
 		}
@@ -132,9 +143,17 @@ func (round *round1) prepare() error {
 		// So x + D has shamir shares  x_0 + D, x_1 + D, ..., x_n + D
 		mod := common.ModInt(round.Params().EC().Params().N)
 		xi = mod.Add(round.temp.keyDerivationDelta, xi)
-		round.key.Xi = xi
+		// [FORK] Note: do NOT write back to round.key.Xi here. The derived xi is only
+		// needed locally for PrepareForSigning below. Mutating round.key would
+		// corrupt the party's copy of LocalPartySaveData, causing incorrect
+		// results if the same data structure is inspected after signing.
 	}
 
+	// [FORK] Parameter sanity check: upstream rejects when t+1 > len(ks) but does not check
+	// len(ks) == partyCount, which could cause silent miscomputation.
+	if len(ks) != round.PartyCount() {
+		return fmt.Errorf("key count %d does not match party count %d", len(ks), round.PartyCount())
+	}
 	if round.Threshold()+1 > len(ks) {
 		return fmt.Errorf("t+1=%d is not satisfied by the key count of %d", round.Threshold()+1, len(ks))
 	}

@@ -11,7 +11,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/binance-chain/edwards25519"
+	"github.com/binance-chain/edwards25519/edwards25519"
 
 	"github.com/hemilabs/x/tss-lib/v2/common"
 )
@@ -51,6 +51,13 @@ func copyBytes(aB []byte) *[32]byte {
 		return nil
 	}
 	s := new([32]byte)
+
+	// [FORK] Reject values that exceed 32 bytes — upstream silently truncated by only
+	// copying the first 32 bytes, which would corrupt cryptographic scalars and produce
+	// incorrect signatures or leak secret data.
+	if len(aB) > 32 {
+		panic("copyBytes: input exceeds 32 bytes, would silently truncate")
+	}
 
 	// If we have a short byte string, expand
 	// it so that it's long enough.

@@ -46,15 +46,21 @@ func (round *round1) Start() *tss.Error {
 
 	// 2. compute the vss shares
 	ids := round.Parties().IDs().Keys()
-	vs, shares, err := vss.Create(round.EC(), round.Threshold(), ui, ids, round.Rand())
+	vs, shares, poly, err := vss.Create(round.EC(), round.Threshold(), ui, ids, round.Rand())
 	if err != nil {
 		return round.WrapError(err, Pi)
 	}
+	// [FORK] Store VSS polynomial for SNARK witness extraction via GetPoly().
+	// Upstream discards the polynomial after creating shares.
+	round.temp.Poly = poly
 	round.save.Ks = ids
 
-	// security: the original u_i may be discarded
-	ui = zero // clears the secret data from memory
-	_ = ui    // silences a linter warning
+	// [FORK] Clear ui (secret partial key share) from memory after its last use.
+	// Defense-in-depth against memory disclosure. Note: poly[0] retains the same
+	// value for SNARK witness extraction via GetPoly(). The caller in tss.go
+	// zeros poly after witness construction.
+	round.temp.ui = new(big.Int)
+	ui = nil
 
 	// make commitment -> (C, D)
 	pGFlat, err := crypto.FlattenECPoints(vs)
@@ -87,23 +93,12 @@ func (round *round1) Start() *tss.Error {
 	round.save.NTildej[i] = preParams.NTildei
 	round.save.H1j[i], round.save.H2j[i] = preParams.H1i, preParams.H2i
 
-	// generate the dlnproofs for keygen
-	h1i, h2i, alpha, beta, p, q, NTildei := preParams.H1i,
-		preParams.H2i,
-		preParams.Alpha,
-		preParams.Beta,
-		preParams.P,
-		preParams.Q,
-		preParams.NTildei
-	dlnProof1 := dlnproof.NewDLNProof(h1i, h2i, alpha, p, q, NTildei, round.Rand())
-	dlnProof2 := dlnproof.NewDLNProof(h2i, h1i, beta, p, q, NTildei, round.Rand())
-
 	// for this P: SAVE
 	// - shareID
 	// and keep in temporary storage:
 	// - VSS Vs
 	// - our set of Shamir shares
-	round.temp.ssidNonce = new(big.Int).SetUint64(0)
+	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(round.Params().SSIDNonce()))
 	round.save.ShareID = ids[i]
 	round.temp.vs = vs
 	ssid, err := round.getSSID()
@@ -112,6 +107,22 @@ func (round *round1) Start() *tss.Error {
 	}
 	round.temp.ssid = ssid
 	round.temp.shares = shares
+
+	// [FORK] Generate DLN proofs for keygen. Gated by NoProofDLN(): in on-chain SNARK mode,
+	// classical DLN proofs are replaced by per-participant SNARKs, so we skip generation.
+	var dlnProof1, dlnProof2 *dlnproof.Proof
+	if !round.Params().NoProofDLN() {
+		h1i, h2i, alpha, beta, p, q, NTildei := preParams.H1i,
+			preParams.H2i,
+			preParams.Alpha,
+			preParams.Beta,
+			preParams.P,
+			preParams.Q,
+			preParams.NTildei
+		ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, big.NewInt(int64(i)))
+		dlnProof1 = dlnproof.NewDLNProof(ContextI, h1i, h2i, alpha, p, q, NTildei, round.Rand())
+		dlnProof2 = dlnproof.NewDLNProof(ContextI, h2i, h1i, beta, p, q, NTildei, round.Rand())
+	}
 
 	// for this P: SAVE de-commitments, paillier keys for round 2
 	round.save.PaillierSK = preParams.PaillierSK

@@ -20,6 +20,11 @@ import (
 
 // These messages were generated from Protocol Buffers definitions into ecdsa-signing.pb.go
 // The following messages are registered on the Protocol Buffers "wire"
+//
+// [FORK] ValidateBasic hardening: upstream ValidateBasic() on all signing message types
+// already checks non-nil and non-empty fields (with proof size validation where applicable).
+// We add upper-bound length checks, ReceiverId non-empty checks on P2P messages, and
+// per-element byte limits on decommitments. This catches oversized/malformed messages early.
 
 var (
 	// Ensure that signing messages implement ValidateBasic
@@ -50,9 +55,13 @@ func NewSignRound1Message1(
 		IsBroadcast: false,
 	}
 	pfBz := proof.Bytes()
+	// [FORK] ReceiverId field added to P2P messages. Upstream does not bind the intended
+	// recipient into the message, allowing relay/reflection attacks where a P2P message
+	// meant for party A is delivered to party B.
 	content := &SignRound1Message1{
 		C:               c.Bytes(),
 		RangeProofAlice: pfBz[:],
+		ReceiverId:      to.GetKey(),
 	}
 	msg := tss.NewMessageWrapper(meta, content)
 	return tss.NewMessage(meta, content, msg)
@@ -61,7 +70,9 @@ func NewSignRound1Message1(
 func (m *SignRound1Message1) ValidateBasic() bool {
 	return m != nil &&
 		common.NonEmptyBytes(m.GetC()) &&
-		common.NonEmptyMultiBytes(m.GetRangeProofAlice(), mta.RangeProofAliceBytesParts)
+		len(m.GetC()) <= 1024 && // Paillier ciphertext is at most N^2 bytes (2*2048/8 = 512, with margin)
+		common.NonEmptyMultiBytes(m.GetRangeProofAlice(), mta.RangeProofAliceBytesParts) &&
+		common.NonEmptyBytes(m.GetReceiverId())
 }
 
 func (m *SignRound1Message1) UnmarshalC() *big.Int {
@@ -90,8 +101,9 @@ func NewSignRound1Message2(
 }
 
 func (m *SignRound1Message2) ValidateBasic() bool {
-	return m.Commitment != nil &&
-		common.NonEmptyBytes(m.GetCommitment())
+	return m != nil &&
+		common.NonEmptyBytes(m.GetCommitment()) &&
+		len(m.GetCommitment()) <= 32 // SHA-512/256 commitment hash
 }
 
 func (m *SignRound1Message2) UnmarshalCommitment() *big.Int {
@@ -114,11 +126,13 @@ func NewSignRound2Message(
 	}
 	pfBob := pi1Ji.Bytes()
 	pfBobWC := pi2Ji.Bytes()
+	// [FORK] ReceiverId field added (same rationale as SignRound1Message1).
 	content := &SignRound2Message{
 		C1:         c1Ji.Bytes(),
 		C2:         c2Ji.Bytes(),
 		ProofBob:   pfBob[:],
 		ProofBobWc: pfBobWC[:],
+		ReceiverId: to.GetKey(),
 	}
 	msg := tss.NewMessageWrapper(meta, content)
 	return tss.NewMessage(meta, content, msg)
@@ -127,9 +141,12 @@ func NewSignRound2Message(
 func (m *SignRound2Message) ValidateBasic() bool {
 	return m != nil &&
 		common.NonEmptyBytes(m.C1) &&
+		len(m.C1) <= 1024 && // Paillier ciphertext upper bound
 		common.NonEmptyBytes(m.C2) &&
+		len(m.C2) <= 1024 && // Paillier ciphertext upper bound
 		common.NonEmptyMultiBytes(m.ProofBob, mta.ProofBobBytesParts) &&
-		common.NonEmptyMultiBytes(m.ProofBobWc, mta.ProofBobWCBytesParts)
+		common.NonEmptyMultiBytes(m.ProofBobWc, mta.ProofBobWCBytesParts) &&
+		common.NonEmptyBytes(m.GetReceiverId())
 }
 
 func (m *SignRound2Message) UnmarshalProofBob() (*mta.ProofBob, error) {
@@ -159,7 +176,8 @@ func NewSignRound3Message(
 
 func (m *SignRound3Message) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.Theta)
+		common.NonEmptyBytes(m.Theta) &&
+		len(m.Theta) <= 32
 }
 
 // ----- //
@@ -185,11 +203,23 @@ func NewSignRound4Message(
 }
 
 func (m *SignRound4Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.DeCommitment, 3) &&
+	if m == nil {
+		return false
+	}
+	// Bound decommitment element sizes: randomness (32) + x (33) + y (33).
+	dc := m.DeCommitment
+	for _, bz := range dc {
+		if len(bz) > 33 {
+			return false
+		}
+	}
+	return common.NonEmptyMultiBytes(dc, 3) &&
 		common.NonEmptyBytes(m.ProofAlphaX) &&
+		len(m.ProofAlphaX) <= 33 && // EC point coordinate max
 		common.NonEmptyBytes(m.ProofAlphaY) &&
-		common.NonEmptyBytes(m.ProofT)
+		len(m.ProofAlphaY) <= 33 &&
+		common.NonEmptyBytes(m.ProofT) &&
+		len(m.ProofT) <= 32 // scalar max
 }
 
 func (m *SignRound4Message) UnmarshalDeCommitment() []*big.Int {
@@ -230,7 +260,8 @@ func NewSignRound5Message(
 
 func (m *SignRound5Message) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.Commitment)
+		common.NonEmptyBytes(m.Commitment) &&
+		len(m.Commitment) <= 32 // SHA-512/256 commitment hash
 }
 
 func (m *SignRound5Message) UnmarshalCommitment() *big.Int {
@@ -265,15 +296,29 @@ func NewSignRound6Message(
 }
 
 func (m *SignRound6Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.DeCommitment, 5) &&
+	if m == nil {
+		return false
+	}
+	for _, d := range m.GetDeCommitment() {
+		if len(d) > 33 { // EC coordinate or randomness max
+			return false
+		}
+	}
+	return common.NonEmptyMultiBytes(m.DeCommitment, 5) &&
 		common.NonEmptyBytes(m.ProofAlphaX) &&
+		len(m.ProofAlphaX) <= 33 && // EC point coordinate max
 		common.NonEmptyBytes(m.ProofAlphaY) &&
+		len(m.ProofAlphaY) <= 33 &&
 		common.NonEmptyBytes(m.ProofT) &&
+		len(m.ProofT) <= 32 && // scalar max
 		common.NonEmptyBytes(m.VProofAlphaX) &&
+		len(m.VProofAlphaX) <= 33 &&
 		common.NonEmptyBytes(m.VProofAlphaY) &&
+		len(m.VProofAlphaY) <= 33 &&
 		common.NonEmptyBytes(m.VProofT) &&
-		common.NonEmptyBytes(m.VProofU)
+		len(m.VProofT) <= 32 &&
+		common.NonEmptyBytes(m.VProofU) &&
+		len(m.VProofU) <= 32
 }
 
 func (m *SignRound6Message) UnmarshalDeCommitment() []*big.Int {
@@ -329,7 +374,8 @@ func NewSignRound7Message(
 
 func (m *SignRound7Message) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.Commitment)
+		common.NonEmptyBytes(m.Commitment) &&
+		len(m.Commitment) <= 32 // SHA-512/256 commitment hash
 }
 
 func (m *SignRound7Message) UnmarshalCommitment() *big.Int {
@@ -355,8 +401,15 @@ func NewSignRound8Message(
 }
 
 func (m *SignRound8Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.DeCommitment, 5)
+	if m == nil || !common.NonEmptyMultiBytes(m.DeCommitment, 5) {
+		return false
+	}
+	for _, d := range m.DeCommitment {
+		if len(d) > 33 { // EC coordinate or randomness max
+			return false
+		}
+	}
+	return true
 }
 
 func (m *SignRound8Message) UnmarshalDeCommitment() []*big.Int {
@@ -383,7 +436,8 @@ func NewSignRound9Message(
 
 func (m *SignRound9Message) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.S)
+		common.NonEmptyBytes(m.S) &&
+		len(m.S) <= 32
 }
 
 func (m *SignRound9Message) UnmarshalS() *big.Int {

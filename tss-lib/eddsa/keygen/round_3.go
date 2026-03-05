@@ -7,6 +7,7 @@
 package keygen
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -42,6 +43,11 @@ func (round *round3) Start() *tss.Error {
 		xi = new(big.Int).Add(xi, share)
 	}
 	round.save.Xi = new(big.Int).Mod(xi, round.Params().EC().Params().N)
+	// [FORK] Xi zero-check: upstream did not validate. A zero Xi means this party's
+	// signing contribution would be zero (annihilated during Lagrange interpolation).
+	if round.save.Xi.Sign() == 0 {
+		return round.WrapError(errors.New("Xi is zero"))
+	}
 
 	// 2-3.
 	Vc := make(vss.Vs, round.Threshold()+1)
@@ -81,13 +87,12 @@ func (round *round3) Start() *tss.Error {
 			}
 
 			PjVs, err := crypto.UnFlattenECPoints(round.Params().EC(), flatPolyGs)
-			for i, PjV := range PjVs {
-				PjVs[i] = PjV.EightInvEight()
-			}
-
 			if err != nil {
 				ch <- vssOut{err, nil}
 				return
+			}
+			for i, PjV := range PjVs {
+				PjVs[i] = PjV.EightInvEight()
 			}
 			proof, err := r2msg2.UnmarshalZKProof(round.Params().EC())
 			if err != nil {
@@ -100,6 +105,14 @@ func (round *round3) Start() *tss.Error {
 				return
 			}
 			r2msg1 := round.temp.kgRound2Message1s[j].Content().(*KGRound2Message1)
+			// [FORK] Verify receiverId matches our key to prevent share redirection attacks (SC#2).
+			// Upstream had no receiver binding — a malicious relay could swap P2P envelopes
+			// between parties, causing them to use each other's shares silently.
+			receiverId := r2msg1.UnmarshalReceiverId()
+			if !bytes.Equal(receiverId, round.PartyID().GetKey()) {
+				ch <- vssOut{errors.New("receiverId mismatch: message not intended for this party"), nil}
+				return
+			}
 			PjShare := vss.Share{
 				Threshold: round.Threshold(),
 				ID:        round.PartyID().KeyInt(),
@@ -177,10 +190,17 @@ func (round *round3) Start() *tss.Error {
 					culprits = append(culprits, Pj)
 				}
 			}
-			bigXj[j] = BigXj
+			// [FORK] BigXj identity check: upstream did not check. The identity point means
+			// this party's public key share is degenerate — it would make the group key
+			// vulnerable and verification equations trivially satisfiable.
+			if BigXj.IsIdentity() {
+				culprits = append(culprits, Pj)
+			} else {
+				bigXj[j] = BigXj
+			}
 		}
 		if len(culprits) > 0 {
-			return round.WrapError(errors.New("adding Vc[c].ScalarMult(z) to BigXj resulted in a point not on the curve"), culprits...)
+			return round.WrapError(errors.New("BigXj is the identity point or could not be computed"), culprits...)
 		}
 		round.save.BigXj = bigXj
 	}
@@ -189,6 +209,12 @@ func (round *round3) Start() *tss.Error {
 	eddsaPubKey, err := crypto.NewECPoint(round.Params().EC(), Vc[0].X(), Vc[0].Y())
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "public key is not on the curve"))
+	}
+	// [FORK] EDDSAPub identity check: upstream did not check. The identity point as a
+	// public key means any signature would be trivially forgeable (the verification
+	// equation degenerates). This is the final defense against degenerate keygen output.
+	if eddsaPubKey.IsIdentity() {
+		return round.WrapError(errors.New("public key is the identity point"))
 	}
 	round.save.EDDSAPub = eddsaPubKey
 

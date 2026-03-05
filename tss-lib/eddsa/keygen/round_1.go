@@ -37,7 +37,9 @@ func (round *round1) Start() *tss.Error {
 	Pi := round.PartyID()
 	i := Pi.Index
 
-	round.temp.ssidNonce = new(big.Int).SetUint64(0)
+	// [FORK] Use caller-supplied SSIDNonce instead of upstream's hardcoded 0.
+	// This enables distinct session IDs for concurrent ceremonies (SC#662).
+	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(round.Params().SSIDNonce()))
 	ssid, err := round.getSSID()
 	if err != nil {
 		return round.WrapError(err)
@@ -50,15 +52,18 @@ func (round *round1) Start() *tss.Error {
 
 	// 2. compute the vss shares
 	ids := round.Parties().IDs().Keys()
-	vs, shares, err := vss.Create(round.EC(), round.Threshold(), ui, ids, round.Rand())
+	// [FORK] vss.Create now returns (vs, shares, poly, err). The poly return is used
+	// by ECDSA keygen for SNARK witness extraction; unused here but API must match.
+	vs, shares, _, err := vss.Create(round.EC(), round.Threshold(), ui, ids, round.Rand())
 	if err != nil {
 		return round.WrapError(err, Pi)
 	}
 	round.save.Ks = ids
 
-	// security: the original u_i may be discarded
-	ui = zero // clears the secret data from memory
-	_ = ui    // silences a linter warning
+	// [FORK] Upstream set `ui = zero` here (local variable only — round.temp.ui was unchanged,
+	// so the value was still available for round 2's Schnorr proof). We similarly clear the
+	// local variable and defer zeroing round.temp.ui to round 2, after the Schnorr proof.
+	ui = nil
 
 	// 3. make commitment -> (C, D)
 	pGFlat, err := crypto.FlattenECPoints(vs)

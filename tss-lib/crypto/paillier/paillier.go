@@ -139,6 +139,9 @@ func (publicKey *PublicKey) HomoMult(m, c1 *big.Int) (*big.Int, error) {
 	if c1.Cmp(zero) == -1 || c1.Cmp(N2) != -1 { // c1 < 0 || c1 >= N2 ?
 		return nil, ErrMessageTooLong
 	}
+	if new(big.Int).GCD(nil, nil, c1, publicKey.N).Cmp(one) != 0 {
+		return nil, ErrMessageMalFormed
+	}
 	// cipher^m mod N2
 	return common.ModInt(N2).Exp(c1, m), nil
 }
@@ -150,6 +153,12 @@ func (publicKey *PublicKey) HomoAdd(c1, c2 *big.Int) (*big.Int, error) {
 	}
 	if c2.Cmp(zero) == -1 || c2.Cmp(N2) != -1 { // c2 < 0 || c2 >= N2 ?
 		return nil, ErrMessageTooLong
+	}
+	if new(big.Int).GCD(nil, nil, c1, publicKey.N).Cmp(one) != 0 {
+		return nil, ErrMessageMalFormed
+	}
+	if new(big.Int).GCD(nil, nil, c2, publicKey.N).Cmp(one) != 0 {
+		return nil, ErrMessageMalFormed
 	}
 	// c1 * c2 mod N2
 	return common.ModInt(N2).Mul(c1, c2), nil
@@ -186,6 +195,9 @@ func (privateKey *PrivateKey) Decrypt(c *big.Int) (m *big.Int, err error) {
 	Lg := L(new(big.Int).Exp(privateKey.Gamma(), privateKey.LambdaN, N2), privateKey.N)
 	// 3. (1) * modInv(2) mod N
 	inv := new(big.Int).ModInverse(Lg, privateKey.N)
+	if inv == nil {
+		return nil, ErrMessageMalFormed
+	}
 	m = common.ModInt(privateKey.N).Mul(Lc, inv)
 	return
 }
@@ -200,14 +212,27 @@ func (privateKey *PrivateKey) Proof(k *big.Int, ecdsaPub *crypto2.ECPoint) Proof
 	var pi Proof
 	iters := ProofIters
 	xs := GenerateXs(iters, k, privateKey.N, ecdsaPub)
+	M := new(big.Int).ModInverse(privateKey.N, privateKey.PhiN)
+	// [FORK] Upstream does not check for nil ModInverse. If N is not coprime
+	// with PhiN (degenerate key), ModInverse returns nil and Exp panics.
+	if M == nil {
+		return pi // N not coprime with PhiN, degenerate key
+	}
 	for i := 0; i < iters; i++ {
-		M := new(big.Int).ModInverse(privateKey.N, privateKey.PhiN)
 		pi[i] = new(big.Int).Exp(xs[i], M, privateKey.N)
 	}
 	return pi
 }
 
 func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error) {
+	// [FORK] Defense-in-depth: reject proofs with nil elements to prevent
+	// nil-pointer panics from degenerate keys or malformed messages.
+	// Upstream does not validate proof elements before use.
+	for i := 0; i < ProofIters; i++ {
+		if pf[i] == nil {
+			return false, fmt.Errorf("paillier proof element %d is nil", i)
+		}
+	}
 	iters := ProofIters
 	pch, xch := make(chan bool, 1), make(chan []*big.Int, 1) // buffered to allow early exit
 	prms := primes.Until(verifyPrimesUntil).List()           // uses cache primed in init()

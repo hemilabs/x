@@ -14,6 +14,7 @@ option go_package = "ecdsa/signing";
 message SignRound1Message1 {
     bytes c = 1;
     repeated bytes range_proof_alice = 2;
+    bytes receiverId = 3;
 }
 
 /*
@@ -31,6 +32,7 @@ message SignRound2Message {
     bytes c2 = 2;
     repeated bytes proof_bob = 3;
     repeated bytes proof_bob_wc = 4;
+    bytes receiverId = 5;
 }
 
 /*

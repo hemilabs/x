@@ -5,6 +5,7 @@ package signing
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"errors"
 	"math/big"
 
 	"github.com/hemilabs/x/tss-lib/v2/common"
@@ -16,6 +17,12 @@ import (
 )
 
 func UpdatePublicKeyAndAdjustBigXj(keyDerivationDelta *big.Int, keys []keygen.LocalPartySaveData, extendedChildPk *ecdsa.PublicKey, ec elliptic.Curve) error {
+	// [FORK] Guard keyDerivationDelta=0: ScalarBaseMult(0) panics (identity point).
+	// keyDerivationDelta is a sum of BIP-32 IL values mod q; each is validated non-zero
+	// individually, but their sum mod q could be 0 with probability ~2^-256.
+	if keyDerivationDelta.Sign() == 0 {
+		return errors.New("UpdatePublicKeyAndAdjustBigXj: keyDerivationDelta is zero")
+	}
 	var err error
 	gDelta := crypto.ScalarBaseMult(ec, keyDerivationDelta)
 	for k := range keys {

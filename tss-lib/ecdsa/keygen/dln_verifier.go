@@ -34,8 +34,12 @@ func NewDlnProofVerifier(concurrency int) *DlnProofVerifier {
 	}
 }
 
+// [FORK] VerifyDLNProof1: upstream did not pass a Session parameter to DLN proof verification.
+// The Session []byte provides SSID-based domain separation so that DLN proofs from one ceremony
+// cannot be replayed in a different ceremony (cross-ceremony DLN proof replay prevention).
 func (dpv *DlnProofVerifier) VerifyDLNProof1(
 	m message,
+	Session []byte,
 	h1, h2, n *big.Int,
 	onDone func(bool),
 ) {
@@ -49,12 +53,14 @@ func (dpv *DlnProofVerifier) VerifyDLNProof1(
 			return
 		}
 
-		onDone(dlnProof.Verify(h1, h2, n))
+		onDone(dlnProof.Verify(Session, h1, h2, n))
 	}()
 }
 
+// [FORK] VerifyDLNProof2: same Session-based domain separation as VerifyDLNProof1 (see above).
 func (dpv *DlnProofVerifier) VerifyDLNProof2(
 	m message,
+	Session []byte,
 	h1, h2, n *big.Int,
 	onDone func(bool),
 ) {
@@ -68,6 +74,6 @@ func (dpv *DlnProofVerifier) VerifyDLNProof2(
 			return
 		}
 
-		onDone(dlnProof.Verify(h1, h2, n))
+		onDone(dlnProof.Verify(Session, h1, h2, n))
 	}()
 }

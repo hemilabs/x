@@ -44,8 +44,12 @@ func NewKGRound1Message(from *tss.PartyID, ct cmt.HashCommitment) tss.ParsedMess
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream checked nil receiver and NonEmptyBytes. Hardened with
+// upper-bound on commitment length to reject oversized payloads before they reach crypto code.
 func (m *KGRound1Message) ValidateBasic() bool {
-	return m != nil && common.NonEmptyBytes(m.GetCommitment())
+	return m != nil &&
+		common.NonEmptyBytes(m.GetCommitment()) &&
+		len(m.GetCommitment()) <= 32 // SHA-512/256 commitment hash
 }
 
 func (m *KGRound1Message) UnmarshalCommitment() *big.Int {
@@ -63,16 +67,29 @@ func NewKGRound2Message1(
 		To:          []*tss.PartyID{to},
 		IsBroadcast: false,
 	}
+	// [FORK] ReceiverId: upstream did not include the receiver's Key in the message.
+	// Adding it allows the receiver to verify the share was intended for them,
+	// preventing share redirection attacks where a relay swaps P2P envelopes (SC#2).
 	content := &KGRound2Message1{
-		Share: share.Share.Bytes(),
+		Share:      share.Share.Bytes(),
+		ReceiverId: to.GetKey(),
 	}
 	msg := tss.NewMessageWrapper(meta, content)
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream only checked NonEmptyBytes(Share). Hardened with share length
+// upper bound (32 bytes for ed25519 scalars) and mandatory ReceiverId presence.
 func (m *KGRound2Message1) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.GetShare())
+		common.NonEmptyBytes(m.GetShare()) &&
+		len(m.GetShare()) <= 32 &&
+		common.NonEmptyBytes(m.GetReceiverId())
+}
+
+// [FORK] UnmarshalReceiverId: new method to extract the receiver's Key for verification.
+func (m *KGRound2Message1) UnmarshalReceiverId() []byte {
+	return m.GetReceiverId()
 }
 
 func (m *KGRound2Message1) UnmarshalShare() *big.Int {
@@ -101,9 +118,18 @@ func NewKGRound2Message2(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream only checked NonEmptyMultiBytes(decommitment). Hardened with
+// upper-bound checks on Schnorr proof fields (32 bytes for Edwards25519 coordinates and scalars)
+// to reject oversized payloads before they reach crypto deserialization.
 func (m *KGRound2Message2) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyMultiBytes(m.GetDeCommitment())
+		common.NonEmptyMultiBytes(m.GetDeCommitment()) &&
+		common.NonEmptyBytes(m.GetProofAlphaX()) &&
+		len(m.GetProofAlphaX()) <= 32 && // Edwards25519 coordinate max (32 bytes)
+		common.NonEmptyBytes(m.GetProofAlphaY()) &&
+		len(m.GetProofAlphaY()) <= 32 &&
+		common.NonEmptyBytes(m.GetProofT()) &&
+		len(m.GetProofT()) <= 32 // scalar max
 }
 
 func (m *KGRound2Message2) UnmarshalDeCommitment() []*big.Int {

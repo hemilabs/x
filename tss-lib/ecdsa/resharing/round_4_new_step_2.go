@@ -7,6 +7,7 @@
 package resharing
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"math/big"
@@ -22,6 +23,11 @@ import (
 	"github.com/hemilabs/x/tss-lib/v2/crypto/vss"
 	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
+)
+
+var (
+	one             = big.NewInt(1)
+	paillierBitsLen = 2048
 )
 
 func (round *round4) Start() *tss.Error {
@@ -50,8 +56,16 @@ func (round *round4) Start() *tss.Error {
 	i := Pi.Index
 	round.newOK[i] = true
 
-	// 1-3. verify paillier & dln proofs, store message pieces, ensure uniqueness of h1j, h2j
+	// [FORK] Comprehensive parameter validation battery (resharing equivalent of keygen round 2).
+	// Upstream verified DLN proofs, ModProof, H1==H2, and h1/h2 cross-party uniqueness.
+	// We add structural checks on Paillier N and NTilde (oddness, non-prime,
+	// non-perfect-square), Pedersen parameter sanity (H1/H2 not 1, coprime with NTilde),
+	// N != NTilde, and cross-party uniqueness for Paillier N and NTilde.
+	// These checks prevent a malicious new committee member from using degenerate parameters
+	// that would break the security of ZK proofs used in future signing ceremonies.
 	h1H2Map := make(map[string]struct{}, len(round.temp.dgRound2Message1s)*2)
+	paillierNMap := make(map[string]struct{}, len(round.temp.dgRound2Message1s))
+	nTildeMap := make(map[string]struct{}, len(round.temp.dgRound2Message1s))
 	paiProofCulprits := make([]*tss.PartyID, len(round.temp.dgRound2Message1s)) // who caused the error(s)
 	dlnProof1FailCulprits := make([]*tss.PartyID, len(round.temp.dgRound2Message1s))
 	dlnProof2FailCulprits := make([]*tss.PartyID, len(round.temp.dgRound2Message1s))
@@ -65,6 +79,47 @@ func (round *round4) Start() *tss.Error {
 		if H1j.Cmp(H2j) == 0 {
 			return round.WrapError(errors.New("h1j and h2j were equal for this party"), msg.GetFrom())
 		}
+		if H1j.Cmp(one) == 0 || H2j.Cmp(one) == 0 {
+			return round.WrapError(errors.New("h1j or h2j was 1 (degenerate Pedersen parameter)"), msg.GetFrom())
+		}
+		// NOTE: resharing uses `<` (minimum threshold) while keygen uses `!=` (exact match)
+		// because resharing may accept pre-existing parameters from parties with >= 2048-bit keys.
+		if paiPK.N.BitLen() < paillierBitsLen {
+			return round.WrapError(errors.New("got paillier modulus with insufficient bits for this party"), msg.GetFrom())
+		}
+		if paiPK.N.Bit(0) == 0 {
+			return round.WrapError(errors.New("got even paillier modulus (trivially factorable)"), msg.GetFrom())
+		}
+		if paiPK.N.ProbablyPrime(20) {
+			return round.WrapError(errors.New("got prime paillier modulus (degenerate Paillier)"), msg.GetFrom())
+		}
+		sqrtN := new(big.Int).Sqrt(paiPK.N)
+		if new(big.Int).Mul(sqrtN, sqrtN).Cmp(paiPK.N) == 0 {
+			return round.WrapError(errors.New("got perfect-square paillier modulus (trivially factorable)"), msg.GetFrom())
+		}
+		if NTildej.BitLen() < paillierBitsLen {
+			return round.WrapError(errors.New("got NTildej with insufficient bits for this party"), msg.GetFrom())
+		}
+		if NTildej.Bit(0) == 0 {
+			return round.WrapError(errors.New("got even NTildej (trivially factorable)"), msg.GetFrom())
+		}
+		if NTildej.ProbablyPrime(20) {
+			return round.WrapError(errors.New("got prime NTildej (degenerate Pedersen parameters)"), msg.GetFrom())
+		}
+		sqrtNT := new(big.Int).Sqrt(NTildej)
+		if new(big.Int).Mul(sqrtNT, sqrtNT).Cmp(NTildej) == 0 {
+			return round.WrapError(errors.New("got perfect-square NTildej (trivially factorable)"), msg.GetFrom())
+		}
+		if paiPK.N.Cmp(NTildej) == 0 {
+			return round.WrapError(errors.New("Paillier N must differ from NTilde"), msg.GetFrom())
+		}
+		// Pedersen parameters must be coprime with NTilde
+		if new(big.Int).GCD(nil, nil, H1j, NTildej).Cmp(one) != 0 {
+			return round.WrapError(errors.New("h1j is not coprime with NTildej"), msg.GetFrom())
+		}
+		if new(big.Int).GCD(nil, nil, H2j, NTildej).Cmp(one) != 0 {
+			return round.WrapError(errors.New("h2j is not coprime with NTildej"), msg.GetFrom())
+		}
 		h1JHex, h2JHex := hex.EncodeToString(H1j.Bytes()), hex.EncodeToString(H2j.Bytes())
 		if _, found := h1H2Map[h1JHex]; found {
 			return round.WrapError(errors.New("this h1j was already used by another party"), msg.GetFrom())
@@ -73,39 +128,62 @@ func (round *round4) Start() *tss.Error {
 			return round.WrapError(errors.New("this h2j was already used by another party"), msg.GetFrom())
 		}
 		h1H2Map[h1JHex], h1H2Map[h2JHex] = struct{}{}, struct{}{}
-		wg.Add(3)
+		// Reject duplicate Paillier moduli across parties
+		paillierNHex := hex.EncodeToString(paiPK.N.Bytes())
+		if _, found := paillierNMap[paillierNHex]; found {
+			return round.WrapError(errors.New("this Paillier N was already used by another party"), msg.GetFrom())
+		}
+		paillierNMap[paillierNHex] = struct{}{}
+		// Reject duplicate NTilde across parties
+		nTildeHex := hex.EncodeToString(NTildej.Bytes())
+		if _, found := nTildeMap[nTildeHex]; found {
+			return round.WrapError(errors.New("this NTilde was already used by another party"), msg.GetFrom())
+		}
+		nTildeMap[nTildeHex] = struct{}{}
+		// [FORK] Proof verification gated by NoProofMod() and NoProofDLN(). In SNARK mode,
+		// classical ModProof and DLN proofs are replaced by per-participant SNARKs.
+		// ContextJ provides SSID domain separation to prevent cross-ceremony proof replay.
+		nTasks := 1 // modProof goroutine
+		if !round.Parameters.NoProofDLN() {
+			nTasks = 3 // + 2 DLN proof verifications
+		}
+		wg.Add(nTasks)
 		go func(j int, msg tss.ParsedMessage, r2msg1 *DGRound2Message1) {
 			defer wg.Done()
+			if round.Parameters.NoProofMod() {
+				return
+			}
 			modProof, err := r2msg1.UnmarshalModProof()
 			if err != nil {
-				if !round.Parameters.NoProofMod() {
-					paiProofCulprits[j] = msg.GetFrom()
-				}
-				common.Logger.Warningf("modProof verify failed for party %s", msg.GetFrom(), err)
+				paiProofCulprits[j] = msg.GetFrom()
+				common.Logger.Warningf("modProof unmarshal failed for party %s: %v", msg.GetFrom(), err)
 				return
 			}
 			ContextJ := common.AppendBigIntToBytesSlice(round.temp.ssid, big.NewInt(int64(j)))
 			if ok := modProof.Verify(ContextJ, paiPK.N); !ok {
 				paiProofCulprits[j] = msg.GetFrom()
-				common.Logger.Warningf("modProof verify failed for party %s", msg.GetFrom(), err)
+				common.Logger.Warningf("modProof verify failed for party %s", msg.GetFrom())
 			}
 		}(j, msg, r2msg1)
-		_j := j
-		_msg := msg
-		dlnVerifier.VerifyDLNProof1(r2msg1, H1j, H2j, NTildej, func(isValid bool) {
-			if !isValid {
-				dlnProof1FailCulprits[_j] = _msg.GetFrom()
-				common.Logger.Warningf("dln proof 1 verify failed for party %s", _msg.GetFrom())
-			}
-			wg.Done()
-		})
-		dlnVerifier.VerifyDLNProof2(r2msg1, H2j, H1j, NTildej, func(isValid bool) {
-			if !isValid {
-				dlnProof2FailCulprits[_j] = _msg.GetFrom()
-				common.Logger.Warningf("dln proof 2 verify failed for party %s", _msg.GetFrom())
-			}
-			wg.Done()
-		})
+		if !round.Parameters.NoProofDLN() {
+			_j := j
+			_msg := msg
+			ContextJ := common.AppendBigIntToBytesSlice(round.temp.ssid, big.NewInt(int64(j)))
+			dlnVerifier.VerifyDLNProof1(r2msg1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
+				if !isValid {
+					dlnProof1FailCulprits[_j] = _msg.GetFrom()
+					common.Logger.Warningf("dln proof 1 verify failed for party %s", _msg.GetFrom())
+				}
+				wg.Done()
+			})
+			dlnVerifier.VerifyDLNProof2(r2msg1, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
+				if !isValid {
+					dlnProof2FailCulprits[_j] = _msg.GetFrom()
+					common.Logger.Warningf("dln proof 2 verify failed for party %s", _msg.GetFrom())
+				}
+				wg.Done()
+			})
+		}
 	}
 	wg.Wait()
 	for _, culprit := range append(append(paiProofCulprits, dlnProof1FailCulprits...), dlnProof2FailCulprits...) {
@@ -150,8 +228,15 @@ func (round *round4) Start() *tss.Error {
 		}
 		vjc[j] = vj
 
-		// 8.
+		// [FORK] ReceiverID binding check: upstream did not include or verify a receiver
+		// identifier in P2P resharing messages. We verify the ReceiverId field matches our
+		// Key to prevent share misdirection attacks where a compromised transport layer
+		// routes party A's resharing share to party B.
 		r3msg1 := round.temp.dgRound3Message1s[j].Content().(*DGRound3Message1)
+		myKey := round.PartyID().KeyInt().Bytes()
+		if !bytes.Equal(r3msg1.GetReceiverId(), myKey) {
+			return round.WrapError(errors.New("receiverId mismatch: resharing share not intended for this party"), round.Parties().IDs()[j])
+		}
 		sharej := &vss.Share{
 			Threshold: round.NewThreshold(),
 			ID:        round.PartyID().KeyInt(),
@@ -164,6 +249,13 @@ func (round *round4) Start() *tss.Error {
 
 		// 9.
 		newXi = new(big.Int).Add(newXi, sharej.Share)
+	}
+	// [FORK] Mod reduction + zero check: upstream did not reduce newXi mod q and did not check
+	// for zero. Without mod reduction, the value could exceed the curve order (correctness issue).
+	// A zero private key share is degenerate and would break threshold ECDSA signing.
+	newXi = new(big.Int).Mod(newXi, round.Params().EC().Params().N)
+	if newXi.Sign() == 0 {
+		return round.WrapError(errors.New("newXi is zero"))
 	}
 
 	// 10-13.
@@ -197,14 +289,27 @@ func (round *round4) Start() *tss.Error {
 		for c := 1; c <= round.NewThreshold(); c++ {
 			z = modQ.Mul(z, kj)
 			newBigXj, err = newBigXj.Add(Vc[c].ScalarMult(z))
+			// [FORK] Break on Add error: upstream continued the inner polynomial evaluation
+			// loop after an Add error (recording the culprit but potentially corrupting
+			// subsequent point additions on the already-corrupted accumulator). We break
+			// immediately on the first error.
 			if err != nil {
 				paiProofCulprits = append(paiProofCulprits, Pj)
+				break
 			}
 		}
-		newBigXjs[j] = newBigXj
+		// [FORK] newBigXj identity-point check: upstream did not validate. A public key share
+		// at the identity point breaks threshold ECDSA verification in future signing ceremonies.
+		// Defense-in-depth: on Weierstrass curves, Add() calls NewECPoint which rejects (0,0),
+		// so this is unreachable. Essential on Edwards curves where identity (0,1) passes.
+		if newBigXj.IsIdentity() {
+			paiProofCulprits = append(paiProofCulprits, Pj)
+		} else {
+			newBigXjs[j] = newBigXj
+		}
 	}
 	if len(paiProofCulprits) > 0 {
-		return round.WrapError(errors2.Wrapf(err, "newBigXj.Add(Vc[c].ScalarMult(z))"), paiProofCulprits...)
+		return round.WrapError(errors.New("newBigXj is the identity point or could not be computed"), paiProofCulprits...)
 	}
 
 	round.temp.newXi = newXi
@@ -216,12 +321,11 @@ func (round *round4) Start() *tss.Error {
 		if j == i {
 			continue
 		}
-		ContextJ := common.AppendBigIntToBytesSlice(round.temp.ssid, big.NewInt(int64(j)))
-		facProof := &facproof.ProofFac{
-			P: zero, Q: zero, A: zero, B: zero, T: zero, Sigma: zero,
-			Z1: zero, Z2: zero, W1: zero, W2: zero, V: zero,
-		}
+		// [FORK] FacProof generation gated by NoProofFac(). In SNARK mode, classical fac
+		// proofs are replaced by per-participant SNARKs. ContextJ provides SSID domain separation.
+		var facProof *facproof.ProofFac
 		if !round.Parameters.NoProofFac() {
+			ContextJ := common.AppendBigIntToBytesSlice(round.temp.ssid, big.NewInt(int64(j)))
 			facProof, err = facproof.NewProof(ContextJ, round.EC(), round.save.PaillierSK.N, round.save.NTildej[j],
 				round.save.H1j[j], round.save.H2j[j], round.save.PaillierSK.P, round.save.PaillierSK.Q, round.Rand())
 			if err != nil {

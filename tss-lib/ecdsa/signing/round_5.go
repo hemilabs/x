@@ -58,16 +58,52 @@ func (round *round5) Start() *tss.Error {
 		}
 	}
 
+	// [FORK] Identity point checks: upstream does not verify the accumulated gamma point
+	// or the resulting R. In upstream, the point at infinity would cause ScalarMult to
+	// panic via NewECPoint. The fork's ScalarMult handles identity without panic, but
+	// the resulting R still produces an invalid ECDSA signature (r=0).
+	// Defense-in-depth: On Weierstrass curves (secp256k1, P-256), NewECPoint inside Add()
+	// rejects (0,0), so an identity result would surface as an Add error above. On Edwards
+	// curves the identity (0,1) passes NewECPoint, making this check essential. Retained for
+	// curve-agnostic safety.
+	if R.IsIdentity() {
+		return round.WrapError(errors.New("sum of gamma points is the identity: degenerate nonce combination"))
+	}
 	R = R.ScalarMult(round.temp.thetaInverse)
+	// Defense-in-depth: mathematically unreachable on prime-order groups — a non-zero scalar
+	// times a non-identity point cannot produce the identity. Retained as a safeguard.
+	if R.IsIdentity() {
+		return round.WrapError(errors.New("R is the point at infinity after theta-inverse scaling"))
+	}
 	N := round.Params().EC().Params().N
 	modN := common.ModInt(N)
 	rx := R.X()
 	ry := R.Y()
+
+	// [FORK] Zero-r check: upstream does not validate r. ECDSA requires r = R.x mod N != 0;
+	// a zero r produces an invalid signature. Early detection avoids wasting 4 more rounds.
+	if new(big.Int).Mod(rx, N).Sign() == 0 {
+		return round.WrapError(errors.New("r component of signature is zero: invalid nonce combination"))
+	}
+
 	si := modN.Add(modN.Mul(round.temp.m, round.temp.k), modN.Mul(rx, round.temp.sigma))
 
-	// clear temp.w and temp.k from memory, lint ignore
-	round.temp.w = zero
-	round.temp.k = zero
+	// [FORK] Guard si=0: R.ScalarMult(si) panics on zero scalar (identity point).
+	// si=0 means a degenerate key/nonce combination that cannot produce a valid signature.
+	if si.Sign() == 0 {
+		return round.WrapError(errors.New("partial signature si is zero: degenerate key/nonce combination"))
+	}
+
+	// [FORK] Clear secret nonces from memory. Upstream sets these to the package-level
+	// `zero` variable (e.g. `round.temp.w = zero`), which aliases a shared mutable
+	// pointer — a latent corruption vector if any future code mutates these fields.
+	// We use fresh allocations (new(big.Int)) to avoid that aliasing bug.
+	// Additionally, upstream does not clear gamma or sigma at all; we zero them here
+	// to minimize the window during which secret material remains in memory.
+	round.temp.w = new(big.Int)
+	round.temp.k = new(big.Int)
+	round.temp.gamma = new(big.Int)
+	round.temp.sigma = new(big.Int)
 
 	li := common.GetRandomPositiveInt(round.Rand(), N)  // li
 	roI := common.GetRandomPositiveInt(round.Rand(), N) // pi

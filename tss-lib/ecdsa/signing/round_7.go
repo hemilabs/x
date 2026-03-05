@@ -46,10 +46,21 @@ func (round *round7) Start() *tss.Error {
 		if err != nil {
 			return round.WrapError(errors2.Wrapf(err, "NewECPoint(bigVj)"), Pj)
 		}
+		// [FORK] Identity point checks: upstream does not check. An identity-point bigVj
+		// would make the abort identification protocol trivially pass for a malicious party
+		// (the V*rho and T*l checks become degenerate). Same for bigAj.
+		// Defense-in-depth: on Weierstrass curves, NewECPoint above rejects (0,0), so
+		// IsIdentity() is unreachable here. Essential on Edwards curves where (0,1) passes.
+		if bigVj.IsIdentity() {
+			return round.WrapError(errors.New("bigVj is the identity point"), Pj)
+		}
 		bigVjs[j] = bigVj
 		bigAj, err := crypto.NewECPoint(round.Params().EC(), bigAjX, bigAjY)
 		if err != nil {
 			return round.WrapError(errors2.Wrapf(err, "NewECPoint(bigAj)"), Pj)
+		}
+		if bigAj.IsIdentity() {
+			return round.WrapError(errors.New("bigAj is the identity point"), Pj)
 		}
 		bigAjs[j] = bigAj
 		pijA, err := r6msg.UnmarshalZKProof(round.Params().EC())
@@ -81,8 +92,16 @@ func (round *round7) Start() *tss.Error {
 
 	UiX, UiY := round.Params().EC().ScalarMult(VX, VY, round.temp.roi.Bytes())
 	TiX, TiY := round.Params().EC().ScalarMult(AX, AY, round.temp.li.Bytes())
-	round.temp.Ui = crypto.NewECPointNoCurveCheck(round.Params().EC(), UiX, UiY)
-	round.temp.Ti = crypto.NewECPointNoCurveCheck(round.Params().EC(), TiX, TiY)
+	Ui, err := crypto.NewECPoint(round.Params().EC(), UiX, UiY)
+	if err != nil {
+		return round.WrapError(errors2.Wrapf(err, "Ui is not on curve"))
+	}
+	Ti, err := crypto.NewECPoint(round.Params().EC(), TiX, TiY)
+	if err != nil {
+		return round.WrapError(errors2.Wrapf(err, "Ti is not on curve"))
+	}
+	round.temp.Ui = Ui
+	round.temp.Ti = Ti
 	cmt := commitments.NewHashCommitment(round.Rand(), UiX, UiY, TiX, TiY)
 	r7msg := NewSignRound7Message(round.PartyID(), cmt.C)
 	round.temp.signRound7Messages[round.PartyID().Index] = r7msg

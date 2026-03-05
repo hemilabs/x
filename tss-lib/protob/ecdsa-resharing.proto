@@ -42,6 +42,7 @@ message DGRound2Message2 {
  */
 message DGRound3Message1 {
     bytes share = 1;
+    bytes receiverId = 2;
 }
 
 /*
@@ -62,4 +63,5 @@ message DGRound4Message2 {
  */
 message DGRound4Message1 {
     repeated bytes facProof = 1;
+    bytes receiverId = 2;
 }

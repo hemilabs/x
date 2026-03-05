@@ -7,6 +7,7 @@
 package resharing
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -67,6 +68,15 @@ func (round *round4) Start() *tss.Error {
 		vjc[j] = vj
 
 		r3msg1 := round.temp.dgRound3Message1s[j].Content().(*DGRound3Message1)
+
+		// [FORK] Verify receiverId matches our key to prevent share redirection attacks (SC#2).
+		// Upstream had no receiver binding — a malicious relay could swap P2P envelopes
+		// between new-committee parties, causing them to use each other's reshare shares.
+		receiverId := r3msg1.UnmarshalReceiverId()
+		if !bytes.Equal(receiverId, round.PartyID().GetKey()) {
+			return round.WrapError(errors.New("DGRound3Message1 receiverId does not match our key"), round.Parties().IDs()[j])
+		}
+
 		sharej := &vss.Share{
 			Threshold: round.NewThreshold(),
 			ID:        round.PartyID().KeyInt(),
@@ -77,6 +87,12 @@ func (round *round4) Start() *tss.Error {
 		}
 
 		newXi = new(big.Int).Add(newXi, sharej.Share)
+	}
+	// [FORK] Reduce newXi mod q: upstream did not reduce, carrying potentially extra-large values
+	// that could cause subtle bugs in subsequent signing. Also check for zero — a degenerate share.
+	newXi = new(big.Int).Mod(newXi, round.Params().EC().Params().N)
+	if newXi.Sign() == 0 {
+		return round.WrapError(errors.New("newXi is zero"))
 	}
 
 	// 9-12.
@@ -112,12 +128,19 @@ func (round *round4) Start() *tss.Error {
 			newBigXj, err = newBigXj.Add(Vc[c].ScalarMult(z))
 			if err != nil {
 				culprits = append(culprits, Pj)
+				break
 			}
 		}
-		newBigXjs[j] = newBigXj
+		// [FORK] Identity check: upstream did not check. The identity point as a public key
+		// share is degenerate and would compromise the group key.
+		if newBigXj.IsIdentity() {
+			culprits = append(culprits, Pj)
+		} else {
+			newBigXjs[j] = newBigXj
+		}
 	}
 	if len(culprits) > 0 {
-		return round.WrapError(errors.Wrapf(err, "newBigXj.Add(Vc[c].ScalarMult(z))"), culprits...)
+		return round.WrapError(errors.New("newBigXj is the identity point or could not be computed"), culprits...)
 	}
 
 	round.temp.newXi = newXi

@@ -9,6 +9,7 @@ package resharing
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/hemilabs/x/tss-lib/v2/crypto"
 	"github.com/hemilabs/x/tss-lib/v2/crypto/commitments"
@@ -34,9 +35,20 @@ func (round *round1) Start() *tss.Error {
 	round.resetOK() // resets both round.oldOK and round.newOK
 	round.allNewOK()
 
+	// [FORK] Use caller-supplied SSIDNonce instead of upstream's hardcoded 0 (SC#662).
+	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(round.Params().SSIDNonce()))
+
 	if !round.ReSharingParams().IsOldCommittee() {
 		return nil
 	}
+
+	// [FORK] Compute SSID for session binding — upstream had no SSID in resharing.
+	// Used by future ZK proofs and domain separation.
+	ssid, err := round.getSSID()
+	if err != nil {
+		return round.WrapError(err)
+	}
+	round.temp.ssid = ssid
 	round.allOldOK()
 
 	Pi := round.PartyID()
@@ -51,7 +63,9 @@ func (round *round1) Start() *tss.Error {
 	wi := signing.PrepareForSigning(round.Params().EC(), i, len(round.OldParties().IDs()), xi, ks)
 
 	// 2.
-	vi, shares, err := vss.Create(round.Params().EC(), round.NewThreshold(), wi, newKs, round.Rand())
+	// [FORK] vss.Create now returns (vs, shares, poly, err). The poly return is used
+	// by ECDSA keygen for SNARK witness extraction; unused here but API must match.
+	vi, shares, _, err := vss.Create(round.Params().EC(), round.NewThreshold(), wi, newKs, round.Rand())
 	if err != nil {
 		return round.WrapError(err, round.PartyID())
 	}
@@ -102,12 +116,11 @@ func (round *round1) Update() (bool, *tss.Error) {
 		}
 		round.oldOK[j] = true
 
-		if round.temp.dgRound1Messages[0] == nil {
-			ret = false
-			continue
-		}
 		// save the eddsa pub received from the old committee
-		r1msg := round.temp.dgRound1Messages[0].Content().(*DGRound1Message)
+		// [FORK] Security: upstream read from hardcoded `round.temp.dgRound1Messages[0]`, meaning
+		// only party 0's public key was checked. All other old parties' claimed public keys were
+		// ignored. We now read from sender j and cross-check all senders agree on the same key.
+		r1msg := msg.Content().(*DGRound1Message)
 		candidate, err := r1msg.UnmarshalEDDSAPub(round.Params().EC())
 		if err != nil {
 			return false, round.WrapError(errors.New("unable to unmarshal the eddsa pub key"), msg.GetFrom())

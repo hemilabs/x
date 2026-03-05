@@ -9,6 +9,7 @@ package tss
 import (
 	"crypto/elliptic"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"runtime"
 	"time"
@@ -24,10 +25,14 @@ type (
 		concurrency         int
 		safePrimeGenTimeout time.Duration
 		// proof session info
-		nonce int
+		// [FORK] Changed from `nonce int` to `nonce uint`. Upstream uses signed int,
+		// which allows negative nonces that are nonsensical for a session counter and
+		// could produce ambiguous SSID encodings (negative two's-complement vs positive).
+		nonce uint
 		// for keygen
 		noProofMod bool
 		noProofFac bool
+		noProofDLN bool // [FORK] Added: allows disabling DLN proofs when replaced by SNARK coverage
 		// random sources
 		partialKeyRand, rand io.Reader
 	}
@@ -45,7 +50,17 @@ const (
 )
 
 // Exported, used in `tss` client
+//
+// [FORK] Added parameter validation panics. Upstream silently accepts invalid
+// partyCount/threshold (e.g., threshold >= partyCount), which violates the
+// (t,n)-threshold assumption and leads to subtle failures deeper in the protocol.
 func NewParameters(ec elliptic.Curve, ctx *PeerContext, partyID *PartyID, partyCount, threshold int) *Parameters {
+	if partyCount < 1 {
+		panic(fmt.Sprintf("NewParameters: partyCount must be >= 1, got %d", partyCount))
+	}
+	if threshold < 0 || threshold >= partyCount {
+		panic(fmt.Sprintf("NewParameters: threshold must be in [0, partyCount), got threshold=%d, partyCount=%d", threshold, partyCount))
+	}
 	return &Parameters{
 		ec:                  ec,
 		parties:             ctx,
@@ -104,10 +119,46 @@ func (params *Parameters) NoProofFac() bool {
 	return params.noProofFac
 }
 
+// [FORK] Added SSIDNonce getter/setter pair. Upstream has no SSID nonce
+// mechanism; all ceremony attempts share the same session ID, enabling
+// cross-attempt proof replay attacks.
+func (params *Parameters) SSIDNonce() uint {
+	return params.nonce
+}
+
+// SetSSIDNonce sets the session nonce for SSID domain separation.
+// Each retry of a ceremony MUST use a distinct nonce to prevent
+// cross-attempt proof replay.
+func (params *Parameters) SetSSIDNonce(n uint) {
+	params.nonce = n
+}
+
+func (params *Parameters) NoProofDLN() bool {
+	return params.noProofDLN
+}
+
+// SetNoProofDLN disables DLN proof generation and validation.
+// WARNING: Only use in on-chain SNARK mode where DLN proofs are
+// replaced by a SNARK covering the same security properties.
+func (params *Parameters) SetNoProofDLN() {
+	params.noProofDLN = true
+}
+
+// SetNoProofMod disables MOD proof generation and validation.
+// WARNING: This is for testing/development ONLY. Disabling MOD proofs in
+// production removes a critical security check that prevents a malicious party
+// from using a non-safe-prime Paillier modulus, which breaks the security
+// assumptions of the GG18 protocol. Never use in production deployments.
 func (params *Parameters) SetNoProofMod() {
 	params.noProofMod = true
 }
 
+// SetNoProofFac disables FAC proof generation and validation.
+// WARNING: This is for testing/development ONLY. Disabling FAC proofs in
+// production removes a critical security check that proves the prover's
+// Paillier key factors are sufficiently large, which is required for the
+// MtA (multiplicative-to-additive) protocol's soundness. Never use in
+// production deployments.
 func (params *Parameters) SetNoProofFac() {
 	params.noProofFac = true
 }
@@ -131,8 +182,17 @@ func (params *Parameters) SetRand(rand io.Reader) {
 // ----- //
 
 // Exported, used in `tss` client
+//
+// [FORK] Added newPartyCount/newThreshold validation panics, same rationale as
+// NewParameters above. Upstream silently accepts invalid resharing parameters.
 func NewReSharingParameters(ec elliptic.Curve, ctx, newCtx *PeerContext, partyID *PartyID, partyCount, threshold, newPartyCount, newThreshold int) *ReSharingParameters {
 	params := NewParameters(ec, ctx, partyID, partyCount, threshold)
+	if newPartyCount < 1 {
+		panic(fmt.Sprintf("NewReSharingParameters: newPartyCount must be >= 1, got %d", newPartyCount))
+	}
+	if newThreshold < 0 || newThreshold >= newPartyCount {
+		panic(fmt.Sprintf("NewReSharingParameters: newThreshold must be in [0, newPartyCount), got newThreshold=%d, newPartyCount=%d", newThreshold, newPartyCount))
+	}
 	return &ReSharingParameters{
 		Parameters:    params,
 		newParties:    newCtx,
@@ -161,8 +221,14 @@ func (rgParams *ReSharingParameters) NewThreshold() int {
 	return rgParams.newThreshold
 }
 
+// [FORK] Append-aliasing fix: upstream does `append(old, newParties...)` directly,
+// which can corrupt the OldParties backing array if old has spare capacity. We
+// allocate a fresh slice before appending to avoid this aliasing corruption.
 func (rgParams *ReSharingParameters) OldAndNewParties() []*PartyID {
-	return append(rgParams.OldParties().IDs(), rgParams.NewParties().IDs()...)
+	old := rgParams.OldParties().IDs()
+	out := make([]*PartyID, len(old), len(old)+len(rgParams.NewParties().IDs()))
+	copy(out, old)
+	return append(out, rgParams.NewParties().IDs()...)
 }
 
 func (rgParams *ReSharingParameters) OldAndNewPartyCount() int {

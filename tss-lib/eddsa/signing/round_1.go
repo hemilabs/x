@@ -34,7 +34,19 @@ func (round *round1) Start() *tss.Error {
 	round.started = true
 	round.resetOK()
 
-	round.temp.ssidNonce = new(big.Int).SetUint64(0)
+	// [FORK] Validate key material before use: upstream did not check. A nil or zero Xi
+	// would produce a zero Lagrange-interpolated wi, reducing the effective threshold
+	// (the other t parties could sign without this party's contribution). A nil or
+	// off-curve EDDSAPub would cause panics or invalid signature verification.
+	if round.key.Xi == nil || round.key.Xi.Sign() == 0 {
+		return round.WrapError(errors.New("invalid key data: Xi is nil or zero"))
+	}
+	if round.key.EDDSAPub == nil || !round.key.EDDSAPub.ValidateBasic() {
+		return round.WrapError(errors.New("invalid key data: EDDSAPub is nil or not on curve"))
+	}
+
+	// [FORK] Use caller-supplied SSIDNonce instead of upstream's hardcoded 0 (SC#662).
+	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(round.Params().SSIDNonce()))
 	var err error
 	round.temp.ssid, err = round.getSSID()
 	if err != nil {
@@ -99,6 +111,11 @@ func (round *round1) prepare() error {
 	xi := round.key.Xi
 	ks := round.key.Ks
 
+	// [FORK] Key count validation: upstream only checked t+1 > len(ks), not len(ks) == partyCount.
+	// A mismatch between key count and party count would cause index-out-of-bounds panics.
+	if len(ks) != round.PartyCount() {
+		return fmt.Errorf("key count %d does not match party count %d", len(ks), round.PartyCount())
+	}
 	if round.Threshold()+1 > len(ks) {
 		return fmt.Errorf("t+1=%d is not satisfied by the key count of %d", round.Threshold()+1, len(ks))
 	}

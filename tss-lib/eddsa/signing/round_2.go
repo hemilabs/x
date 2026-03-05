@@ -12,6 +12,7 @@ import (
 
 	errors2 "github.com/pkg/errors"
 
+	"github.com/hemilabs/x/tss-lib/v2/common"
 	"github.com/hemilabs/x/tss-lib/v2/crypto/schnorr"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
@@ -33,7 +34,10 @@ func (round *round2) Start() *tss.Error {
 	}
 
 	// 2. compute Schnorr prove
-	ContextI := append(round.temp.ssid, new(big.Int).SetUint64(uint64(i)).Bytes()...)
+	// [FORK] Upstream used append(ssid, bigInt.Bytes()...) which is ambiguous for
+	// multi-byte big.Int values. AppendBigIntToBytesSlice uses length-prefixed encoding
+	// to prevent domain collisions in the Schnorr proof context.
+	ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(i)))
 	pir, err := schnorr.NewZKProof(ContextI, round.temp.ri, round.temp.pointRi, round.Rand())
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "NewZKProof(ri, pointRi)"))

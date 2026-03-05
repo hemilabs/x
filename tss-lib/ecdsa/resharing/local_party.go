@@ -52,6 +52,10 @@ type (
 		// temp data (thrown away after rounds)
 		NewVs     vss.Vs
 		NewShares vss.Shares
+		// [FORK] Store VSS polynomial coefficients for SNARK witness extraction.
+		// Upstream does not expose the polynomial; we need it so the SP1 per-participant
+		// prover can reconstruct the party's secret share commitment during resharing.
+		Poly []*big.Int
 		VD        cmt.HashDeCommitment
 
 		// temporary storage of data that is persisted by the new party in round 5 if all "ACK" messages are received
@@ -128,16 +132,25 @@ func (p *LocalParty) ValidateMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 		return ok, err
 	}
 	// check that the message's "from index" will fit into the array
-	var maxFromIdx int
+	var partyIDs tss.SortedPartyIDs
 	switch msg.Content().(type) {
 	case *DGRound2Message1, *DGRound2Message2, *DGRound4Message1, *DGRound4Message2:
-		maxFromIdx = len(p.params.NewParties().IDs()) - 1
+		partyIDs = p.params.NewParties().IDs()
 	default:
-		maxFromIdx = len(p.params.OldParties().IDs()) - 1
+		partyIDs = p.params.OldParties().IDs()
 	}
+	maxFromIdx := len(partyIDs) - 1
 	if maxFromIdx < msg.GetFrom().Index {
 		return false, p.WrapError(fmt.Errorf("received msg with a sender index too great (%d <= %d)",
 			maxFromIdx, msg.GetFrom().Index), msg.GetFrom())
+	}
+	// [FORK] Key-at-Index verification: upstream only checked index bounds. We additionally
+	// verify that the sender's Key matches the party registered at the claimed Index. Without
+	// this, an attacker could impersonate another party by sending a valid index with a
+	// different Key, causing messages to be stored under the wrong party's slot.
+	knownParty := partyIDs[msg.GetFrom().Index]
+	if knownParty.KeyInt().Cmp(msg.GetFrom().KeyInt()) != 0 {
+		return false, p.WrapError(fmt.Errorf("sender Key does not match party at claimed Index %d", msg.GetFrom().Index), msg.GetFrom())
 	}
 	return true, nil
 }
@@ -150,21 +163,74 @@ func (p *LocalParty) StoreMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 	fromPIdx := msg.GetFrom().Index
 
 	// switch/case is necessary to store any messages beyond current round
-	// this does not handle message replays. we expect the caller to apply replay and spoofing protection.
+	// [FORK] Defense-in-depth: reject duplicate messages for the same (round, sender) pair.
+	// Upstream would silently overwrite stored messages, which breaks commit-then-reveal
+	// guarantees (an attacker could replace a commitment after seeing the decommitment).
+	// We also validate the broadcast/P2P flag at storage time to prevent slot poisoning
+	// (a P2P message stored in a broadcast slot or vice versa).
 	switch msg.Content().(type) {
-	case *DGRound1Message:
+	case *DGRound1Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("DGRound1Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.dgRound1Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate DGRound1Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.dgRound1Messages[fromPIdx] = msg
-	case *DGRound2Message1:
+	case *DGRound2Message1: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("DGRound2Message1 expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.dgRound2Message1s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate DGRound2Message1 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.dgRound2Message1s[fromPIdx] = msg
-	case *DGRound2Message2:
+	case *DGRound2Message2: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("DGRound2Message2 expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.dgRound2Message2s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate DGRound2Message2 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.dgRound2Message2s[fromPIdx] = msg
-	case *DGRound3Message1:
+	case *DGRound3Message1: // P2P
+		if msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("DGRound3Message1 expected P2P but got broadcast"), msg.GetFrom())
+		}
+		if p.temp.dgRound3Message1s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate DGRound3Message1 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.dgRound3Message1s[fromPIdx] = msg
-	case *DGRound3Message2:
+	case *DGRound3Message2: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("DGRound3Message2 expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.dgRound3Message2s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate DGRound3Message2 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.dgRound3Message2s[fromPIdx] = msg
-	case *DGRound4Message1:
+	case *DGRound4Message1: // P2P
+		if msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("DGRound4Message1 expected P2P but got broadcast"), msg.GetFrom())
+		}
+		if p.temp.dgRound4Message1s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate DGRound4Message1 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.dgRound4Message1s[fromPIdx] = msg
-	case *DGRound4Message2:
+	case *DGRound4Message2: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("DGRound4Message2 expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.dgRound4Message2s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate DGRound4Message2 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.dgRound4Message2s[fromPIdx] = msg
 	default: // unrecognised message, just ignore!
 		common.Logger.Warningf("unrecognised message ignored: %v", msg)
@@ -179,4 +245,20 @@ func (p *LocalParty) PartyID() *tss.PartyID {
 
 func (p *LocalParty) String() string {
 	return fmt.Sprintf("id: %s, %s", p.PartyID(), p.BaseParty.String())
+}
+
+// [FORK] GetPoly returns the VSS polynomial coefficients stored during Round 1.
+// Only populated for old committee members after Round 1 completes.
+// Returns nil for new committee members or if Round 1 has not run.
+// This method does not exist in upstream; it is used by the SP1 per-participant
+// prover for witness extraction during resharing ceremonies.
+func (p *LocalParty) GetPoly() []*big.Int {
+	return p.temp.Poly
+}
+
+// [FORK] GetNewVs returns the Feldman VSS commitments (V[0..t_new]) stored during Round 1.
+// Only populated for old committee members after Round 1 completes. This method does not
+// exist in upstream; it is used alongside GetPoly() for SNARK witness construction.
+func (p *LocalParty) GetNewVs() []*crypto.ECPoint {
+	return p.temp.NewVs
 }
