@@ -120,6 +120,11 @@ func NewLocalPartyWithKDD(
 	end chan<- *common.SignatureData,
 	fullBytesLen ...int,
 ) tss.Party {
+	// [FORK] Nil guard: upstream silently accepts nil msg, which would panic later in
+	// round 1 when computing the hash. Fail-fast here with a clear error message.
+	if msg == nil {
+		panic("signing.NewLocalPartyWithKDD: message must not be nil")
+	}
 	partyCount := len(params.Parties().IDs())
 	p := &LocalParty{
 		BaseParty: new(tss.BaseParty),
@@ -198,6 +203,13 @@ func (p *LocalParty) ValidateMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 		return false, p.WrapError(fmt.Errorf("received msg with a sender index too great (%d <= %d)",
 			maxFromIdx, msg.GetFrom().Index), msg.GetFrom())
 	}
+	// [FORK] Key-at-Index verification: upstream only checked index bounds. We additionally
+	// verify the sender's Key matches the party registered at the claimed Index, preventing
+	// an attacker from spoofing messages with a valid index but a different identity.
+	knownParty := p.params.Parties().IDs()[msg.GetFrom().Index]
+	if knownParty.KeyInt().Cmp(msg.GetFrom().KeyInt()) != 0 {
+		return false, p.WrapError(fmt.Errorf("sender Key does not match party at claimed Index %d", msg.GetFrom().Index), msg.GetFrom())
+	}
 	return true, nil
 }
 
@@ -209,27 +221,102 @@ func (p *LocalParty) StoreMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 	fromPIdx := msg.GetFrom().Index
 
 	// switch/case is necessary to store any messages beyond current round
-	// this does not handle message replays. we expect the caller to apply replay and spoofing protection.
+	// [FORK] Defense-in-depth: reject duplicate messages for the same (round, sender) pair.
+	// Upstream overwrites the stored message unconditionally, which breaks commit-then-reveal
+	// guarantees (an attacker could send commitment C1, wait for others, then replace with C2).
+	// Also validate broadcast/P2P flag at storage time to prevent slot poisoning:
+	// a message with the wrong flag would occupy the slot but be rejected by
+	// CanAccept(), permanently blocking the round from proceeding.
 	switch msg.Content().(type) {
-	case *SignRound1Message1:
+	case *SignRound1Message1: // P2P
+		if msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound1Message1 expected P2P but got broadcast"), msg.GetFrom())
+		}
+		if p.temp.signRound1Message1s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound1Message1 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound1Message1s[fromPIdx] = msg
-	case *SignRound1Message2:
+	case *SignRound1Message2: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound1Message2 expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound1Message2s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound1Message2 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound1Message2s[fromPIdx] = msg
-	case *SignRound2Message:
+	case *SignRound2Message: // P2P
+		if msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound2Message expected P2P but got broadcast"), msg.GetFrom())
+		}
+		if p.temp.signRound2Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound2Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound2Messages[fromPIdx] = msg
-	case *SignRound3Message:
+	case *SignRound3Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound3Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound3Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound3Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound3Messages[fromPIdx] = msg
-	case *SignRound4Message:
+	case *SignRound4Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound4Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound4Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound4Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound4Messages[fromPIdx] = msg
-	case *SignRound5Message:
+	case *SignRound5Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound5Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound5Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound5Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound5Messages[fromPIdx] = msg
-	case *SignRound6Message:
+	case *SignRound6Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound6Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound6Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound6Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound6Messages[fromPIdx] = msg
-	case *SignRound7Message:
+	case *SignRound7Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound7Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound7Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound7Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound7Messages[fromPIdx] = msg
-	case *SignRound8Message:
+	case *SignRound8Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound8Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound8Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound8Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound8Messages[fromPIdx] = msg
-	case *SignRound9Message:
+	case *SignRound9Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("SignRound9Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.signRound9Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate SignRound9Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.signRound9Messages[fromPIdx] = msg
 	default: // unrecognised message, just ignore!
 		common.Logger.Warningf("unrecognised message ignored: %v", msg)

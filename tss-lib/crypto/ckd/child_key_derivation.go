@@ -117,6 +117,9 @@ func NewExtendedKeyFromString(key string, curve elliptic.Curve) (*ExtendedKey, e
 		}
 	} else {
 		px, py := elliptic.Unmarshal(curve, keyData)
+		if px == nil {
+			return nil, errors.New("failed to unmarshal public key from extended key data")
+		}
 		pubKey = ecdsa.PublicKey{
 			Curve: curve,
 			X:     px,
@@ -235,12 +238,16 @@ func DeriveChildKey(index uint32, pk *ExtendedKey, curve elliptic.Curve) (*big.I
 		return nil, nil, err
 	}
 
+	// Note: the fork's ScalarBaseMult (crypto/ecpoint.go) returns identity (0,0) instead
+	// of panicking. The identity check below is unchanged from upstream.
 	deltaG := crypto.ScalarBaseMult(curve, ilNum)
 	if deltaG.X().Sign() == 0 || deltaG.Y().Sign() == 0 {
 		err = errors.New("invalid child")
 		common.Logger.Error("error invalid child")
 		return nil, nil, err
 	}
+	// Note: the fork's ECPoint.Add (crypto/ecpoint.go) adds nil/curve-mismatch guards.
+	// This callsite and its error handling are unchanged from upstream.
 	childCryptoPk, err := cryptoPk.Add(deltaG)
 	if err != nil {
 		common.Logger.Error("error adding delta G to parent key")

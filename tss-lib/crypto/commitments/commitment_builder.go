@@ -70,8 +70,8 @@ func ParseSecrets(secrets []*big.Int) ([][]*big.Int, error) {
 		}
 		if isLenEl {
 			nextPartLen = secrets[el].Int64()
-			if MaxPartSize < nextPartLen {
-				return nil, fmt.Errorf("ParseSecrets: commitment part too large: part %d, size %d", len(parts), nextPartLen)
+			if nextPartLen < 0 || MaxPartSize < nextPartLen {
+				return nil, fmt.Errorf("ParseSecrets: invalid commitment part size: part %d, size %d", len(parts), nextPartLen)
 			}
 			el += 1
 		} else {

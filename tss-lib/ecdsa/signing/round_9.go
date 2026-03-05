@@ -9,6 +9,9 @@ package signing
 import (
 	"errors"
 
+	errors2 "github.com/pkg/errors"
+
+	"github.com/hemilabs/x/tss-lib/v2/crypto"
 	"github.com/hemilabs/x/tss-lib/v2/crypto/commitments"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
@@ -33,15 +36,36 @@ func (round *round9) Start() *tss.Error {
 		cj, dj := r7msg.UnmarshalCommitment(), r8msg.UnmarshalDeCommitment()
 		cmt := commitments.HashCommitDecommit{C: cj, D: dj}
 		ok, values := cmt.DeCommit()
-		if !ok && len(values) != 4 {
+		if !ok || len(values) != 4 {
 			return round.WrapError(errors.New("de-commitment for bigVj and bigAj failed"), Pj)
 		}
 		UjX, UjY, TjX, TjY := values[0], values[1], values[2], values[3]
+		// [FORK] On-curve and identity-point validation for decommitted Uj, Tj. Upstream
+		// uses raw (X,Y) coordinates from the decommitment without constructing ECPoint
+		// objects, so off-curve or identity points are not caught. An identity Uj or Tj
+		// would make the U==T consistency check trivially pass, hiding a malicious party.
+		// Defense-in-depth: on Weierstrass curves, NewECPoint rejects (0,0), making the
+		// IsIdentity() checks below unreachable. Essential on Edwards curves where (0,1) passes.
+		Uj, err := crypto.NewECPoint(round.Params().EC(), UjX, UjY)
+		if err != nil {
+			return round.WrapError(errors2.Wrapf(err, "decommitted Uj not on curve"), Pj)
+		}
+		if Uj.IsIdentity() {
+			return round.WrapError(errors.New("decommitted Uj is the identity point"), Pj)
+		}
+		Tj, err := crypto.NewECPoint(round.Params().EC(), TjX, TjY)
+		if err != nil {
+			return round.WrapError(errors2.Wrapf(err, "decommitted Tj not on curve"), Pj)
+		}
+		if Tj.IsIdentity() {
+			return round.WrapError(errors.New("decommitted Tj is the identity point"), Pj)
+		}
 		UX, UY = round.Params().EC().Add(UX, UY, UjX, UjY)
 		TX, TY = round.Params().EC().Add(TX, TY, TjX, TjY)
 	}
 	if UX.Cmp(TX) != 0 || UY.Cmp(TY) != 0 {
-		return round.WrapError(errors.New("U doesn't equal T"), round.PartyID())
+		// Don't blame self — the inconsistency is caused by at least one malicious party
+		return round.WrapError(errors.New("U doesn't equal T: signature share inconsistency detected"))
 	}
 
 	r9msg := NewSignRound9Message(round.PartyID(), round.temp.si)

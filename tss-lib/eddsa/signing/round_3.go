@@ -10,7 +10,7 @@ import (
 	"crypto/sha512"
 	"math/big"
 
-	"github.com/binance-chain/edwards25519"
+	"github.com/binance-chain/edwards25519/edwards25519"
 	"github.com/pkg/errors"
 
 	"github.com/hemilabs/x/tss-lib/v2/common"
@@ -47,17 +47,20 @@ func (round *round3) Start() *tss.Error {
 		cmtDeCmt := commitments.HashCommitDecommit{C: round.temp.cjs[j], D: r2msg.UnmarshalDeCommitment()}
 		ok, coordinates := cmtDeCmt.DeCommit()
 		if !ok {
-			return round.WrapError(errors.New("de-commitment verify failed"))
+			return round.WrapError(errors.New("de-commitment verify failed"), Pj)
 		}
 		if len(coordinates) != 2 {
-			return round.WrapError(errors.New("length of de-commitment should be 2"))
+			return round.WrapError(errors.New("length of de-commitment should be 2"), Pj)
 		}
 
 		Rj, err := crypto.NewECPoint(round.Params().EC(), coordinates[0], coordinates[1])
-		Rj = Rj.EightInvEight()
 		if err != nil {
 			return round.WrapError(errors.Wrapf(err, "NewECPoint(Rj)"), Pj)
 		}
+		// [FORK] Moved EightInvEight() call after NewECPoint error check. Upstream called
+		// EightInvEight() before checking the error from NewECPoint, risking a nil-pointer
+		// dereference if NewECPoint failed.
+		Rj = Rj.EightInvEight()
 		proof, err := r2msg.UnmarshalZKProof(round.Params().EC())
 		if err != nil {
 			return round.WrapError(errors.New("failed to unmarshal Rj proof"), Pj)
@@ -74,6 +77,21 @@ func (round *round3) Start() *tss.Error {
 	// 7. compute lambda
 	var encodedR [32]byte
 	R.ToBytes(&encodedR)
+
+	// [FORK] R identity check: upstream did not check. If all nonces cancel out, the
+	// resulting R is the identity element. The identity point in Edwards form encodes as
+	// [1, 0, 0, ...0] (little-endian y=1). If R is the identity then sum(r_i) = 0 mod L,
+	// and the published signature scalar s = H(R,A,M)*a directly leaks the full private key.
+	isIdentity := encodedR[0] == 0x01
+	for k := 1; k < 32 && isIdentity; k++ {
+		if encodedR[k] != 0x00 {
+			isIdentity = false
+		}
+	}
+	if isIdentity {
+		return round.WrapError(errors.New("R is the identity point: degenerate nonce combination"))
+	}
+
 	encodedPubKey := ecPointToEncodedBytes(round.key.EDDSAPub.X(), round.key.EDDSAPub.Y())
 
 	// h = hash512(k || A || M)
@@ -97,6 +115,13 @@ func (round *round3) Start() *tss.Error {
 	// 8. compute si
 	var localS [32]byte
 	edwards25519.ScMulAdd(&localS, &lambdaReduced, bigIntToEncodedBytes(round.temp.wi), riBytes)
+
+	// [FORK] Clear signing nonces from memory — ri leak allows secret share recovery.
+	// Upstream did not clear these after use. An ri leak combined with a known partial
+	// signature directly reveals this party's interpolated secret share w_i via
+	// s_i = r_i + H(R,A,M)*w_i.
+	round.temp.ri = new(big.Int)
+	round.temp.wi = new(big.Int)
 
 	// 9. store r3 message pieces
 	round.temp.si = &localS

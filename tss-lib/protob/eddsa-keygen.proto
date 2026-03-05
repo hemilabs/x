@@ -20,6 +20,7 @@ message KGRound1Message {
  */
 message KGRound2Message1 {
     bytes share = 1;
+    bytes receiverId = 2;
 }
 
 /*

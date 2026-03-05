@@ -40,7 +40,7 @@ func (round *round1) Start() *tss.Error {
 	}
 	round.allOldOK()
 
-	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(0))
+	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(round.Params().SSIDNonce()))
 	ssid, err := round.getSSID()
 	if err != nil {
 		return round.WrapError(err)
@@ -58,7 +58,7 @@ func (round *round1) Start() *tss.Error {
 	wi, _ := signing.PrepareForSigning(round.Params().EC(), i, len(round.OldParties().IDs()), xi, ks, bigXj)
 
 	// 2.
-	vi, shares, err := vss.Create(round.Params().EC(), round.NewThreshold(), wi, newKs, round.Rand())
+	vi, shares, poly, err := vss.Create(round.Params().EC(), round.NewThreshold(), wi, newKs, round.Rand())
 	if err != nil {
 		return round.WrapError(err, round.PartyID())
 	}
@@ -73,6 +73,13 @@ func (round *round1) Start() *tss.Error {
 	// 4. populate temp data
 	round.temp.VD = vCmt.D
 	round.temp.NewShares = shares
+	// [FORK] Store VSS commitments for SNARK witness extraction via GetNewVs().
+	// Upstream never populated round.temp.NewVs in round 1 (the field exists in the
+	// struct but was left empty).
+	round.temp.NewVs = vi
+	// [FORK] Store VSS polynomial for SNARK witness extraction via GetPoly().
+	// Upstream discards the polynomial after creating shares.
+	round.temp.Poly = poly
 
 	// 5. "broadcast" C_i to members of the NEW committee
 	r1msg := NewDGRound1Message(
@@ -109,12 +116,10 @@ func (round *round1) Update() (bool, *tss.Error) {
 		}
 		round.oldOK[j] = true
 
-		// save the ecdsa pub received from the old committee
-		if round.temp.dgRound1Messages[0] == nil {
-			ret = false
-			continue
-		}
-		r1msg := round.temp.dgRound1Messages[0].Content().(*DGRound1Message)
+		// [FORK] Save the ecdsa pub received from the old committee.
+		// Upstream always read from index [0], ignoring other old committee members' claims.
+		// We read from sender j and cross-check all senders agree.
+		r1msg := msg.Content().(*DGRound1Message)
 		candidate, err := r1msg.UnmarshalECDSAPub(round.Params().EC())
 		if err != nil {
 			return false, round.WrapError(errors.New("unable to unmarshal the ecdsa pub key"), msg.GetFrom())

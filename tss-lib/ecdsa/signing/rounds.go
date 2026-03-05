@@ -126,20 +126,33 @@ func (round *base) resetOK() {
 	}
 }
 
-// get ssid from local params
+// [FORK] SSID computation: upstream includes curve params (P, N, B, Gx, Gy), party keys,
+// BigXj, NTildej, H1j, H2j, round number, and ssidNonce. Our version adds:
+//   - "ecdsa-signing" protocol tag (prevents cross-protocol SSID collisions with keygen/reshare)
+//   - partyCount, threshold (prevents proofs from being valid across different (n,t) configs)
+//   - message m (prevents cross-message proof replay for same party set and nonce)
+// All values are hashed via SHA512_256i which has its own length-delimited
+// domain separation (see common/hash.go [FORK] comment).
 func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
+	ssidList := []*big.Int{new(big.Int).SetBytes([]byte("ecdsa-signing")), round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // protocol tag + ec curve
 	ssidList = append(ssidList, round.Parties().IDs().Keys()...)                                                                                // parties
 	BigXjList, err := crypto.FlattenECPoints(round.key.BigXj)
 	if err != nil {
 		return nil, round.WrapError(errors.New("read BigXj failed"), round.PartyID())
 	}
-	ssidList = append(ssidList, BigXjList...)                    // BigXj
-	ssidList = append(ssidList, round.key.NTildej...)            // NTilde
-	ssidList = append(ssidList, round.key.H1j...)                // h1
-	ssidList = append(ssidList, round.key.H2j...)                // h2
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, BigXjList...)                          // BigXj
+	ssidList = append(ssidList, round.key.NTildej...)                  // NTilde
+	ssidList = append(ssidList, round.key.H1j...)                      // h1
+	ssidList = append(ssidList, round.key.H2j...)                      // h2
+	ssidList = append(ssidList, big.NewInt(int64(round.PartyCount()))) // party count
+	ssidList = append(ssidList, big.NewInt(int64(round.Threshold())))  // threshold
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))       // round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
+	// Bind the message being signed into the SSID to prevent cross-session
+	// proof replay when two signing sessions use the same party set and nonce.
+	if round.temp.m != nil {
+		ssidList = append(ssidList, round.temp.m)
+	}
 	ssid := common.SHA512_256i(ssidList...).Bytes()
 
 	return ssid, nil

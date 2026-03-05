@@ -45,13 +45,20 @@ func NewKGRound1Message(
 		From:        from,
 		IsBroadcast: true,
 	}
-	dlnProof1Bz, err := dlnProof1.Serialize()
-	if err != nil {
-		return nil, err
+	var dlnProof1Bz, dlnProof2Bz [][]byte
+	if dlnProof1 != nil {
+		var err error
+		dlnProof1Bz, err = dlnProof1.Serialize()
+		if err != nil {
+			return nil, err
+		}
 	}
-	dlnProof2Bz, err := dlnProof2.Serialize()
-	if err != nil {
-		return nil, err
+	if dlnProof2 != nil {
+		var err error
+		dlnProof2Bz, err = dlnProof2.Serialize()
+		if err != nil {
+			return nil, err
+		}
 	}
 	content := &KGRound1Message{
 		Commitment: ct.Bytes(),
@@ -66,16 +73,25 @@ func NewKGRound1Message(
 	return tss.NewMessage(meta, content, msg), nil
 }
 
+// [FORK] ValidateBasic: upstream checks non-nil and non-empty on all fields, plus DLN proof
+// size validation. We additionally add upper-bound length checks on each field to prevent
+// memory exhaustion from adversarially oversized values, and make DLN proofs optional
+// (absent in on-chain SNARK mode where per-participant SNARKs replace classical proofs).
 func (m *KGRound1Message) ValidateBasic() bool {
 	return m != nil &&
 		common.NonEmptyBytes(m.GetCommitment()) &&
+		len(m.GetCommitment()) <= 32 && // SHA-512/256 commitment hash
 		common.NonEmptyBytes(m.GetPaillierN()) &&
+		len(m.GetPaillierN()) <= 512 && // 4096-bit N max (512 bytes)
 		common.NonEmptyBytes(m.GetNTilde()) &&
+		len(m.GetNTilde()) <= 512 && // 4096-bit NTilde max
 		common.NonEmptyBytes(m.GetH1()) &&
+		len(m.GetH1()) <= 512 && // bounded by NTilde
 		common.NonEmptyBytes(m.GetH2()) &&
-		// expected len of dln proof = sizeof(int64) + len(alpha) + len(t)
-		common.NonEmptyMultiBytes(m.GetDlnproof_1(), 2+(dlnproof.Iterations*2)) &&
-		common.NonEmptyMultiBytes(m.GetDlnproof_2(), 2+(dlnproof.Iterations*2))
+		len(m.GetH2()) <= 512 && // bounded by NTilde
+		// DLN proofs: absent (on-chain SNARK mode) OR correct size
+		(len(m.GetDlnproof_1()) == 0 || common.NonEmptyMultiBytes(m.GetDlnproof_1(), 2+(dlnproof.Iterations*2))) &&
+		(len(m.GetDlnproof_2()) == 0 || common.NonEmptyMultiBytes(m.GetDlnproof_2(), 2+(dlnproof.Iterations*2)))
 }
 
 func (m *KGRound1Message) UnmarshalCommitment() *big.Int {
@@ -118,20 +134,33 @@ func NewKGRound2Message1(
 		To:          []*tss.PartyID{to},
 		IsBroadcast: false,
 	}
-	proofBzs := proof.Bytes()
+	var proofBzs [][]byte
+	if proof != nil {
+		b := proof.Bytes()
+		proofBzs = b[:]
+	}
+	// [FORK] ReceiverId: upstream did not include the receiver's Key in the message.
+	// We bind the intended receiver's identity into the P2P message so that round 3
+	// can verify the share was addressed to this party, preventing share misdirection.
 	content := &KGRound2Message1{
-		Share:    share.Share.Bytes(),
-		FacProof: proofBzs[:],
+		Share:      share.Share.Bytes(),
+		FacProof:   proofBzs,
+		ReceiverId: to.GetKey(),
 	}
 	msg := tss.NewMessageWrapper(meta, content)
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream checks m != nil and non-empty share (FacProof check
+// commented out for backward compatibility). We add share length bound, FacProof structure
+// check (optional for SNARK mode), and ReceiverId non-empty check (fork addition for share binding).
 func (m *KGRound2Message1) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.GetShare())
-	// This is commented for backward compatibility, which msg has no proof
-	// && common.NonEmptyMultiBytes(m.GetFacProof(), facproof.ProofFacBytesParts)
+		common.NonEmptyBytes(m.GetShare()) &&
+		len(m.GetShare()) <= 32 && // secp256k1 scalar max 32 bytes
+		// FacProof: absent (on-chain SNARK mode) OR correct size
+		(len(m.GetFacProof()) == 0 || common.NonEmptyMultiBytes(m.GetFacProof(), facproof.ProofFacBytesParts)) &&
+		common.NonEmptyBytes(m.GetReceiverId())
 }
 
 func (m *KGRound2Message1) UnmarshalShare() *big.Int {
@@ -140,6 +169,10 @@ func (m *KGRound2Message1) UnmarshalShare() *big.Int {
 
 func (m *KGRound2Message1) UnmarshalFacProof() (*facproof.ProofFac, error) {
 	return facproof.NewProofFromBytes(m.GetFacProof())
+}
+
+func (m *KGRound2Message1) UnmarshalReceiverId() []byte {
+	return m.GetReceiverId()
 }
 
 // ----- //
@@ -154,20 +187,39 @@ func NewKGRound2Message2(
 		IsBroadcast: true,
 	}
 	dcBzs := common.BigIntsToBytes(deCommitment)
-	proofBzs := proof.Bytes()
+	var proofBzs [][]byte
+	if proof != nil {
+		b := proof.Bytes()
+		proofBzs = b[:]
+	}
 	content := &KGRound2Message2{
 		DeCommitment: dcBzs,
-		ModProof:     proofBzs[:],
+		ModProof:     proofBzs,
 	}
 	msg := tss.NewMessageWrapper(meta, content)
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream checks m != nil and non-empty decommitment (ModProof
+// check commented out for backward compatibility). We add element count and per-element
+// byte length bounds to prevent memory exhaustion, plus ModProof structure check (optional
+// for SNARK mode).
 func (m *KGRound2Message2) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.GetDeCommitment())
-	// This is commented for backward compatibility, which msg has no proof
-	// && common.NonEmptyMultiBytes(m.GetModProof(), modproof.ProofModBytesParts)
+	if m == nil {
+		return false
+	}
+	dc := m.GetDeCommitment()
+	if len(dc) > 600 {
+		return false
+	}
+	for _, bz := range dc {
+		if len(bz) > 512 {
+			return false
+		}
+	}
+	return common.NonEmptyMultiBytes(dc) &&
+		// ModProof: absent (on-chain SNARK mode) OR correct size
+		(len(m.GetModProof()) == 0 || common.NonEmptyMultiBytes(m.GetModProof(), modproof.ProofModBytesParts))
 }
 
 func (m *KGRound2Message2) UnmarshalDeCommitment() []*big.Int {
@@ -203,6 +255,8 @@ func NewKGRound3Message(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// ValidateBasic checks Paillier proof has the correct number of iterations (ProofIters)
+// and all proof bytes are non-empty. Same as upstream.
 func (m *KGRound3Message) ValidateBasic() bool {
 	return m != nil &&
 		common.NonEmptyMultiBytes(m.GetPaillierProof(), paillier.ProofIters)

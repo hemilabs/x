@@ -139,19 +139,29 @@ func (round *base) allNewOK() {
 	}
 }
 
-// get ssid from local params
+// [FORK] getSSID: upstream SSID hashed old party keys, curve parameters (P, N, B, Gx, Gy),
+// BigXj, NTilde, H1, H2, round number, and ssidNonce. This was underspecified: it allowed
+// cross-protocol proof replay (keygen vs resharing) and cross-session replay (different
+// thresholds or party counts). We add: (1) "ecdsa-resharing" protocol tag (distinct from
+// keygen), (2) new party keys (upstream only included old), (3) old/new partyCount and
+// threshold binding, and (4) parameterized ssidNonce via SSIDNonce() (upstream hardcodes to 0).
 func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
-	ssidList = append(ssidList, round.Parties().IDs().Keys()...)                                                                                // parties
+	ssidList := []*big.Int{new(big.Int).SetBytes([]byte("ecdsa-resharing")), round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // protocol tag + ec curve
+	ssidList = append(ssidList, round.Parties().IDs().Keys()...)                                                                                // old parties
+	ssidList = append(ssidList, round.NewParties().IDs().Keys()...)                                                                              // new parties
 	BigXjList, err := crypto.FlattenECPoints(round.input.BigXj)
 	if err != nil {
 		return nil, round.WrapError(errors.New("read BigXj failed"), round.PartyID())
 	}
-	ssidList = append(ssidList, BigXjList...)                    // BigXj
-	ssidList = append(ssidList, round.input.NTildej...)          // NTilde
-	ssidList = append(ssidList, round.input.H1j...)              // h1
-	ssidList = append(ssidList, round.input.H2j...)              // h2
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, BigXjList...)                                          // BigXj
+	ssidList = append(ssidList, round.input.NTildej...)                                // NTilde
+	ssidList = append(ssidList, round.input.H1j...)                                    // h1
+	ssidList = append(ssidList, round.input.H2j...)                                    // h2
+	ssidList = append(ssidList, big.NewInt(int64(round.ReSharingParams().PartyCount()))) // old party count
+	ssidList = append(ssidList, big.NewInt(int64(round.Threshold())))                   // old threshold
+	ssidList = append(ssidList, big.NewInt(int64(round.ReSharingParams().NewPartyCount()))) // new party count
+	ssidList = append(ssidList, big.NewInt(int64(round.ReSharingParams().NewThreshold())))  // new threshold
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))                        // round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
 	ssid := common.SHA512_256i(ssidList...).Bytes()
 

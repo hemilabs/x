@@ -58,23 +58,32 @@ func CheckIndexes(ec elliptic.Curve, indexes []*big.Int) ([]*big.Int, error) {
 }
 
 // Returns a new array of secret shares created by Shamir's Secret Sharing Algorithm,
-// requiring a minimum number of shares to recreate, of length shares, from the input secret
-func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.Int, rand io.Reader) (Vs, Shares, error) {
+// requiring a minimum number of shares to recreate, of length shares, from the input secret.
+//
+// [FORK] Returns the polynomial coefficients as the third return value. Upstream returns
+// only (Vs, Shares, error). The polynomial is needed for the per-participant SNARK
+// architecture where each operator's SP1 guest must evaluate the polynomial independently.
+func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.Int, rand io.Reader) (Vs, Shares, []*big.Int, error) {
 	if secret == nil || indexes == nil {
-		return nil, nil, fmt.Errorf("vss secret or indexes == nil: %v %v", secret, indexes)
+		return nil, nil, nil, fmt.Errorf("vss secret or indexes == nil: secret=%t indexes=%t", secret != nil, indexes != nil)
+	}
+	// [FORK] Reject zero secret: ScalarBaseMult(0) produces the identity point, which
+	// panics. A zero secret also means the shared key is trivially known (= 0).
+	if secret.Sign() == 0 {
+		return nil, nil, nil, errors.New("vss secret must be non-zero")
 	}
 	if threshold < 1 {
-		return nil, nil, errors.New("vss threshold < 1")
+		return nil, nil, nil, errors.New("vss threshold < 1")
 	}
 
 	ids, err := CheckIndexes(ec, indexes)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	num := len(indexes)
 	if num < threshold {
-		return nil, nil, ErrNumSharesBelowThreshold
+		return nil, nil, nil, ErrNumSharesBelowThreshold
 	}
 
 	poly := samplePolynomial(ec, threshold, secret, rand)
@@ -89,11 +98,24 @@ func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.In
 		share := evaluatePolynomial(ec, threshold, poly, ids[i])
 		shares[i] = &Share{Threshold: threshold, ID: ids[i], Share: share}
 	}
-	return v, shares, nil
+	return v, shares, poly, nil
 }
 
 func (share *Share) Verify(ec elliptic.Curve, threshold int, vs Vs) bool {
 	if share.Threshold != threshold || vs == nil || len(vs) != threshold+1 {
+		return false
+	}
+	// [FORK] Reject shares that are zero or out of range [1, q-1].
+	// Upstream does not validate share values, allowing zero shares (which map to the
+	// identity point under ScalarBaseMult) or out-of-range values (>= q) that indicate
+	// malformed or tampered data.
+	q := ec.Params().N
+	if share.Share == nil || share.Share.Sign() <= 0 || share.Share.Cmp(q) >= 0 {
+		return false
+	}
+	// [FORK] Reject share ID that is nil or zero mod q — evaluation at x=0 leaks the
+	// secret (constant term of the polynomial). Upstream does not check.
+	if share.ID == nil || new(big.Int).Mod(share.ID, q).Sign() == 0 {
 		return false
 	}
 	var err error
@@ -119,21 +141,40 @@ func (shares Shares) ReConstruct(ec elliptic.Curve) (secret *big.Int, err error)
 	}
 	modN := common.ModInt(ec.Params().N)
 
-	// x coords
-	xs := make([]*big.Int, 0)
+	// [FORK] Check for duplicate share IDs (reduced mod q) to prevent silently wrong
+	// Lagrange interpolation. Upstream does not check — duplicate IDs cause division
+	// by zero in ModInverse. Reduction mod q is necessary because distinct integers
+	// that are congruent mod q (e.g., k and k+q) produce a zero denominator in the
+	// Lagrange basis computation. This mirrors the approach in CheckIndexes.
+	q := ec.Params().N
+	xs := make([]*big.Int, 0, len(shares))
+	seen := make(map[string]struct{}, len(shares))
 	for _, share := range shares {
+		idMod := new(big.Int).Mod(share.ID, q)
+		idStr := idMod.String()
+		if _, dup := seen[idStr]; dup {
+			return nil, fmt.Errorf("duplicate share ID %s (mod q) in ReConstruct", idStr)
+		}
+		seen[idStr] = struct{}{}
 		xs = append(xs, share.ID)
 	}
 
-	secret = zero
+	secret = new(big.Int)
 	for i, share := range shares {
-		times := one
+		times := new(big.Int).SetInt64(1)
 		for j := 0; j < len(xs); j++ {
 			if j == i {
 				continue
 			}
 			sub := modN.Sub(xs[j], share.ID)
 			subInv := modN.ModInverse(sub)
+			// [FORK] Upstream does not check for nil ModInverse. If share IDs collide
+			// mod q, ModInverse returns nil causing a nil-pointer panic.
+			// Defense-in-depth: the mod-q duplicate check above now catches this
+			// condition, but this nil guard is retained as a safeguard.
+			if subInv == nil {
+				return nil, errors.New("ModInverse(xs[j] - share.ID) returned nil; share IDs may collide modulo the curve order")
+			}
 			div := modN.Mul(xs[j], subInv)
 			times = modN.Mul(times, div)
 		}

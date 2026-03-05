@@ -79,9 +79,17 @@ var (
 // ----- //
 
 // NewMessageWrapper constructs a MessageWrapper from routing metadata and content
+//
+// [FORK] Upstream silently discards the error from anypb.New (`any, _ :=`),
+// which hides proto registration bugs and produces nil wire messages. Changed
+// to panic on error so failures are caught immediately during development.
 func NewMessageWrapper(routing MessageRouting, content MessageContent) *MessageWrapper {
 	// marshal the content to the ProtoBuf Any type
-	any, _ := anypb.New(content)
+	any, err := anypb.New(content)
+	if err != nil {
+		// This indicates a programming error (proto type not registered).
+		panic(fmt.Sprintf("NewMessageWrapper: anypb.New failed: %v", err))
+	}
 	// convert given PartyIDs to the wire format
 	var to []*MessageWrapper_PartyID
 	if routing.To != nil {
@@ -136,8 +144,14 @@ func (mm *MessageImpl) IsToOldAndNewCommittees() bool {
 	return mm.wire.IsToOldAndNewCommittees
 }
 
+// [FORK] Upstream uses default proto.Marshal (non-deterministic). Changed to
+// proto.MarshalOptions{Deterministic: true} so that the same message always
+// produces identical wire bytes. This is required for on-chain P2P transport
+// where message hashes (used in CeremonyID and misbehavior proofs) must be
+// reproducible across independent nodes.
 func (mm *MessageImpl) WireBytes() ([]byte, *MessageRouting, error) {
-	bz, err := proto.Marshal(mm.wire.Message)
+	opts := proto.MarshalOptions{Deterministic: true}
+	bz, err := opts.Marshal(mm.wire.Message)
 	if err != nil {
 		return nil, nil, err
 	}

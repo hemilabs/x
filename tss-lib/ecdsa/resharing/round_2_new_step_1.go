@@ -11,14 +11,12 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/crypto/modproof"
-
+	"github.com/hemilabs/x/tss-lib/v2/common"
 	"github.com/hemilabs/x/tss-lib/v2/crypto/dlnproof"
+	"github.com/hemilabs/x/tss-lib/v2/crypto/modproof"
 	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
-
-var zero = big.NewInt(0)
 
 func (round *round2) Start() *tss.Error {
 	if round.started {
@@ -39,8 +37,11 @@ func (round *round2) Start() *tss.Error {
 	// check consistency of SSID
 	r1msg := round.temp.dgRound1Messages[0].Content().(*DGRound1Message)
 	SSID := r1msg.UnmarshalSSID()
+	// [FORK] Upstream skipped `j == 0 || j == i`, but since i is a new-committee index
+	// and j iterates over old-committee parties, `j == i` could wrongly skip an old party
+	// whose index happens to equal i. We only skip j == 0 (the reference party).
 	for j, Pj := range round.OldParties().IDs() {
-		if j == 0 || j == i {
+		if j == 0 {
 			continue
 		}
 		r1msg := round.temp.dgRound1Messages[j].Content().(*DGRound1Message)
@@ -87,21 +88,24 @@ func (round *round2) Start() *tss.Error {
 		preParams.P,
 		preParams.Q,
 		preParams.NTildei
-	dlnProof1 := dlnproof.NewDLNProof(h1i, h2i, alpha, p, q, NTildei, round.Rand())
-	dlnProof2 := dlnproof.NewDLNProof(h2i, h1i, beta, p, q, NTildei, round.Rand())
+	ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, big.NewInt(int64(i)))
+	var dlnProof1, dlnProof2 *dlnproof.Proof
+	if !round.Parameters.NoProofDLN() {
+		dlnProof1 = dlnproof.NewDLNProof(ContextI, h1i, h2i, alpha, p, q, NTildei, round.Rand())
+		dlnProof2 = dlnproof.NewDLNProof(ContextI, h2i, h1i, beta, p, q, NTildei, round.Rand())
+	}
 
-	modProof := &modproof.ProofMod{W: zero, X: *new([80]*big.Int), A: zero, B: zero, Z: *new([80]*big.Int)}
-	ContextI := append(round.temp.ssid, big.NewInt(int64(i)).Bytes()...)
+	var modProofObj *modproof.ProofMod
 	if !round.Parameters.NoProofMod() {
 		var err error
-		modProof, err = modproof.NewProof(ContextI, preParams.PaillierSK.N, preParams.PaillierSK.P, preParams.PaillierSK.Q, round.Rand())
+		modProofObj, err = modproof.NewProof(ContextI, preParams.PaillierSK.N, preParams.PaillierSK.P, preParams.PaillierSK.Q, round.Rand())
 		if err != nil {
 			return round.WrapError(err, Pi)
 		}
 	}
 	r2msg2, err := NewDGRound2Message1(
 		round.NewParties().IDs().Exclude(round.PartyID()), round.PartyID(),
-		&preParams.PaillierSK.PublicKey, modProof, preParams.NTildei, preParams.H1i, preParams.H2i, dlnProof1, dlnProof2)
+		&preParams.PaillierSK.PublicKey, modProofObj, preParams.NTildei, preParams.H1i, preParams.H2i, dlnProof1, dlnProof2)
 	if err != nil {
 		return round.WrapError(err, Pi)
 	}

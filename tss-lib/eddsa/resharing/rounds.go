@@ -7,6 +7,10 @@
 package resharing
 
 import (
+	"errors"
+	"math/big"
+
+	"github.com/hemilabs/x/tss-lib/v2/common"
 	"github.com/hemilabs/x/tss-lib/v2/eddsa/keygen"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
@@ -132,4 +136,29 @@ func (round *base) allNewOK() {
 	for j := range round.newOK {
 		round.newOK[j] = true
 	}
+}
+
+// [FORK] getSSID: upstream had no SSID for resharing at all. This is entirely new code.
+// Includes: (1) "eddsa-resharing" protocol tag for cross-protocol domain separation,
+// (2) full curve parameters including B, (3) both old and new party keys, (4) the EDDSA
+// public key being reshared, (5) old/new party counts and thresholds, (6) round number,
+// (7) caller-supplied ssidNonce for concurrent sessions. This ensures every resharing
+// session has a cryptographically unique context.
+func (round *base) getSSID() ([]byte, error) {
+	ssidList := []*big.Int{new(big.Int).SetBytes([]byte("eddsa-resharing")), round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // protocol tag + ec curve
+	ssidList = append(ssidList, round.Parties().IDs().Keys()...)    // old parties
+	ssidList = append(ssidList, round.NewParties().IDs().Keys()...) // new parties
+	if round.input.EDDSAPub == nil {
+		return nil, round.WrapError(errors.New("read EDDSAPub failed"), round.PartyID())
+	}
+	ssidList = append(ssidList, round.input.EDDSAPub.X(), round.input.EDDSAPub.Y()) // public key
+	ssidList = append(ssidList, big.NewInt(int64(round.ReSharingParams().PartyCount())))    // old party count
+	ssidList = append(ssidList, big.NewInt(int64(round.Threshold())))                       // old threshold
+	ssidList = append(ssidList, big.NewInt(int64(round.ReSharingParams().NewPartyCount()))) // new party count
+	ssidList = append(ssidList, big.NewInt(int64(round.ReSharingParams().NewThreshold())))  // new threshold
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))                            // round number
+	ssidList = append(ssidList, round.temp.ssidNonce)
+	ssid := common.SHA512_256i(ssidList...).Bytes()
+
+	return ssid, nil
 }

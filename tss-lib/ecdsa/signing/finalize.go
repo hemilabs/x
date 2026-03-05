@@ -24,16 +24,40 @@ func (round *finalization) Start() *tss.Error {
 	round.started = true
 	round.resetOK()
 
-	sumS := round.temp.si
+	// [FORK] Defense-in-depth: upstream uses `sumS := round.temp.si` which aliases the
+	// pointer. While modN.Add allocates a new big.Int (so the alias is broken after the
+	// first iteration), using Set() from the start prevents aliasing hazards if the
+	// implementation of modInt.Add ever changes.
+	sumS := new(big.Int).Set(round.temp.si)
 	modN := common.ModInt(round.Params().EC().Params().N)
 
+	N := round.Params().EC().Params().N
 	for j := range round.Parties().IDs() {
 		round.ok[j] = true
 		if j == round.PartyID().Index {
 			continue
 		}
 		r9msg := round.temp.signRound9Messages[j].Content().(*SignRound9Message)
-		sumS = modN.Add(sumS, r9msg.UnmarshalS())
+		sj := r9msg.UnmarshalS()
+		// [FORK] Range check on each party's s_j share. Upstream accepts any value
+		// from UnmarshalS(). A malicious party could send >= N values to manipulate
+		// the aggregated signature or cause undefined modular arithmetic.
+		// Defense-in-depth: sj.Sign()<0 is unreachable because UnmarshalS() uses
+		// SetBytes() which always produces non-negative values. Retained alongside
+		// the Cmp(N) check for completeness — the range check [0, N) is the meaningful
+		// validation.
+		if sj.Sign() < 0 || sj.Cmp(N) >= 0 {
+			return round.WrapError(fmt.Errorf("party %d sent s_i outside [0, N)", j),
+				round.Parties().IDs()[j])
+		}
+		sumS = modN.Add(sumS, sj)
+	}
+
+	// [FORK] Zero-S rejection. Upstream does not check. A colluding set of malicious
+	// parties could craft their s_j values to force sumS = 0 mod N, producing an
+	// invalid ECDSA signature (s=0 is explicitly forbidden by the spec).
+	if sumS.Sign() == 0 {
+		return round.WrapError(errors.New("accumulated S is zero: malicious share detected"))
 	}
 
 	recid := 0
@@ -56,7 +80,10 @@ func (round *finalization) Start() *tss.Error {
 	}
 
 	// save the signature for final output
-	bitSizeInBytes := round.Params().EC().Params().BitSize / 8
+	// [FORK] Ceiling division: upstream uses `BitSize / 8` which truncates for curves
+	// whose bit size is not a multiple of 8 (e.g. P-521 = 521 bits -> 65 instead of 66).
+	// Latent on secp256k1 (256/8 = 32 exact), but a real bug for non-standard curves.
+	bitSizeInBytes := (round.Params().EC().Params().BitSize + 7) / 8
 	round.data.R = padToLengthBytesInPlace(round.temp.rx.Bytes(), bitSizeInBytes)
 	round.data.S = padToLengthBytesInPlace(sumS.Bytes(), bitSizeInBytes)
 	round.data.Signature = append(round.data.R, round.data.S...)

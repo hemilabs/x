@@ -28,8 +28,12 @@ func (round *round5) Start() *tss.Error {
 		round.save.ShareID = round.PartyID().KeyInt()
 		round.save.Xi = round.temp.newXi
 		round.save.Ks = round.temp.newKs
-
-	} else if round.IsOldCommittee() {
+	}
+	// [FORK] Unconditionally zero old Xi for any party in the old committee.
+	// Upstream used `else if` which missed dual-committee parties (a party that is in both
+	// the old and new committee). Those parties would retain their old Xi in memory after
+	// resharing, creating a key-material disclosure risk.
+	if round.IsOldCommittee() {
 		round.input.Xi.SetInt64(0)
 	}
 

@@ -41,8 +41,17 @@ func (round *round4) Start() *tss.Error {
 
 	// compute the multiplicative inverse thelta mod q
 	thetaInverse = modN.ModInverse(thetaInverse)
+	// [FORK] Nil check: upstream does not guard against theta=0. If the accumulated
+	// theta is zero mod N (degenerate nonce combination), ModInverse returns nil and
+	// the subsequent ScalarMult in round 5 would panic on a nil big.Int.
+	if thetaInverse == nil {
+		return round.WrapError(errors.New("theta is zero: cannot compute multiplicative inverse"))
+	}
 	i := round.PartyID().Index
-	ContextI := append(round.temp.ssid, new(big.Int).SetUint64(uint64(i)).Bytes()...)
+	// [FORK] Schnorr proof ContextI encoding: upstream computes ContextI = SSID || i using
+	// raw byte concatenation (append). We use AppendBigIntToBytesSlice for length-prefixed
+	// encoding, preventing ambiguity when the index has a variable-length representation.
+	ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(i)))
 	piGamma, err := schnorr.NewZKProof(ContextI, round.temp.gamma, round.temp.pointGamma, round.Rand())
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "NewZKProof(gamma, bigGamma)"))

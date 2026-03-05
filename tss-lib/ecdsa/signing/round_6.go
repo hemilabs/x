@@ -12,6 +12,7 @@ import (
 
 	errors2 "github.com/pkg/errors"
 
+	"github.com/hemilabs/x/tss-lib/v2/common"
 	"github.com/hemilabs/x/tss-lib/v2/crypto/schnorr"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
@@ -25,7 +26,10 @@ func (round *round6) Start() *tss.Error {
 	round.resetOK()
 
 	i := round.PartyID().Index
-	ContextI := append(round.temp.ssid, new(big.Int).SetUint64(uint64(i)).Bytes()...)
+	// [FORK] Schnorr proof ContextI encoding: upstream computes ContextI = SSID || i using
+	// raw byte concatenation (append). We use AppendBigIntToBytesSlice for length-prefixed
+	// encoding, matching the convention used in all other rounds.
+	ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(i)))
 	piAi, err := schnorr.NewZKProof(ContextI, round.temp.roi, round.temp.bigAi, round.Rand())
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "NewZKProof(roi, bigAi)"))

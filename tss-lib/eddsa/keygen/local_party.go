@@ -39,6 +39,9 @@ type (
 		kgRound1Messages,
 		kgRound2Message1s,
 		kgRound2Message2s,
+		// Dead field: EdDSA keygen has 3 rounds where round 3 is computation-only (no
+		// outbound message). Retained for structural compatibility with the ECDSA keygen
+		// 4-round message store layout.
 		kgRound3Messages []tss.ParsedMessage
 	}
 
@@ -112,6 +115,13 @@ func (p *LocalParty) ValidateMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 		return false, p.WrapError(fmt.Errorf("received msg with a sender index too great (%d <= %d)",
 			p.params.PartyCount(), msg.GetFrom().Index), msg.GetFrom())
 	}
+	// [FORK] Key-at-Index verification: upstream only checked index bounds. We additionally
+	// verify the sender's Key matches the party registered at the claimed Index to prevent
+	// a malicious party from impersonating another by sending a valid index with a wrong key.
+	knownParty := p.params.Parties().IDs()[msg.GetFrom().Index]
+	if knownParty.KeyInt().Cmp(msg.GetFrom().KeyInt()) != 0 {
+		return false, p.WrapError(fmt.Errorf("sender Key does not match party at claimed Index %d", msg.GetFrom().Index), msg.GetFrom())
+	}
 	return true, nil
 }
 
@@ -123,13 +133,38 @@ func (p *LocalParty) StoreMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
 	fromPIdx := msg.GetFrom().Index
 
 	// switch/case is necessary to store any messages beyond current round
-	// this does not handle message replays. we expect the caller to apply replay and spoofing protection.
+	// [FORK] Defense-in-depth: reject duplicate messages for the same (round, sender) pair.
+	// Upstream did not handle replays, leaving it to the caller. We enforce dedup here because
+	// overwriting a stored message breaks commit-then-reveal guarantees. We also validate the
+	// broadcast/P2P flag at storage time to prevent slot poisoning (a P2P message stored in a
+	// broadcast slot or vice versa).
 	switch msg.Content().(type) {
-	case *KGRound1Message:
+	case *KGRound1Message: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("KGRound1Message expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.kgRound1Messages[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate KGRound1Message from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.kgRound1Messages[fromPIdx] = msg
-	case *KGRound2Message1:
+	case *KGRound2Message1: // P2P
+		if msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("KGRound2Message1 expected P2P but got broadcast"), msg.GetFrom())
+		}
+		if p.temp.kgRound2Message1s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate KGRound2Message1 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.kgRound2Message1s[fromPIdx] = msg
-	case *KGRound2Message2:
+	case *KGRound2Message2: // broadcast
+		if !msg.IsBroadcast() {
+			return false, p.WrapError(fmt.Errorf("KGRound2Message2 expected broadcast but got P2P"), msg.GetFrom())
+		}
+		if p.temp.kgRound2Message2s[fromPIdx] != nil {
+			common.Logger.Warningf("duplicate KGRound2Message2 from %d ignored", fromPIdx)
+			return true, nil
+		}
 		p.temp.kgRound2Message2s[fromPIdx] = msg
 	default: // unrecognised message, just ignore!
 		common.Logger.Warningf("unrecognised message ignored: %v", msg)

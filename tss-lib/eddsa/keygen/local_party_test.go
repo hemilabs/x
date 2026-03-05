@@ -135,7 +135,7 @@ keygen:
 					assert.NoError(t, err, "vss.ReConstruct should not throw error")
 
 					// uG test: u*G[j] == V[0]
-					assert.Equal(t, uj, Pj.temp.ui)
+					// (temp.ui is zeroed after round 2 for security)
 					uG := crypto.ScalarBaseMult(tss.Edwards(), uj)
 					assert.True(t, uG.Equals(Pj.temp.vs[0]), "ensure u*G[j] == V_0")
 
@@ -149,10 +149,10 @@ keygen:
 					{
 						badShares := pShares[:threshold]
 						badShares[len(badShares)-1].Share.Set(big.NewInt(0))
-						uj, err := pShares[:threshold].ReConstruct(tss.Edwards())
+						ujBad, err := pShares[:threshold].ReConstruct(tss.Edwards())
 						assert.NoError(t, err)
-						assert.NotEqual(t, parties[j].temp.ui, uj)
-						BigXjX, BigXjY := tss.Edwards().ScalarBaseMult(uj.Bytes())
+						assert.NotEqual(t, uj, ujBad)
+						BigXjX, BigXjY := tss.Edwards().ScalarBaseMult(ujBad.Bytes())
 						assert.NotEqual(t, BigXjX, Pj.temp.vs[0].X())
 						assert.NotEqual(t, BigXjY, Pj.temp.vs[0].Y())
 					}

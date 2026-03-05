@@ -28,6 +28,7 @@ message DGRound2Message {
  */
 message DGRound3Message1 {
     bytes share = 1;
+    bytes receiverId = 2;
 }
 
 /*

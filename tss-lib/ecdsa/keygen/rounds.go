@@ -98,11 +98,17 @@ func (round *base) resetOK() {
 	}
 }
 
-// get ssid from local params
+// [FORK] getSSID: upstream SSID hashes curve parameters (P, N, Gx, Gy), party keys,
+// round number, and ssidNonce. This was underspecified: it allowed cross-protocol proof
+// replay (keygen vs resharing) and cross-session replay (different party counts or
+// thresholds). We add: (1) "ecdsa-keygen" protocol tag, (2) curve parameter B,
+// (3) partyCount and threshold binding.
 func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
+	ssidList := []*big.Int{new(big.Int).SetBytes([]byte("ecdsa-keygen")), round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // protocol tag + ec curve
 	ssidList = append(ssidList, round.Parties().IDs().Keys()...)
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, big.NewInt(int64(round.PartyCount())))  // party count
+	ssidList = append(ssidList, big.NewInt(int64(round.Threshold())))   // threshold
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))        // round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
 	ssid := common.SHA512_256i(ssidList...).Bytes()
 

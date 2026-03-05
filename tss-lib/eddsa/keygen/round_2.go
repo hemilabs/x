@@ -12,6 +12,7 @@ import (
 
 	errors2 "github.com/pkg/errors"
 
+	"github.com/hemilabs/x/tss-lib/v2/common"
 	"github.com/hemilabs/x/tss-lib/v2/crypto/schnorr"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
@@ -41,13 +42,18 @@ func (round *round2) Start() *tss.Error {
 			round.temp.kgRound2Message1s[j] = r2msg1
 			continue
 		}
-		round.temp.kgRound2Message1s[i] = r2msg1
 		round.out <- r2msg1
 	}
 
 	// 5. compute Schnorr prove
-	ContextI := append(round.temp.ssid, new(big.Int).SetUint64(uint64(i)).Bytes()...)
+	// [FORK] Upstream used append(ssid, bigInt.Bytes()...) which is ambiguous for
+	// multi-byte big.Int values. AppendBigIntToBytesSlice uses length-prefixed encoding
+	// to prevent domain collisions in the Schnorr proof context.
+	ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(i)))
 	pii, err := schnorr.NewZKProof(ContextI, round.temp.ui, round.temp.vs[0], round.Rand())
+	// [FORK] Clear round.temp.ui from memory after last use — defense-in-depth against memory
+	// disclosure. Upstream only cleared the local variable in round 1 (round.temp.ui was unchanged).
+	round.temp.ui = new(big.Int)
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "NewZKProof(ui, vi0)"))
 	}

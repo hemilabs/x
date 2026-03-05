@@ -86,11 +86,17 @@ func (round *base) resetOK() {
 	}
 }
 
-// get ssid from local params
+// [FORK] getSSID: upstream SSID included {P, N, Gx, Gy}, party keys, round number, and
+// ssidNonce (hardcoded to 0). Hardened with: (1) "eddsa-keygen" protocol tag to prevent
+// cross-protocol SSID collisions, (2) curve parameter B for full curve identification,
+// (3) partyCount and threshold to bind the session to its exact configuration,
+// (4) parameterized ssidNonce via SSIDNonce() (upstream hardcodes to 0).
 func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
+	ssidList := []*big.Int{new(big.Int).SetBytes([]byte("eddsa-keygen")), round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // protocol tag + ec curve
 	ssidList = append(ssidList, round.Parties().IDs().Keys()...)
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, big.NewInt(int64(round.PartyCount())))  // party count
+	ssidList = append(ssidList, big.NewInt(int64(round.Threshold())))   // threshold
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))        // round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
 	ssid := common.SHA512_256i(ssidList...).Bytes()
 

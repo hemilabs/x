@@ -106,6 +106,37 @@ func mustSetString(s string) *big.Int {
 	return i
 }
 
+func TestModProofRejectsSmallN(test *testing.T) {
+	// Generate valid 2048-bit parameters and a valid proof.
+	preParams, err := keygen.GeneratePreParams(time.Minute*10, 8)
+	assert.NoError(test, err)
+
+	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
+
+	proof, err := NewProof(Session, N, P, Q, rand.Reader)
+	assert.NoError(test, err)
+
+	// Sanity: the proof must pass with the proper N (>= 2048 bits).
+	ok := proof.Verify(Session, N)
+	assert.True(test, ok, "proof must verify with proper 2048-bit N")
+
+	// Build a small N (1024-bit) from two 512-bit primes.
+	smallP, err := rand.Prime(rand.Reader, 512)
+	assert.NoError(test, err)
+	smallQ, err := rand.Prime(rand.Reader, 512)
+	assert.NoError(test, err)
+	smallN := new(big.Int).Mul(smallP, smallQ)
+	assert.True(test, smallN.BitLen() < 2048, "smallN must be less than 2048 bits")
+
+	// The [FORK] BitLen < 2048 check in Verify must reject smallN.
+	ok = proof.Verify(Session, smallN)
+	assert.False(test, ok, "proof must be rejected when N.BitLen() < 2048")
+
+	// nil N must also be rejected.
+	ok = proof.Verify(Session, nil)
+	assert.False(test, ok, "proof must be rejected when N is nil")
+}
+
 func TestAttackMod(test *testing.T) {
 	fmt.Printf("Starting TestAttackMod\n")
 

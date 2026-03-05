@@ -53,11 +53,17 @@ func NewDGRound1Message(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream checked nil receiver and non-empty fields but not sizes.
+// Hardened with upper bounds on Edwards25519 coordinates (32 bytes) and commitment hash
+// (32 bytes) to reject oversized payloads before they reach crypto deserialization.
 func (m *DGRound1Message) ValidateBasic() bool {
 	return m != nil &&
 		common.NonEmptyBytes(m.EddsaPubX) &&
+		len(m.EddsaPubX) <= 32 && // Edwards25519 coordinate max (32 bytes)
 		common.NonEmptyBytes(m.EddsaPubY) &&
-		common.NonEmptyBytes(m.VCommitment)
+		len(m.EddsaPubY) <= 32 &&
+		common.NonEmptyBytes(m.VCommitment) &&
+		len(m.VCommitment) <= 32 // SHA-512/256 commitment hash
 }
 
 func (m *DGRound1Message) UnmarshalEDDSAPub(ec elliptic.Curve) (*crypto.ECPoint, error) {
@@ -88,8 +94,10 @@ func NewDGRound2Message(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream returned `true` unconditionally (no nil check).
+// Hardened with nil receiver check.
 func (m *DGRound2Message) ValidateBasic() bool {
-	return true
+	return m != nil
 }
 
 // ----- //
@@ -105,16 +113,29 @@ func NewDGRound3Message1(
 		IsBroadcast:      false,
 		IsToOldCommittee: false,
 	}
+	// [FORK] ReceiverId: upstream did not include the receiver's Key in the message.
+	// Adding it allows the receiver to verify the share was intended for them,
+	// preventing share redirection attacks where a relay swaps P2P envelopes (SC#2).
 	content := &DGRound3Message1{
-		Share: share.Share.Bytes(),
+		Share:      share.Share.Bytes(),
+		ReceiverId: to.GetKey(),
 	}
 	msg := tss.NewMessageWrapper(meta, content)
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream only checked NonEmptyBytes(Share). Hardened with share
+// length upper bound (32 bytes for ed25519 scalar) and mandatory ReceiverId presence.
 func (m *DGRound3Message1) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.Share)
+		common.NonEmptyBytes(m.Share) &&
+		len(m.Share) <= 32 && // ed25519 scalar max 32 bytes
+		common.NonEmptyBytes(m.GetReceiverId())
+}
+
+// [FORK] UnmarshalReceiverId: new method to extract the receiver's Key for verification.
+func (m *DGRound3Message1) UnmarshalReceiverId() []byte {
+	return m.GetReceiverId()
 }
 
 // ----- //
@@ -165,6 +186,8 @@ func NewDGRound4Message(
 	return tss.NewMessage(meta, content, msg)
 }
 
+// [FORK] ValidateBasic: upstream returned `true` unconditionally (no nil check).
+// Hardened with nil receiver check.
 func (m *DGRound4Message) ValidateBasic() bool {
-	return true
+	return m != nil
 }

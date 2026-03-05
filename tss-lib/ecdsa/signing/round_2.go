@@ -7,12 +7,14 @@
 package signing
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 	"sync"
 
 	errorspkg "github.com/pkg/errors"
 
+	"github.com/hemilabs/x/tss-lib/v2/common"
 	"github.com/hemilabs/x/tss-lib/v2/crypto/mta"
 	"github.com/hemilabs/x/tss-lib/v2/tss"
 )
@@ -28,10 +30,28 @@ func (round *round2) Start() *tss.Error {
 	i := round.PartyID().Index
 	round.ok[i] = true
 
+	// [FORK] ReceiverID verification: upstream does not include or check a receiver field
+	// in P2P messages. Without this, a relay/reflection attack can deliver a P2P message
+	// intended for party A to party B, causing B to use A's MtA ciphertext.
+	myKey := round.PartyID().KeyInt().Bytes()
+	for j, Pj := range round.Parties().IDs() {
+		if j == i {
+			continue
+		}
+		r1msg := round.temp.signRound1Message1s[j].Content().(*SignRound1Message1)
+		if !bytes.Equal(r1msg.GetReceiverId(), myKey) {
+			return round.WrapError(errors.New("receiverId mismatch: message not intended for this party"), Pj)
+		}
+	}
+
 	errChs := make(chan *tss.Error, (len(round.Parties().IDs())-1)*2)
 	wg := sync.WaitGroup{}
 	wg.Add((len(round.Parties().IDs()) - 1) * 2)
-	ContextI := append(round.temp.ssid, new(big.Int).SetUint64(uint64(i)).Bytes()...)
+	// [FORK] Session-tagged MtA context: upstream passes a single ContextI = SSID || i
+	// (raw byte concatenation) to BobMid/BobMidWC. Our fork: (1) uses length-prefixed
+	// encoding for ContextI, and (2) passes a separate AliceContextJ = SSID || j so
+	// Alice's and Bob's proofs are bound to distinct per-party contexts.
+	ContextI := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(i)))
 	for j, Pj := range round.Parties().IDs() {
 		if j == i {
 			continue
@@ -45,7 +65,11 @@ func (round *round2) Start() *tss.Error {
 				errChs <- round.WrapError(errorspkg.Wrapf(err, "UnmarshalRangeProofAlice failed"), Pj)
 				return
 			}
+			// Alice's range proof was created with Alice's context (SSID || j),
+			// Bob's own proof is created with Bob's context (SSID || i).
+			AliceContextJ := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(j)))
 			beta, c1ji, _, pi1ji, err := mta.BobMid(
+				AliceContextJ,
 				ContextI,
 				round.Parameters.EC(),
 				round.key.PaillierPKs[j],
@@ -60,13 +84,14 @@ func (round *round2) Start() *tss.Error {
 				round.key.H2j[i],
 				round.Rand(),
 			)
-			// should be thread safe as these are pre-allocated
+			if err != nil {
+				errChs <- round.WrapError(err, Pj)
+				return
+			}
+			// thread safe as these are pre-allocated
 			round.temp.betas[j] = beta
 			round.temp.c1jis[j] = c1ji
 			round.temp.pi1jis[j] = pi1ji
-			if err != nil {
-				errChs <- round.WrapError(err, Pj)
-			}
 		}(j, Pj)
 		// Bob_mid_wc
 		go func(j int, Pj *tss.PartyID) {
@@ -77,7 +102,9 @@ func (round *round2) Start() *tss.Error {
 				errChs <- round.WrapError(errorspkg.Wrapf(err, "UnmarshalRangeProofAlice failed"), Pj)
 				return
 			}
+			AliceContextJ := common.AppendBigIntToBytesSlice(round.temp.ssid, new(big.Int).SetUint64(uint64(j)))
 			v, c2ji, _, pi2ji, err := mta.BobMidWC(
+				AliceContextJ,
 				ContextI,
 				round.Parameters.EC(),
 				round.key.PaillierPKs[j],
@@ -93,12 +120,13 @@ func (round *round2) Start() *tss.Error {
 				round.temp.bigWs[i],
 				round.Rand(),
 			)
+			if err != nil {
+				errChs <- round.WrapError(err, Pj)
+				return
+			}
 			round.temp.vs[j] = v
 			round.temp.c2jis[j] = c2ji
 			round.temp.pi2jis[j] = pi2ji
-			if err != nil {
-				errChs <- round.WrapError(err, Pj)
-			}
 		}(j, Pj)
 	}
 	// consume error channels; wait for goroutines
