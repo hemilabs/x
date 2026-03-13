@@ -98,6 +98,9 @@ func (round *base) getSSID() ([]byte, error) {
 	ssidList = append(ssidList, big.NewInt(int64(round.Threshold())))   // threshold
 	ssidList = append(ssidList, big.NewInt(int64(round.number)))        // round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
+	if cid := round.Params().CeremonyID(); len(cid) > 0 {
+		ssidList = append(ssidList, new(big.Int).SetBytes(cid))
+	}
 	ssid := common.SHA512_256i(ssidList...).Bytes()
 
 	return ssid, nil
