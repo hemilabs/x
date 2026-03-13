@@ -34,3 +34,17 @@ type RoundOutput struct {
 	// witness extraction.  Non-nil only on Round1.
 	Poly []*big.Int
 }
+
+// ExportR2P2PSelf returns this party's own Round2 P2P message (stored
+// during Round2 for self-delivery).  Needed by the signing test to
+// build the full message matrix without channels.
+func (s *KeygenState) ExportR2P2PSelf() tss.ParsedMessage {
+	i := s.params.PartyID().Index
+	return s.temp.kgRound2Message1s[i]
+}
+
+// ExportR2BcastSelf returns this party's own Round2 broadcast message.
+func (s *KeygenState) ExportR2BcastSelf() tss.ParsedMessage {
+	i := s.params.PartyID().Index
+	return s.temp.kgRound2Message2s[i]
+}
