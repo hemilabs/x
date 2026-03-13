@@ -108,18 +108,26 @@ func SignRound1(
 		return nil, nil, errors.New("hashed message is not valid")
 	}
 
+	// Auto-subset: if the key has more parties than the signing
+	// committee (threshold signing with a subset of keygen parties),
+	// trim the key data to only the signing parties.  This avoids
+	// requiring callers to call BuildLocalSaveDataSubset manually.
+	if len(key.Ks) > params.PartyCount() {
+		key = keygen.BuildLocalSaveDataSubset(key, params.Parties().IDs())
+	}
+	if len(key.Ks) != params.PartyCount() {
+		return nil, nil, fmt.Errorf("key count %d != party count %d after subset", len(key.Ks), params.PartyCount())
+	}
+	if params.Threshold()+1 > len(key.Ks) {
+		return nil, nil, fmt.Errorf("t+1=%d > key count %d", params.Threshold()+1, len(key.Ks))
+	}
+
 	// Prepare (Lagrange coefficients)
 	i := params.PartyID().Index
 	xi := key.Xi
 	if keyDerivationDelta != nil {
 		mod := common.ModInt(params.EC().Params().N)
 		xi = mod.Add(keyDerivationDelta, xi)
-	}
-	if len(key.Ks) != params.PartyCount() {
-		return nil, nil, fmt.Errorf("key count %d != party count %d", len(key.Ks), params.PartyCount())
-	}
-	if params.Threshold()+1 > len(key.Ks) {
-		return nil, nil, fmt.Errorf("t+1=%d > key count %d", params.Threshold()+1, len(key.Ks))
 	}
 	wi, bigWs := PrepareForSigning(params.EC(), i, len(key.Ks), xi, key.Ks, key.BigXj)
 	temp.w = wi
