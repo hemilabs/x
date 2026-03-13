@@ -33,6 +33,12 @@ type (
 		noProofMod bool
 		noProofFac bool
 		noProofDLN bool // [FORK] Added: allows disabling DLN proofs when replaced by SNARK coverage
+		// ceremonyID binds SSID to a specific ceremony instance.
+		// Two concurrent ceremonies with the same parties produce
+		// different SSIDs because their ceremonyIDs differ.  The
+		// nonce field is orthogonal: it tracks retry attempts of
+		// the same logical ceremony.
+		ceremonyID []byte
 		// random sources
 		partialKeyRand, rand io.Reader
 	}
@@ -131,6 +137,19 @@ func (params *Parameters) SSIDNonce() uint {
 // cross-attempt proof replay.
 func (params *Parameters) SetSSIDNonce(n uint) {
 	params.nonce = n
+}
+
+// CeremonyID returns the ceremony identifier bound into the SSID.
+func (params *Parameters) CeremonyID() []byte {
+	return params.ceremonyID
+}
+
+// SetCeremonyID binds a ceremony identifier into the SSID hash.
+// This distinguishes concurrent ceremonies that share the same
+// parties, threshold, and curve.  The caller MUST set this before
+// starting any round.
+func (params *Parameters) SetCeremonyID(id []byte) {
+	params.ceremonyID = id
 }
 
 func (params *Parameters) NoProofDLN() bool {

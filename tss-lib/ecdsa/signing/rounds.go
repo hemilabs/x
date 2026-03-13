@@ -148,6 +148,9 @@ func (round *base) getSSID() ([]byte, error) {
 	ssidList = append(ssidList, big.NewInt(int64(round.Threshold())))  // threshold
 	ssidList = append(ssidList, big.NewInt(int64(round.number)))       // round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
+	if cid := round.Params().CeremonyID(); len(cid) > 0 {
+		ssidList = append(ssidList, new(big.Int).SetBytes(cid))
+	}
 	// Bind the message being signed into the SSID to prevent cross-session
 	// proof replay when two signing sessions use the same party set and nonce.
 	if round.temp.m != nil {
