@@ -2,9 +2,25 @@
 
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Threshold signature scheme library for ECDSA (secp256k1), forked from
-[binance/tss-lib](https://github.com/bnb-chain/tss-lib) with 112
-security audit fixes and a channel-free round function API.
+Threshold signature scheme library for ECDSA (secp256k1) and EdDSA
+(Ed25519), forked from [binance/tss-lib](https://github.com/bnb-chain/tss-lib)
+with security audit fixes and a channel-free round function API.
+
+## Attribution
+
+This library is built on the excellent work of the
+[Binance tss-lib](https://github.com/bnb-chain/tss-lib) team, which
+provided a solid, well-structured implementation of GG18/GG20
+threshold ECDSA and EdDSA.  The original Feldman VSS, Paillier
+encryption, Schnorr proofs, and MtA protocol implementations form the
+cryptographic foundation of this library.  We are grateful for their
+contribution to the open-source TSS ecosystem.
+
+Our fork (v3) adds security audit fixes, removes protobuf in favor of
+plain Go structs, replaces the channel-based state machine with pure
+round functions, and adds overlapping-committee resharing support.
+See [SECURITY_FIXES.md](SECURITY_FIXES.md) for details on the audit
+fixes.
 
 ## v3 API
 
@@ -17,85 +33,124 @@ event loop.
 fields.  Serialization is the caller's responsibility — the library
 does not prescribe a wire format.
 
-## ECDSA Example — Keygen + Sign
+## ECDSA — Keygen / Sign / Reshare
 
-A complete runnable example lives at
-[`ecdsa/example_test.go`](ecdsa/example_test.go).  Run it with:
+Complete runnable example: [`ecdsa/example_test.go`](ecdsa/example_test.go)
 
 ```
-go test -tags tssexamples -v -run TestECDSAKeygenAndSign ./ecdsa/ -timeout 10m
+go test -tags tssexamples -v -run TestECDSAKeygenSignReshare ./ecdsa/ -timeout 15m
 ```
 
-### Key Generation (4 rounds)
+### Keygen (4 rounds)
 
 ```go
-import (
-    "github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-    "github.com/hemilabs/x/tss-lib/v3/tss"
-)
+import "github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 
-// Step 1: Generate Paillier pre-parameters (CPU-intensive, do once).
+// Generate Paillier pre-params (CPU-intensive, do out-of-band).
 preParams, _ := keygen.GeneratePreParams(5 * time.Minute)
 
-// Step 2: Create party IDs and peer context.
-pIDs := tss.GenerateTestPartyIDs(n)
-peerCtx := tss.NewPeerContext(pIDs)
 params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
-
-// Step 3: Run 4 rounds.  Each round returns outbound messages
-// that must be delivered to all other parties before the next
-// round can begin.
 state, r1out, _ := keygen.Round1(ctx, params, *preParams)
-// deliver r1out.Messages to all parties, collect r1Msgs
 r2out, _ := keygen.Round2(ctx, state, r1Msgs)
-// r2out.Messages contains both P2P and broadcast messages:
-//   msg.To == nil → broadcast to all
-//   msg.To != nil → send to each listed party
-// Also export self-messages:
-//   state.ExportR2P2PSelf(), state.ExportR2BcastSelf()
 r3out, _ := keygen.Round3(ctx, state, r2p2p, r2bcast)
 r4out, _ := keygen.Round4(ctx, state, r3Msgs)
-// r4out.Save contains the key share (LocalPartySaveData).
+// r4out.Save = LocalPartySaveData (key share)
 ```
 
-### Threshold Signing (9 rounds + finalize)
+### Signing (9 rounds + finalize)
 
 ```go
 import "github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
 
-msgHash := sha256.Sum256([]byte("hello"))
 m := new(big.Int).SetBytes(msgHash[:])
-
-// Round 1 returns P2P (Paillier ciphertext) and broadcast (commitment).
 sigState, r1out, _ := signing.SignRound1(params, keyShare, m, nil, 0)
-// Rounds 2-3: MtA protocol (P2P), theta/sigma computation.
 r2out, _ := signing.SignRound2(ctx, sigState, r1p2p, r1bcast)
 r3out, _ := signing.SignRound3(ctx, sigState, r2p2p)
-// Rounds 4-9: Schnorr proofs, commitment/decommitment, partial sigs.
+// Rounds 4-9 are all broadcast:
 r4out, _ := signing.SignRound4(sigState, r3)
 r5out, _ := signing.SignRound5(sigState, r4)
 r6out, _ := signing.SignRound6(sigState)
 r7out, _ := signing.SignRound7(sigState, r5, r6)
 r8out, _ := signing.SignRound8(sigState)
 r9out, _ := signing.SignRound9(sigState, r7, r8)
-// Finalize: sum partial signatures, verify ECDSA.
 finalOut, _ := signing.SignFinalize(sigState, r9)
-// finalOut.Signature.R, finalOut.Signature.S — standard ECDSA sig.
+// finalOut.Signature.R, .S = standard ECDSA sig
 ```
 
-### Key Resharing (5 rounds)
+### Resharing (5 rounds, overlapping committees)
 
 ```go
 import "github.com/hemilabs/x/tss-lib/v3/ecdsa/resharing"
 
-// Dual-committee protocol: old committee transfers key shares
-// to a new committee without reconstructing the private key.
-reshareState, r1out, _ := resharing.ReshareRound1(params, keyShare, newPreParams)
-r2out, _ := resharing.ReshareRound2(reshareState, r1Msgs)
-r3out, _ := resharing.ReshareRound3(reshareState, r2AckMsgs)
-r4out, _ := resharing.ReshareRound4(ctx, reshareState, r1Msgs, r2Msgs, r3p2p, r3bcast)
-r5out, _ := resharing.ReshareRound5(ctx, reshareState, r2Msgs, r4p2p, r4AckMsgs)
-// r5out.Save contains the new key share (new committee members only).
+// Supports overlapping committees: [P0,P1,P2] → [P1,P2,P3]
+// Each committee needs its own *PartyID copies (SortPartyIDs
+// mutates Index).
+params := tss.NewReSharingParameters(
+    tss.S256(), oldCtx, newCtx, myPID,
+    oldN, oldT, newN, newT)
+
+state, r1out, _ := resharing.ReshareRound1(params, keyShare, newPreParams)
+r2out, _ := resharing.ReshareRound2(state, r1Msgs)
+r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
+r4out, _ := resharing.ReshareRound4(ctx, state, r2Msgs, r3p2p, r3bcast)
+r5out, _ := resharing.ReshareRound5(state, r4p2p, r4bcast)
+// r5out.Save = new key share (new committee), old Xi zeroed
+```
+
+## EdDSA — Keygen / Sign / Reshare
+
+Complete runnable example: [`eddsa/example_test.go`](eddsa/example_test.go)
+
+```
+go test -tags tssexamples -v -run TestEdDSAKeygenSignReshare ./eddsa/ -timeout 5m
+```
+
+EdDSA is simpler than ECDSA: no Paillier pre-parameters, no MtA.
+Keygen is 3 rounds (vs 4), signing is 3+finalize (vs 9+finalize).
+
+### Keygen (3 rounds)
+
+```go
+import "github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
+
+// No pre-parameters needed for EdDSA.
+params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+state, r1out, _ := keygen.Round1(params)
+r2out, _ := keygen.Round2(state, r1Msgs)
+r3out, _ := keygen.Round3(state, r2p2p, r2bcast)
+// r3out.Save = LocalPartySaveData (key share)
+```
+
+### Signing (3 rounds + finalize)
+
+```go
+import "github.com/hemilabs/x/tss-lib/v3/eddsa/signing"
+
+m := new(big.Int).SetBytes(msgHash[:])
+sigState, r1out, _ := signing.SignRound1(params, keyShare, m, 0)
+r2out, _ := signing.SignRound2(sigState, r1)
+r3out, _ := signing.SignRound3(sigState, r2)
+finalOut, _ := signing.SignFinalize(sigState, r3)
+// finalOut.Signature.R, .S = standard EdDSA sig
+// finalOut.Signature.Signature = 64-byte R||S encoding
+```
+
+### Resharing (5 rounds, overlapping committees)
+
+```go
+import "github.com/hemilabs/x/tss-lib/v3/eddsa/resharing"
+
+// Same dual-committee pattern as ECDSA, but no Paillier.
+params := tss.NewReSharingParameters(
+    tss.Edwards(), oldCtx, newCtx, myPID,
+    oldN, oldT, newN, newT)
+
+state, r1out, _ := resharing.ReshareRound1(params, &keyShare)
+r2out, _ := resharing.ReshareRound2(state, r1Msgs)
+r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
+r4out, _ := resharing.ReshareRound4(state, r1Msgs, r3p2p, r3bcast)
+r5out, _ := resharing.ReshareRound5(state, r4AckMsgs)
+// r5out.Save = new key share (new committee), old Xi zeroed
 ```
 
 ## Message Routing
@@ -111,10 +166,28 @@ The caller is responsible for serializing `Content` and delivering
 it to the correct parties.  See the heminetwork continuum service
 for a JSON-based wire format example.
 
+## Overlapping Committees
+
+When resharing between committees that share members (e.g.,
+`[P0,P1,P2] → [P1,P2,P3]`), each committee **must** have its own
+`*PartyID` copies:
+
+```go
+copyPID := func(src *tss.PartyID) *tss.PartyID {
+    return tss.NewPartyID(src.Id, src.Moniker,
+        new(big.Int).SetBytes(src.Key))
+}
+```
+
+`SortPartyIDs` assigns `Index` by sort position within the committee.
+Shared `*PartyID` objects would have their Index overwritten by the
+second sort.
+
 ## Security Audit
 
-See [FORK_CHANGES.md](FORK_CHANGES.md) for the complete list of 112
-security fixes with v3 code locations.
+See [SECURITY_FIXES.md](SECURITY_FIXES.md) for the complete list of
+security fixes from the v2 audit (76 in v3 production code, annotated
+with `[FORK]` comments).
 
 ## Packages
 
@@ -123,9 +196,25 @@ security fixes with v3 code locations.
 | `ecdsa/keygen` | ECDSA distributed key generation (4 rounds) |
 | `ecdsa/signing` | ECDSA threshold signing (9 rounds + finalize) |
 | `ecdsa/resharing` | ECDSA key resharing (5 rounds, dual committee) |
+| `eddsa/keygen` | EdDSA distributed key generation (3 rounds) |
+| `eddsa/signing` | EdDSA threshold signing (3 rounds + finalize) |
+| `eddsa/resharing` | EdDSA key resharing (5 rounds, dual committee) |
 | `tss` | Core types: Parameters, PartyID, Message |
 | `common` | Hash utilities, safe prime generation, random |
 | `crypto` | EC points, Paillier, VSS, ZK proofs, commitments |
+
+## Running the Demos
+
+Standalone CLI programs that run the full lifecycle:
+keygen → sign → reshare (overlapping committees) → sign.
+
+```
+# EdDSA (fast — no Paillier, ~1 second):
+go run ./cmd/tss-eddsa-demo
+
+# ECDSA (slow — Paillier safe-prime generation, ~30 seconds):
+go run ./cmd/tss-ecdsa-demo
+```
 
 ## Testing
 
@@ -134,9 +223,6 @@ make test         # all tests
 make lint         # golangci-lint
 make race         # race detector
 make vulncheck    # govulncheck
-
-# Run the ECDSA example (slow — generates Paillier primes):
-go test -tags tssexamples -v -run TestECDSAKeygenAndSign ./ecdsa/ -timeout 10m
 ```
 
 ## License

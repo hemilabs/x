@@ -32,6 +32,28 @@ var (
 	resharePaiBitsLen = 2048
 )
 
+// oldIndex returns this party's index in the old committee, or -1.
+func oldIndex(params *tss.ReSharingParameters) int {
+	key := params.PartyID().KeyInt()
+	for i, pid := range params.OldParties().IDs() {
+		if pid.KeyInt().Cmp(key) == 0 {
+			return i
+		}
+	}
+	return -1
+}
+
+// newIndex returns this party's index in the new committee, or -1.
+func newIndex(params *tss.ReSharingParameters) int {
+	key := params.PartyID().KeyInt()
+	for i, pid := range params.NewParties().IDs() {
+		if pid.KeyInt().Cmp(key) == 0 {
+			return i
+		}
+	}
+	return -1
+}
+
 func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData, temp *localTempData, roundNumber int) ([]byte, error) {
 	ssidList := []*big.Int{
 		new(big.Int).SetBytes([]byte("ecdsa-resharing")),
@@ -109,7 +131,7 @@ func ReshareRound1(
 	temp.ssid = ssid
 
 	Pi := params.PartyID()
-	i := Pi.Index
+	i := oldIndex(params)
 	xi, ks, bigXj := input.Xi, input.Ks, input.BigXj
 	if params.Threshold()+1 > len(ks) {
 		return nil, nil, fmt.Errorf("t+1=%d > key count %d", params.Threshold()+1, len(ks))
@@ -159,7 +181,7 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 	}
 
 	Pi := params.PartyID()
-	i := Pi.Index
+	i := newIndex(params)
 
 	// Validate SSID consistency across old committee
 	r1msg0 := r1Msgs[0].Content.(*DGRound1Message)
@@ -260,7 +282,7 @@ func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRound
 	}
 
 	Pi := params.PartyID()
-	i := Pi.Index
+	i := oldIndex(params)
 
 	for j, Pj := range params.NewParties().IDs() {
 		share := temp.NewShares[j]
@@ -302,7 +324,7 @@ func ReshareRound4(
 
 	dlnVerifier := keygen.NewDlnProofVerifier(params.Concurrency())
 	Pi := params.PartyID()
-	i := Pi.Index
+	i := newIndex(params)
 
 	// Parameter validation
 	h1H2Map := make(map[string]struct{}, len(r2NewMsgs)*2)
@@ -574,7 +596,7 @@ func ReshareRound5(
 	out := &ReshareRoundOutput{}
 
 	Pi := params.PartyID()
-	i := Pi.Index
+	i := newIndex(params)
 
 	if params.IsNewCommittee() {
 		ContextI := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(i)))
