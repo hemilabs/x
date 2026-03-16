@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package tss
 
@@ -34,7 +37,7 @@ func init() {
 
 	registry = make(map[CurveName]elliptic.Curve)
 	registry[Secp256k1] = s256k1.S256()
-	registry[Ed25519] = edwards.Edwards()
+	registry[Ed25519] = edwardsCurve
 }
 
 // RegisterCurve adds a named curve to the global registry.
@@ -92,7 +95,12 @@ func S256() elliptic.Curve {
 	return s256k1.S256()
 }
 
+// edwardsCurve is cached because edwards.Edwards() allocates a new
+// instance each call.  ECPoint.Add uses pointer identity to check
+// curve compatibility, so all Edwards points must share one instance.
+var edwardsCurve = edwards.Edwards()
+
 // Edwards returns the Edwards25519 curve for EdDSA.
 func Edwards() elliptic.Curve {
-	return edwards.Edwards()
+	return edwardsCurve
 }
