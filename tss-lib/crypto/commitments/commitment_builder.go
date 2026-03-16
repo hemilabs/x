@@ -57,7 +57,7 @@ func (b *builder) Secrets() ([]*big.Int, error) {
 }
 
 func ParseSecrets(secrets []*big.Int) ([][]*big.Int, error) {
-	if secrets == nil || len(secrets) < 2 {
+	if len(secrets) < 2 {
 		return nil, errors.New("ParseSecrets: secrets == nil or is too small")
 	}
 	var el, nextPartLen int64

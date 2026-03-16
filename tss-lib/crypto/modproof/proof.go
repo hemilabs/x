@@ -12,7 +12,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 const (
@@ -54,7 +54,7 @@ func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, erro
 	modN, modPhi := common.ModInt(N), common.ModInt(Phi)
 	invN := new(big.Int).ModInverse(N, Phi)
 	if invN == nil {
-		return nil, errors.New("N not coprime with Phi")
+		return nil, errors.New("n not coprime with phi")
 	}
 	X := [Iterations]*big.Int{}
 	// Fix bitLen of A and B

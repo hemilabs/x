@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
 )
 
 // PrepareForSigning(), GG18Spec (11) Fig. 14
@@ -96,8 +96,8 @@ func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int
 			if inv == nil {
 				panic(fmt.Errorf("PrepareForSigning: ModInverse(ks[%d]-ks[%d]) is nil; keys may collide mod q", c, j))
 			}
-			iota := modQ.Mul(ksc, inv)
-			bigWj = bigWj.ScalarMult(iota)
+			iotaVal := modQ.Mul(ksc, inv)
+			bigWj = bigWj.ScalarMult(iotaVal)
 		}
 		bigWs[j] = bigWj
 	}

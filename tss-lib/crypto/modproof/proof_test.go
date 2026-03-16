@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	. "github.com/hemilabs/x/tss-lib/v2/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 )
 
 var Session = []byte("session")
@@ -38,9 +39,7 @@ func TestMod(test *testing.T) {
 	assert.True(test, ok, "proof must verify")
 }
 
-var (
-	one = big.NewInt(1)
-)
+var one = big.NewInt(1)
 
 func NewHackedProof(Session []byte, N, P *big.Int, Q []*big.Int) (*ProofMod, error) {
 	Phi := new(big.Int).Sub(P, one)

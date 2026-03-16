@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/signing"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // TestRoundFnReshareAndSign does keygen(3) → reshare(3→3) → sign(3)
@@ -36,7 +36,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	oldCtx := tss.NewPeerContext(oldPIDs)
 
 	kgStates := make([]*keygen.KeygenState, n)
-	kgR1 := make([]tss.ParsedMessage, n)
+	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
@@ -44,13 +44,13 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
 		kgStates[i] = st
-		kgR1[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR1[i] = out.Messages[0]
 	}
 
-	kgR2P2P := make([][]tss.ParsedMessage, n)
-	kgR2Bcast := make([]tss.ParsedMessage, n)
+	kgR2P2P := make([][]*tss.Message, n)
+	kgR2Bcast := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		kgR2P2P[i] = make([]tss.ParsedMessage, n)
+		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
@@ -58,11 +58,11 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 			t.Fatalf("keygen Round2[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				kgR2Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					kgR2P2P[to.Index][i] = pm
 				}
 			}
@@ -73,13 +73,13 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 		}
 	}
 
-	kgR3 := make([]tss.ParsedMessage, n)
+	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("keygen Round3[%d]: %v", i, err)
 		}
-		kgR3[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR3[i] = out.Messages[0]
 	}
 
 	oldKeys := make([]keygen.LocalPartySaveData, n)
@@ -110,7 +110,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	newStates := make([]*ReshareState, n)
 
 	// Round 1: old committee produces broadcasts
-	oldR1Msgs := make([]tss.ParsedMessage, n)
+	oldR1Msgs := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
 		st, out, err := ReshareRound1(params, oldKeys[i], keygen.LocalPreParams{})
@@ -119,7 +119,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 		}
 		oldStates[i] = st
 		if len(out.Messages) > 0 {
-			oldR1Msgs[i] = out.Messages[0].(tss.ParsedMessage)
+			oldR1Msgs[i] = out.Messages[0]
 		}
 	}
 	// New committee: Round1 is a no-op, just creates state
@@ -135,16 +135,16 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	}
 
 	// Round 2: new committee produces DGRound2Message1 (to new) + DGRound2Message2 (ACK to old)
-	newR2Msg1s := make([]tss.ParsedMessage, n) // broadcast to new
-	newR2Msg2s := make([]tss.ParsedMessage, n) // ACK to old
+	newR2Msg1s := make([]*tss.Message, n) // broadcast to new
+	newR2Msg2s := make([]*tss.Message, n) // ACK to old
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound2(newStates[i], oldR1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2(new)[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			switch pm.Content().(type) {
+			pm := msg
+			switch pm.Content.(type) {
 			case *DGRound2Message1:
 				newR2Msg1s[i] = pm
 			case *DGRound2Message2:
@@ -170,10 +170,10 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	}
 
 	// Round 3: old committee sends shares P2P + decommit broadcast
-	oldR3P2P := make([][]tss.ParsedMessage, n) // oldR3P2P[newIdx][oldIdx]
-	oldR3Bcast := make([]tss.ParsedMessage, n)  // oldR3Bcast[oldIdx]
+	oldR3P2P := make([][]*tss.Message, n) // oldR3P2P[newIdx][oldIdx]
+	oldR3Bcast := make([]*tss.Message, n) // oldR3Bcast[oldIdx]
 	for i := 0; i < n; i++ {
-		oldR3P2P[i] = make([]tss.ParsedMessage, n)
+		oldR3P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound3(oldStates[i], newR2Msg2s)
@@ -181,11 +181,11 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 			t.Fatalf("ReshareRound3(old)[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			switch pm.Content().(type) {
+			pm := msg
+			switch pm.Content.(type) {
 			case *DGRound3Message1:
 				// P2P to new party
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					oldR3P2P[to.Index][i] = pm
 				}
 			case *DGRound3Message2:
@@ -202,10 +202,10 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	}
 
 	// Round 4: new committee verifies and produces FacProof + ACK
-	newR4P2P := make([][]tss.ParsedMessage, n)  // newR4P2P[newIdx][senderNewIdx]
-	newR4Bcast := make([]tss.ParsedMessage, n)    // newR4Bcast[newIdx]
+	newR4P2P := make([][]*tss.Message, n) // newR4P2P[newIdx][senderNewIdx]
+	newR4Bcast := make([]*tss.Message, n) // newR4Bcast[newIdx]
 	for i := 0; i < n; i++ {
-		newR4P2P[i] = make([]tss.ParsedMessage, n)
+		newR4P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound4(context.Background(), newStates[i], newR2Msg1s, oldR3P2P[i], oldR3Bcast)
@@ -213,10 +213,10 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 			t.Fatalf("ReshareRound4(new)[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			switch pm.Content().(type) {
+			pm := msg
+			switch pm.Content.(type) {
 			case *DGRound4Message1:
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					newR4P2P[to.Index][i] = pm
 				}
 			case *DGRound4Message2:
@@ -274,10 +274,10 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	m := new(big.Int).SetBytes(msgHash[:])
 
 	sigStates := make([]*signing.SigningState, n)
-	sigR1P2P := make([][]tss.ParsedMessage, n)
-	sigR1Bcast := make([]tss.ParsedMessage, n)
+	sigR1P2P := make([][]*tss.Message, n)
+	sigR1Bcast := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		sigR1P2P[i] = make([]tss.ParsedMessage, n)
+		sigR1P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), newCtx, newPIDs[i], n, threshold)
@@ -287,11 +287,11 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 		}
 		sigStates[i] = st
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				sigR1Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					sigR1P2P[to.Index][i] = pm
 				}
 			}
@@ -299,9 +299,9 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	}
 
 	// Signing rounds 2-9 + finalize
-	sigR2P2P := make([][]tss.ParsedMessage, n)
+	sigR2P2P := make([][]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		sigR2P2P[i] = make([]tss.ParsedMessage, n)
+		sigR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound2(context.Background(), sigStates[i], sigR1P2P[i], sigR1Bcast)
@@ -309,67 +309,67 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 			t.Fatalf("SignRound2[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			for _, to := range pm.GetTo() {
+			pm := msg
+			for _, to := range pm.To {
 				sigR2P2P[to.Index][i] = pm
 			}
 		}
 	}
-	sigR3 := make([]tss.ParsedMessage, n)
+	sigR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound3(context.Background(), sigStates[i], sigR2P2P[i])
 		if err != nil {
 			t.Fatalf("SignRound3[%d]: %v", i, err)
 		}
-		sigR3[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR3[i] = out.Messages[0]
 	}
-	sigR4 := make([]tss.ParsedMessage, n)
+	sigR4 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound4(sigStates[i], sigR3)
 		if err != nil {
 			t.Fatalf("SignRound4[%d]: %v", i, err)
 		}
-		sigR4[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR4[i] = out.Messages[0]
 	}
-	sigR5 := make([]tss.ParsedMessage, n)
+	sigR5 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound5(sigStates[i], sigR4)
 		if err != nil {
 			t.Fatalf("SignRound5[%d]: %v", i, err)
 		}
-		sigR5[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR5[i] = out.Messages[0]
 	}
-	sigR6 := make([]tss.ParsedMessage, n)
+	sigR6 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound6(sigStates[i])
 		if err != nil {
 			t.Fatalf("SignRound6[%d]: %v", i, err)
 		}
-		sigR6[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR6[i] = out.Messages[0]
 	}
-	sigR7 := make([]tss.ParsedMessage, n)
+	sigR7 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound7(sigStates[i], sigR5, sigR6)
 		if err != nil {
 			t.Fatalf("SignRound7[%d]: %v", i, err)
 		}
-		sigR7[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR7[i] = out.Messages[0]
 	}
-	sigR8 := make([]tss.ParsedMessage, n)
+	sigR8 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound8(sigStates[i])
 		if err != nil {
 			t.Fatalf("SignRound8[%d]: %v", i, err)
 		}
-		sigR8[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR8[i] = out.Messages[0]
 	}
-	sigR9 := make([]tss.ParsedMessage, n)
+	sigR9 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := signing.SignRound9(sigStates[i], sigR7, sigR8)
 		if err != nil {
 			t.Fatalf("SignRound9[%d]: %v", i, err)
 		}
-		sigR9[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR9[i] = out.Messages[0]
 	}
 	for i := 0; i < n; i++ {
 		out, err := signing.SignFinalize(sigStates[i], sigR9)
@@ -400,38 +400,50 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 	preParamsOld := make([]keygen.LocalPreParams, n)
 	for i := 0; i < n; i++ {
 		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil { t.Fatalf("GeneratePreParams[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
+		}
 		preParamsOld[i] = *pp
 	}
 	oldPIDs := tss.GenerateTestPartyIDs(n)
 	oldCtx := tss.NewPeerContext(oldPIDs)
 	kgStates := make([]*keygen.KeygenState, n)
-	kgR1 := make([]tss.ParsedMessage, n)
+	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
-		if err != nil { t.Fatalf("kg R1[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("kg R1[%d]: %v", i, err)
+		}
 		kgStates[i] = st
-		kgR1[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR1[i] = out.Messages[0]
 	}
-	kgR2P2P := make([][]tss.ParsedMessage, n)
-	kgR2Bcast := make([]tss.ParsedMessage, n)
-	for i := 0; i < n; i++ { kgR2P2P[i] = make([]tss.ParsedMessage, n) }
+	kgR2P2P := make([][]*tss.Message, n)
+	kgR2Bcast := make([]*tss.Message, n)
+	for i := 0; i < n; i++ {
+		kgR2P2P[i] = make([]*tss.Message, n)
+	}
 	for i := 0; i < n; i++ {
 		out, _ := keygen.Round2(context.Background(), kgStates[i], kgR1)
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil { kgR2Bcast[i] = pm } else {
-				for _, to := range pm.GetTo() { kgR2P2P[to.Index][i] = pm }
+			pm := msg
+			if pm.To == nil {
+				kgR2Bcast[i] = pm
+			} else {
+				for _, to := range pm.To {
+					kgR2P2P[to.Index][i] = pm
+				}
 			}
 		}
 		kgR2P2P[i][i] = kgStates[i].ExportR2P2PSelf()
-		if kgR2Bcast[i] == nil { kgR2Bcast[i] = kgStates[i].ExportR2BcastSelf() }
+		if kgR2Bcast[i] == nil {
+			kgR2Bcast[i] = kgStates[i].ExportR2BcastSelf()
+		}
 	}
-	kgR3 := make([]tss.ParsedMessage, n)
+	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, _ := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
-		kgR3[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR3[i] = out.Messages[0]
 	}
 	oldKeys := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
@@ -445,22 +457,28 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 	preParamsNew := make([]keygen.LocalPreParams, n)
 	for i := 0; i < n; i++ {
 		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil { t.Fatalf("GeneratePreParams(new)[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("GeneratePreParams(new)[%d]: %v", i, err)
+		}
 		preParamsNew[i] = *pp
 	}
 
 	oldStates := make([]*ReshareState, n)
 	newStates := make([]*ReshareState, n)
-	oldR1Msgs := make([]tss.ParsedMessage, n)
+	oldR1Msgs := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
 		st, out, err := ReshareRound1(params, oldKeys[i], keygen.LocalPreParams{})
-		if err != nil { t.Fatalf("ReshareRound1(old)[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("ReshareRound1(old)[%d]: %v", i, err)
+		}
 		oldStates[i] = st
-		if len(out.Messages) > 0 { oldR1Msgs[i] = out.Messages[0].(tss.ParsedMessage) }
+		if len(out.Messages) > 0 {
+			oldR1Msgs[i] = out.Messages[0]
+		}
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
@@ -468,44 +486,63 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 		params.SetNoProofMod()
 		params.SetNoProofFac()
 		st, _, err := ReshareRound1(params, keygen.NewLocalPartySaveData(n), preParamsNew[i])
-		if err != nil { t.Fatalf("ReshareRound1(new)[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("ReshareRound1(new)[%d]: %v", i, err)
+		}
 		newStates[i] = st
 	}
 
-	newR2Msg1s := make([]tss.ParsedMessage, n)
-	newR2Msg2s := make([]tss.ParsedMessage, n)
+	newR2Msg1s := make([]*tss.Message, n)
+	newR2Msg2s := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound2(newStates[i], oldR1Msgs)
-		if err != nil { t.Fatalf("ReshareRound2(new)[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("ReshareRound2(new)[%d]: %v", i, err)
+		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			switch pm.Content().(type) {
-			case *DGRound2Message1: newR2Msg1s[i] = pm
-			case *DGRound2Message2: newR2Msg2s[i] = pm
+			pm := msg
+			switch pm.Content.(type) {
+			case *DGRound2Message1:
+				newR2Msg1s[i] = pm
+			case *DGRound2Message2:
+				newR2Msg2s[i] = pm
 			}
 		}
 	}
 	for i := 0; i < n; i++ {
 		_, err := ReshareRound2(oldStates[i], oldR1Msgs)
-		if err != nil { t.Fatalf("ReshareRound2(old)[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("ReshareRound2(old)[%d]: %v", i, err)
+		}
 	}
 	for i := 0; i < n; i++ {
-		if newR2Msg1s[i] == nil { newR2Msg1s[i] = newStates[i].temp.dgRound2Message1s[i] }
-		if newR2Msg2s[i] == nil { newR2Msg2s[i] = newStates[i].temp.dgRound2Message2s[i] }
+		if newR2Msg1s[i] == nil {
+			newR2Msg1s[i] = newStates[i].temp.dgRound2Message1s[i]
+		}
+		if newR2Msg2s[i] == nil {
+			newR2Msg2s[i] = newStates[i].temp.dgRound2Message2s[i]
+		}
 	}
 
-	oldR3P2P := make([][]tss.ParsedMessage, n)
-	oldR3Bcast := make([]tss.ParsedMessage, n)
-	for i := 0; i < n; i++ { oldR3P2P[i] = make([]tss.ParsedMessage, n) }
+	oldR3P2P := make([][]*tss.Message, n)
+	oldR3Bcast := make([]*tss.Message, n)
+	for i := 0; i < n; i++ {
+		oldR3P2P[i] = make([]*tss.Message, n)
+	}
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound3(oldStates[i], newR2Msg2s)
-		if err != nil { t.Fatalf("ReshareRound3(old)[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("ReshareRound3(old)[%d]: %v", i, err)
+		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			switch pm.Content().(type) {
+			pm := msg
+			switch pm.Content.(type) {
 			case *DGRound3Message1:
-				for _, to := range pm.GetTo() { oldR3P2P[to.Index][i] = pm }
-			case *DGRound3Message2: oldR3Bcast[i] = pm
+				for _, to := range pm.To {
+					oldR3P2P[to.Index][i] = pm
+				}
+			case *DGRound3Message2:
+				oldR3Bcast[i] = pm
 			}
 		}
 	}
@@ -513,18 +550,25 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 		_, _ = ReshareRound3(newStates[i], newR2Msg2s)
 	}
 
-	newR4P2P := make([][]tss.ParsedMessage, n)
-	newR4Bcast := make([]tss.ParsedMessage, n)
-	for i := 0; i < n; i++ { newR4P2P[i] = make([]tss.ParsedMessage, n) }
+	newR4P2P := make([][]*tss.Message, n)
+	newR4Bcast := make([]*tss.Message, n)
+	for i := 0; i < n; i++ {
+		newR4P2P[i] = make([]*tss.Message, n)
+	}
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound4(context.Background(), newStates[i], newR2Msg1s, oldR3P2P[i], oldR3Bcast)
-		if err != nil { t.Fatalf("ReshareRound4(new)[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("ReshareRound4(new)[%d]: %v", i, err)
+		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			switch pm.Content().(type) {
+			pm := msg
+			switch pm.Content.(type) {
 			case *DGRound4Message1:
-				for _, to := range pm.GetTo() { newR4P2P[to.Index][i] = pm }
-			case *DGRound4Message2: newR4Bcast[i] = pm
+				for _, to := range pm.To {
+					newR4P2P[to.Index][i] = pm
+				}
+			case *DGRound4Message2:
+				newR4Bcast[i] = pm
 			}
 		}
 	}
@@ -532,13 +576,19 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 		_, _ = ReshareRound4(context.Background(), oldStates[i], newR2Msg1s, nil, nil)
 	}
 	for i := 0; i < n; i++ {
-		if newR4Bcast[i] == nil { newR4Bcast[i] = newStates[i].temp.dgRound4Message2s[i] }
+		if newR4Bcast[i] == nil {
+			newR4Bcast[i] = newStates[i].temp.dgRound4Message2s[i]
+		}
 	}
 
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound5(newStates[i], newR4P2P[i], newR4Bcast)
-		if err != nil { t.Fatalf("ReshareRound5(new)[%d]: %v", i, err) }
-		if out.Save == nil { t.Fatalf("ReshareRound5(new)[%d]: no Save", i) }
+		if err != nil {
+			t.Fatalf("ReshareRound5(new)[%d]: %v", i, err)
+		}
+		if out.Save == nil {
+			t.Fatalf("ReshareRound5(new)[%d]: no Save", i)
+		}
 		if !out.Save.ECDSAPub.Equals(oldKeys[0].ECDSAPub) {
 			t.Fatal("ECDSAPub changed after reshare")
 		}

@@ -12,7 +12,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 // TestRejectionSampleMutatesInput verifies that RejectionSample does NOT

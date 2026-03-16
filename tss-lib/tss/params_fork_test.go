@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 package tss
 
 import (
@@ -171,23 +174,13 @@ func TestSSIDNonceUint(t *testing.T) {
 	assert.Equal(t, ^uint(0), p.SSIDNonce())
 }
 
-// --- ParseWireMessage nil from guard ---
-
-func TestParseWireMessageRejectsNilFrom(t *testing.T) {
-	// [FORK] Upstream dereferences from.MessageWrapper_PartyID unconditionally.
-	// Fork adds nil guard returning error.
-	_, err := ParseWireMessage([]byte{0x01}, nil, true)
-	assert.Error(t, err, "nil from should return error")
-	assert.Contains(t, err.Error(), "from is nil")
-}
-
 // --- PartyID ValidateBasic tests ---
 
 func TestPartyIDValidateBasicRejectsEmptyKey(t *testing.T) {
 	// [FORK] Upstream checks Key != nil but not len(Key) > 0.
 	// An empty byte slice passes nil check but KeyInt() returns 0.
 	pid := &PartyID{
-		MessageWrapper_PartyID: &MessageWrapper_PartyID{
+		PartyIDData: &PartyIDData{
 			Id:      "test",
 			Moniker: "Test",
 			Key:     []byte{}, // empty, not nil
@@ -199,7 +192,7 @@ func TestPartyIDValidateBasicRejectsEmptyKey(t *testing.T) {
 
 func TestPartyIDValidateBasicRejectsNilKey(t *testing.T) {
 	pid := &PartyID{
-		MessageWrapper_PartyID: &MessageWrapper_PartyID{
+		PartyIDData: &PartyIDData{
 			Id:      "test",
 			Moniker: "Test",
 			Key:     nil,

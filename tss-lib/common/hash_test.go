@@ -208,7 +208,7 @@ func TestBigIntBytesEncodingForHash(t *testing.T) {
 		value    int64
 		expected string // hex
 	}{
-		{0, ""},          // empty! Rust BigUint::to_bytes_be() returns [0x00] instead
+		{0, ""}, // empty! Rust BigUint::to_bytes_be() returns [0x00] instead
 		{1, "01"},
 		{127, "7f"},
 		{128, "80"},
@@ -342,10 +342,10 @@ func TestAppendBigIntToBytesSliceLengthPrefixIs4Bytes(t *testing.T) {
 		expectedLen   uint32 // expected value of the 4-byte length prefix
 		expectedBytes int    // expected byte length of the big.Int value
 	}{
-		{0, 0, 0},         // big.NewInt(0).Bytes() = []
-		{1, 1, 1},         // big.NewInt(1).Bytes() = [0x01]
-		{256, 2, 2},       // big.NewInt(256).Bytes() = [0x01, 0x00]
-		{65536, 3, 3},     // big.NewInt(65536).Bytes() = [0x01, 0x00, 0x00]
+		{0, 0, 0},     // big.NewInt(0).Bytes() = []
+		{1, 1, 1},     // big.NewInt(1).Bytes() = [0x01]
+		{256, 2, 2},   // big.NewInt(256).Bytes() = [0x01, 0x00]
+		{65536, 3, 3}, // big.NewInt(65536).Bytes() = [0x01, 0x00, 0x00]
 	}
 	for _, tc := range tests {
 		result := AppendBigIntToBytesSlice(ssid, big.NewInt(tc.index))

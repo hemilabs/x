@@ -7,7 +7,7 @@ package keygen
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // KeygenState holds all mutable state between keygen rounds.
@@ -24,7 +24,7 @@ type KeygenState struct {
 type RoundOutput struct {
 	// Messages to send to other parties.  Broadcast messages
 	// have GetTo() == nil; P2P messages have one recipient.
-	Messages []tss.Message
+	Messages []*tss.Message
 
 	// Save is non-nil only on the final round (Round4).
 	// Contains the complete key share data.
@@ -38,13 +38,13 @@ type RoundOutput struct {
 // ExportR2P2PSelf returns this party's own Round2 P2P message (stored
 // during Round2 for self-delivery).  Needed by the signing test to
 // build the full message matrix without channels.
-func (s *KeygenState) ExportR2P2PSelf() tss.ParsedMessage {
+func (s *KeygenState) ExportR2P2PSelf() *tss.Message {
 	i := s.params.PartyID().Index
 	return s.temp.kgRound2Message1s[i]
 }
 
 // ExportR2BcastSelf returns this party's own Round2 broadcast message.
-func (s *KeygenState) ExportR2BcastSelf() tss.ParsedMessage {
+func (s *KeygenState) ExportR2BcastSelf() *tss.Message {
 	i := s.params.PartyID().Index
 	return s.temp.kgRound2Message2s[i]
 }

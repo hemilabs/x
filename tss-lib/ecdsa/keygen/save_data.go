@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 type (
@@ -51,6 +51,7 @@ type (
 	}
 )
 
+// NewLocalPartySaveData allocates a LocalPartySaveData with slices sized for partyCount.
 func NewLocalPartySaveData(partyCount int) (saveData LocalPartySaveData) {
 	saveData.Ks = make([]*big.Int, partyCount)
 	saveData.NTildej = make([]*big.Int, partyCount)
@@ -60,6 +61,7 @@ func NewLocalPartySaveData(partyCount int) (saveData LocalPartySaveData) {
 	return
 }
 
+// Validate checks that the pre-parameters are structurally valid.
 func (preParams LocalPreParams) Validate() bool {
 	return preParams.PaillierSK != nil &&
 		preParams.NTildei != nil &&
@@ -93,7 +95,7 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 		return false
 	}
 	// Verify P, Q are the Sophie Germain primes corresponding to NTilde
-	// NTilde should equal (2*P+1) * (2*Q+1)
+	// should equal (2*P+1) * (2*Q+1)
 	safeP := new(big.Int).Mul(preParams.P, big.NewInt(2))
 	safeP.Add(safeP, big.NewInt(1))
 	safeQ := new(big.Int).Mul(preParams.Q, big.NewInt(2))
@@ -104,10 +106,7 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 	}
 	// Verify H2 = H1^Alpha mod NTilde
 	expectedH2 := new(big.Int).Exp(preParams.H1i, preParams.Alpha, preParams.NTildei)
-	if expectedH2.Cmp(preParams.H2i) != 0 {
-		return false
-	}
-	return true
+	return expectedH2.Cmp(preParams.H2i) == 0
 }
 
 // [FORK] ValidateSaveData performs comprehensive validation of loaded ECDSA save data,

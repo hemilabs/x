@@ -13,7 +13,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 const (
@@ -24,12 +24,6 @@ type (
 	ProofFac struct {
 		P, Q, A, B, T, Sigma, Z1, Z2, W1, W2, V *big.Int
 	}
-)
-
-var (
-	// rangeParameter l limits the bits of p or q to be in [1024-l, 1024+l]
-	rangeParameter = new(big.Int).Lsh(big.NewInt(1), 15)
-	one            = big.NewInt(1)
 )
 
 // NewProof implements prooffac. Session provides SSID domain separation (replay prevention).
@@ -112,7 +106,7 @@ func NewProofFromBytes(bzs [][]byte) (*ProofFac, error) {
 	// to |V| and causing verification failures for ~50% of honest proofs.
 	vBz := bzs[10]
 	if len(vBz) < 1 {
-		return nil, fmt.Errorf("V field too short for sign-magnitude decoding")
+		return nil, fmt.Errorf("v field too short for sign-magnitude decoding")
 	}
 	vSign := vBz[0]
 	if vSign != 0x00 && vSign != 0x01 {

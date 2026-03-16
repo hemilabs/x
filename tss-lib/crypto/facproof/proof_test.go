@@ -13,10 +13,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	. "github.com/hemilabs/x/tss-lib/v2/crypto/facproof"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // Using a modulus length of 2048 is recommended in the GG18 spec
@@ -146,7 +146,7 @@ func TestFacProofVSignMagnitudeZero(test *testing.T) {
 func TestFacProofVSignMagnitudeLargeNegative(test *testing.T) {
 	largeNeg := new(big.Int).SetBytes(make([]byte, 256)) // 2048-bit
 	largeNeg.SetBit(largeNeg, 2047, 1)                   // Set high bit
-	largeNeg.Neg(largeNeg)                                // Make negative
+	largeNeg.Neg(largeNeg)                               // Make negative
 
 	proof := &ProofFac{
 		P: big.NewInt(1), Q: big.NewInt(2), A: big.NewInt(3),

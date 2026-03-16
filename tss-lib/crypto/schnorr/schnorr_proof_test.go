@@ -12,10 +12,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	. "github.com/hemilabs/x/tss-lib/v2/crypto/schnorr"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 var Session = []byte("session")

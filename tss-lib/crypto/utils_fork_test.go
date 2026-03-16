@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 package crypto
 
 import (
@@ -5,8 +8,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 func TestGenerateNTildeiRejectsEqualPrimes(t *testing.T) {

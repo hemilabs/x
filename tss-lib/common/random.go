@@ -25,11 +25,11 @@ func MustGetRandomInt(rand io.Reader, bits int) *big.Int {
 		panic(fmt.Errorf("MustGetRandomInt: bits should be positive, non-zero and less than %d", mustGetRandomIntMaxBits))
 	}
 	// Max random value e.g. 2^256 - 1
-	max := new(big.Int)
-	max = max.Exp(two, big.NewInt(int64(bits)), nil).Sub(max, one)
+	maxVal := new(big.Int)
+	maxVal = maxVal.Exp(two, big.NewInt(int64(bits)), nil).Sub(maxVal, one)
 
 	// Generate cryptographically strong pseudo-random int between 0 - max
-	n, err := cryptorand.Int(rand, max)
+	n, err := cryptorand.Int(rand, maxVal)
 	if err != nil {
 		panic(errors.Wrap(err, "rand.Int failure in MustGetRandomInt!"))
 	}

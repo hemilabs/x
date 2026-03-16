@@ -1,30 +1,29 @@
+// Copyright © 2019 Binance
 // Copyright (c) 2026 Hemi Labs, Inc.
 // Use of this source code is governed by the MIT License,
 // which can be found in the LICENSE file.
-
 package keygen
 
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/hashicorp/go-multierror"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	cmts "github.com/hemilabs/x/tss-lib/v2/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/dlnproof"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/facproof"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
-
-	"encoding/hex"
-	"sync"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	cmts "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // getSSID computes the SSID for a given round number using the state's
@@ -64,10 +63,10 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 	save := NewLocalPartySaveData(partyCount)
 	temp := &localTempData{
 		localMessageStore: localMessageStore{
-			kgRound1Messages:  make([]tss.ParsedMessage, partyCount),
-			kgRound2Message1s: make([]tss.ParsedMessage, partyCount),
-			kgRound2Message2s: make([]tss.ParsedMessage, partyCount),
-			kgRound3Messages:  make([]tss.ParsedMessage, partyCount),
+			kgRound1Messages:  make([]*tss.Message, partyCount),
+			kgRound2Message1s: make([]*tss.Message, partyCount),
+			kgRound2Message2s: make([]*tss.Message, partyCount),
+			kgRound3Messages:  make([]*tss.Message, partyCount),
 		},
 		KGCs: make([]cmts.HashCommitment, partyCount),
 	}
@@ -90,7 +89,6 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 
 	// Clear ui after last use.
 	temp.ui = new(big.Int)
-	ui = nil
 
 	// make commitment -> (C, D)
 	pGFlat, err := crypto.FlattenECPoints(vs)
@@ -141,19 +139,16 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 	save.PaillierPKs[i] = &pp.PaillierSK.PublicKey
 	temp.deCommitPolyG = cmt.D
 
-	msg, err := NewKGRound1Message(
+	msg := NewKGRound1Message(
 		Pi, cmt.C, &pp.PaillierSK.PublicKey,
 		pp.NTildei, pp.H1i, pp.H2i,
 		dlnProof1, dlnProof2)
-	if err != nil {
-		return nil, nil, err
-	}
 	// Store own round 1 message so round 2 can validate uniformly.
 	temp.kgRound1Messages[i] = msg
 
 	state := &KeygenState{params: params, save: &save, temp: temp}
 	out := &RoundOutput{
-		Messages: []tss.Message{msg},
+		Messages: []*tss.Message{msg},
 		Poly:     poly,
 	}
 	return state, out, nil
@@ -166,7 +161,7 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 // r1Msgs must be indexed by party: r1Msgs[j] is party j's
 // KGRound1Message broadcast.  r1Msgs[i] (own message from Round1)
 // must be present.
-func Round2(ctx context.Context, state *KeygenState, r1Msgs []tss.ParsedMessage) (*RoundOutput, error) {
+func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 	params := state.params
 	save := state.save
 	temp := state.temp
@@ -186,68 +181,68 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []tss.ParsedMessage)
 	dlnProof2FailCulprits := make([]*tss.PartyID, len(r1Msgs))
 	wg := new(sync.WaitGroup)
 	for j, msg := range r1Msgs {
-		r1msg := msg.Content().(*KGRound1Message)
-		H1j, H2j, NTildej, paillierPKj := r1msg.UnmarshalH1(),
-			r1msg.UnmarshalH2(),
-			r1msg.UnmarshalNTilde(),
-			r1msg.UnmarshalPaillierPK()
+		r1msg := msg.Content.(*KGRound1Message)
+		H1j, H2j, NTildej, paillierPKj := r1msg.H1,
+			r1msg.H2,
+			r1msg.NTilde,
+			r1msg.PaillierPK
 		if paillierPKj.N.BitLen() != paillierBitsLen {
-			return nil, tss.NewError(errors.New("paillier modulus insufficient bits"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("paillier modulus insufficient bits"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if paillierPKj.N.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even paillier modulus"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("even paillier modulus"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if paillierPKj.N.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime paillier modulus"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("prime paillier modulus"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		sqrtN := new(big.Int).Sqrt(paillierPKj.N)
 		if new(big.Int).Mul(sqrtN, sqrtN).Cmp(paillierPKj.N) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square paillier modulus"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("perfect-square paillier modulus"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if H1j.Cmp(H2j) == 0 {
-			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if H1j.Cmp(big.NewInt(1)) == 0 || H2j.Cmp(big.NewInt(1)) == 0 {
-			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if NTildej.BitLen() != paillierBitsLen {
-			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if NTildej.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if NTildej.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		sqrtNT := new(big.Int).Sqrt(NTildej)
 		if new(big.Int).Mul(sqrtNT, sqrtNT).Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if paillierPKj.N.Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("Paillier N == NTilde"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if new(big.Int).GCD(nil, nil, H1j, NTildej).Cmp(big.NewInt(1)) != 0 {
-			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if new(big.Int).GCD(nil, nil, H2j, NTildej).Cmp(big.NewInt(1)) != 0 {
-			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		h1JHex, h2JHex := hex.EncodeToString(H1j.Bytes()), hex.EncodeToString(H2j.Bytes())
 		if _, found := h1H2Map[h1JHex]; found {
-			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if _, found := h1H2Map[h2JHex]; found {
-			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		h1H2Map[h1JHex], h1H2Map[h2JHex] = struct{}{}, struct{}{}
 		paillierNHex := hex.EncodeToString(paillierPKj.N.Bytes())
 		if _, found := paillierNMap[paillierNHex]; found {
-			return nil, tss.NewError(errors.New("duplicate Paillier N"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate Paillier N"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		paillierNMap[paillierNHex] = struct{}{}
 		nTildeHex := hex.EncodeToString(NTildej.Bytes())
 		if _, found := nTildeMap[nTildeHex]; found {
-			return nil, tss.NewError(errors.New("duplicate NTilde"), TaskName, 2, params.PartyID(), msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate NTilde"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		nTildeMap[nTildeHex] = struct{}{}
 
@@ -256,15 +251,15 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []tss.ParsedMessage)
 			_j := j
 			_msg := msg
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
-			dlnVerifier.VerifyDLNProof1(r1msg, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
+			dlnVerifier.VerifyDLNProof(r1msg.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof1FailCulprits[_j] = _msg.GetFrom()
+					dlnProof1FailCulprits[_j] = _msg.From
 				}
 				wg.Done()
 			})
-			dlnVerifier.VerifyDLNProof2(r1msg, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
+			dlnVerifier.VerifyDLNProof(r1msg.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof2FailCulprits[_j] = _msg.GetFrom()
+					dlnProof2FailCulprits[_j] = _msg.From
 				}
 				wg.Done()
 			})
@@ -274,9 +269,11 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []tss.ParsedMessage)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, culprit := range append(dlnProof1FailCulprits, dlnProof2FailCulprits...) {
-		if culprit != nil {
-			return nil, tss.NewError(errors.New("dln proof verification failed"), TaskName, 2, params.PartyID(), culprit)
+	for _, culprits := range [][]*tss.PartyID{dlnProof1FailCulprits, dlnProof2FailCulprits} {
+		for _, culprit := range culprits {
+			if culprit != nil {
+				return nil, tss.NewError(errors.New("dln proof verification failed"), TaskName, 2, params.PartyID(), culprit)
+			}
 		}
 	}
 
@@ -285,12 +282,12 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []tss.ParsedMessage)
 		if j == i {
 			continue
 		}
-		r1msg := msg.Content().(*KGRound1Message)
-		save.PaillierPKs[j] = r1msg.UnmarshalPaillierPK()
-		save.NTildej[j] = r1msg.UnmarshalNTilde()
-		save.H1j[j] = r1msg.UnmarshalH1()
-		save.H2j[j] = r1msg.UnmarshalH2()
-		temp.KGCs[j] = r1msg.UnmarshalCommitment()
+		r1msg := msg.Content.(*KGRound1Message)
+		save.PaillierPKs[j] = r1msg.PaillierPK
+		save.NTildej[j] = r1msg.NTilde
+		save.H1j[j] = r1msg.H1
+		save.H2j[j] = r1msg.H2
+		temp.KGCs[j] = r1msg.Commitment
 	}
 
 	// P2P send share ij to Pj
@@ -340,7 +337,7 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []tss.ParsedMessage)
 // r2p2p[j] is party j's KGRound2Message1 (P2P, contains VSS share).
 // r2bcast[j] is party j's KGRound2Message2 (broadcast, contains
 // de-commitment and ModProof).
-func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.ParsedMessage) (*RoundOutput, error) {
+func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, error) {
 	params := state.params
 	save := state.save
 	temp := state.temp
@@ -357,13 +354,13 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 		if j == PIdx {
 			continue
 		}
-		r2msg1 := r2p2p[j].Content().(*KGRound2Message1)
-		share := r2msg1.UnmarshalShare()
+		r2msg1 := r2p2p[j].Content.(*KGRound2Message1)
+		share := r2msg1.Share
 		xi = new(big.Int).Add(xi, share)
 	}
 	save.Xi = new(big.Int).Mod(xi, params.EC().Params().N)
 	if save.Xi.Sign() == 0 {
-		return nil, errors.New("Xi is zero")
+		return nil, errors.New("xi is zero")
 	}
 
 	// 2-3.
@@ -393,8 +390,8 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 				return
 			}
 			KGCj := temp.KGCs[j]
-			r2msg2 := r2bcast[j].Content().(*KGRound2Message2)
-			KGDj := r2msg2.UnmarshalDeCommitment()
+			r2msg2 := r2bcast[j].Content.(*KGRound2Message2)
+			KGDj := r2msg2.DeCommitment
 			cmtDeCmt := cmts.HashCommitDecommit{C: KGCj, D: KGDj}
 			ok, flatPolyGs := cmtDeCmt.DeCommit()
 			if !ok || flatPolyGs == nil {
@@ -412,13 +409,12 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 				return
 			}
 			if !params.NoProofMod() {
-				modProof, err := r2msg2.UnmarshalModProof()
-				if err != nil {
-					vssResults[j] = vssOut{errors.New("modProof verify failed"), nil}
+				if r2msg2.ModProof == nil {
+					vssResults[j] = vssOut{errors.New("modProof missing"), nil}
 					gcancel()
 					return
 				}
-				if ok = modProof.Verify(ContextJ, save.PaillierPKs[j].N); !ok {
+				if ok = r2msg2.ModProof.Verify(ContextJ, save.PaillierPKs[j].N); !ok {
 					vssResults[j] = vssOut{errors.New("modProof verify failed"), nil}
 					gcancel()
 					return
@@ -427,9 +423,9 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 			if gctx.Err() != nil {
 				return
 			}
-			r2msg1 := r2p2p[j].Content().(*KGRound2Message1)
+			r2msg1 := r2p2p[j].Content.(*KGRound2Message1)
 			myKey := params.PartyID().KeyInt().Bytes()
-			if !bytes.Equal(r2msg1.GetReceiverId(), myKey) {
+			if !bytes.Equal(r2msg1.ReceiverID, myKey) {
 				vssResults[j] = vssOut{errors.New("receiverId mismatch"), nil}
 				gcancel()
 				return
@@ -437,7 +433,7 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 			PjShare := vss.Share{
 				Threshold: params.Threshold(),
 				ID:        params.PartyID().KeyInt(),
-				Share:     r2msg1.UnmarshalShare(),
+				Share:     r2msg1.Share,
 			}
 			if ok = PjShare.Verify(params.EC(), params.Threshold(), PjVs); !ok {
 				vssResults[j] = vssOut{errors.New("vss verify failed"), nil}
@@ -448,13 +444,12 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 				return
 			}
 			if !params.NoProofFac() {
-				facProof, err := r2msg1.UnmarshalFacProof()
-				if err != nil {
-					vssResults[j] = vssOut{errors.New("facProof verify failed"), nil}
+				if r2msg1.FacProof == nil {
+					vssResults[j] = vssOut{errors.New("facProof missing"), nil}
 					gcancel()
 					return
 				}
-				if ok = facProof.Verify(ContextJ, params.EC(), save.PaillierPKs[j].N,
+				if ok = r2msg1.FacProof.Verify(ContextJ, params.EC(), save.PaillierPKs[j].N,
 					save.NTildei, save.H1i, save.H2i); !ok {
 					vssResults[j] = vssOut{errors.New("facProof verify failed"), nil}
 					gcancel()
@@ -507,7 +502,7 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 			}
 		}
 		if len(culprits) > 0 {
-			return nil, tss.NewError(errors.New("Vc point addition failed"), TaskName, 3, params.PartyID(), culprits...)
+			return nil, tss.NewError(errors.New("vc point addition failed"), TaskName, 3, params.PartyID(), culprits...)
 		}
 	}
 
@@ -556,7 +551,7 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 	proof := save.PaillierSK.Proof(ki, ecdsaPubKey)
 	r3msg := NewKGRound3Message(params.PartyID(), proof)
 
-	return &RoundOutput{Messages: []tss.Message{r3msg}}, nil
+	return &RoundOutput{Messages: []*tss.Message{r3msg}}, nil
 }
 
 // Round4 verifies round 3 Paillier proofs and returns the final
@@ -564,7 +559,7 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []tss.Parsed
 //
 // r3Msgs[j] is party j's KGRound3Message broadcast containing the
 // Paillier proof.
-func Round4(ctx context.Context, state *KeygenState, r3Msgs []tss.ParsedMessage) (*RoundOutput, error) {
+func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*RoundOutput, error) {
 	params := state.params
 	save := state.save
 
@@ -584,7 +579,7 @@ func Round4(ctx context.Context, state *KeygenState, r3Msgs []tss.ParsedMessage)
 			continue
 		}
 		wg.Add(1)
-		r3msg := msg.Content().(*KGRound3Message)
+		r3msg := msg.Content.(*KGRound3Message)
 		go func(prf paillier.Proof, j int) {
 			defer wg.Done()
 			if gctx.Err() != nil {
@@ -601,7 +596,7 @@ func Round4(ctx context.Context, state *KeygenState, r3Msgs []tss.ParsedMessage)
 			if !verified {
 				gcancel()
 			}
-		}(r3msg.UnmarshalProofInts(), j)
+		}(r3msg.PaillierProof, j)
 	}
 	wg.Wait()
 	if err := ctx.Err(); err != nil {

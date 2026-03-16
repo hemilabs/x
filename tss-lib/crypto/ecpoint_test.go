@@ -17,8 +17,8 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 func TestFlattenECPoints(t *testing.T) {
@@ -39,18 +39,22 @@ func TestFlattenECPoints(t *testing.T) {
 		want: []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)},
 	}, {
 		name: "flatten with nil point (expects err)",
-		args: args{[]*ECPoint{
-			NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
-			nil,
-			NewECPointNoCurveCheck(tss.EC(), big.NewInt(3), big.NewInt(4))},
+		args: args{
+			[]*ECPoint{
+				NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
+				nil,
+				NewECPointNoCurveCheck(tss.EC(), big.NewInt(3), big.NewInt(4)),
+			},
 		},
 		want:    nil,
 		wantErr: true,
 	}, {
 		name: "flatten with nil coordinate (expects err)",
-		args: args{[]*ECPoint{
-			NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
-			NewECPointNoCurveCheck(tss.EC(), nil, big.NewInt(4))},
+		args: args{
+			[]*ECPoint{
+				NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
+				NewECPointNoCurveCheck(tss.EC(), nil, big.NewInt(4)),
+			},
 		},
 		want:    nil,
 		wantErr: true,
