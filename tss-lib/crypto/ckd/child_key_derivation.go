@@ -14,11 +14,12 @@ import (
 	"hash"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcutil/base58"
-	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/ripemd160" //nolint:staticcheck // BIP-32 requires RIPEMD-160
+
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
 )
 
 type ExtendedKey struct {
@@ -70,7 +71,7 @@ func (k *ExtendedKey) String() string {
 	serializedBytes = append(serializedBytes, k.ParentFP...)
 	serializedBytes = append(serializedBytes, childNumBytes[:]...)
 	serializedBytes = append(serializedBytes, k.ChainCode...)
-	pubKeyBytes := serializeCompressed(k.PublicKey.X, k.PublicKey.Y)
+	pubKeyBytes := serializeCompressed(k.X, k.Y)
 	serializedBytes = append(serializedBytes, pubKeyBytes...)
 
 	checkSum := doubleHashB(serializedBytes)[:4]
@@ -184,7 +185,7 @@ func serializeCompressed(publicKeyX *big.Int, publicKeyY *big.Int) []byte {
 }
 
 func DeriveChildKeyFromHierarchy(indicesHierarchy []uint32, pk *ExtendedKey, mod *big.Int, curve elliptic.Curve) (*big.Int, *ExtendedKey, error) {
-	var k = pk
+	k := pk
 	var err error
 	var childKey *ExtendedKey
 	mod_ := common.ModInt(mod)

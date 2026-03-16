@@ -250,8 +250,8 @@ func TestSortPartyIDsReverseSorted(t *testing.T) {
 // (e.g., duplicate detection, Lagrange interpolation).
 func TestPartyIDValidateBasicEmptyKey(t *testing.T) {
 	pid := &PartyID{
-		MessageWrapper_PartyID: &MessageWrapper_PartyID{Key: []byte{}},
-		Index:                  0,
+		PartyIDData: &PartyIDData{Key: []byte{}},
+		Index:       0,
 	}
 	result := pid.ValidateBasic()
 	if result {
@@ -430,8 +430,8 @@ func TestNewPartyIDZeroKey(t *testing.T) {
 	pid := NewPartyID("p0", "Party0", big.NewInt(0))
 
 	// big.NewInt(0).Bytes() = []byte{} (empty).
-	if len(pid.GetKey()) != 0 {
-		t.Fatalf("expected empty Key for big.NewInt(0), got %v", pid.GetKey())
+	if len(pid.Key) != 0 {
+		t.Fatalf("expected empty Key for big.NewInt(0), got %v", pid.Key)
 	}
 
 	// KeyInt() should still reconstruct to 0.

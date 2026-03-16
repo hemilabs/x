@@ -13,16 +13,18 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 const (
 	ProofBobBytesParts   = 10
 	ProofBobWCBytesParts = 12
 )
+
+var zero = big.NewInt(0)
 
 type (
 	ProofBob struct {

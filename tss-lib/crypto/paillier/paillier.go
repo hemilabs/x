@@ -27,8 +27,8 @@ import (
 
 	"github.com/otiai10/primes"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	crypto2 "github.com/hemilabs/x/tss-lib/v2/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	crypto2 "github.com/hemilabs/x/tss-lib/v3/crypto"
 )
 
 const (
@@ -304,7 +304,7 @@ func GenerateXs(m int, k, N *big.Int, ecdsaPub *crypto2.ECPoint) []*big.Int {
 		for _, ch := range chs { // must be in order
 			rx := <-ch
 			if rx == nil { // this should never happen. see: https://golang.org/pkg/hash/#Hash
-				panic(errors.New("GenerateXs hash write error!"))
+				panic(errors.New("generateXs hash write error"))
 			}
 			xi = append(xi, rx...) // xi1||···||xib
 		}

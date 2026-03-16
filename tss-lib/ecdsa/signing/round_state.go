@@ -5,9 +5,8 @@
 package signing
 
 import (
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // SigningState holds all mutable state between signing rounds.
@@ -15,7 +14,7 @@ import (
 type SigningState struct {
 	params *tss.Parameters
 	key    *keygen.LocalPartySaveData
-	data   *common.SignatureData
+	data   *SignatureData
 	temp   *localTempData
 }
 
@@ -23,8 +22,8 @@ type SigningState struct {
 // produced by a single signing round function.
 type SignRoundOutput struct {
 	// Messages to send.  Broadcast: GetTo() == nil.
-	Messages []tss.Message
+	Messages []*tss.Message
 
 	// Signature is non-nil only after Finalize.
-	Signature *common.SignatureData
+	Signature *SignatureData
 }

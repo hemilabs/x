@@ -1,10 +1,7 @@
+// Copyright © 2019 Binance
 // Copyright (c) 2026 Hemi Labs, Inc.
 // Use of this source code is governed by the MIT License,
 // which can be found in the LICENSE file.
-
-// Channel-free resharing round functions.  Each round takes explicit
-// state + inbound messages and returns outbound messages.
-
 package resharing
 
 import (
@@ -18,21 +15,21 @@ import (
 
 	errors2 "github.com/pkg/errors"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/dlnproof"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/facproof"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/signing"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 var (
-	reshareOne         = big.NewInt(1)
-	resharePaiBitsLen  = 2048
+	reshareOne        = big.NewInt(1)
+	resharePaiBitsLen = 2048
 )
 
 func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData, temp *localTempData, roundNumber int) ([]byte, error) {
@@ -87,13 +84,13 @@ func ReshareRound1(
 
 	temp := &localTempData{
 		localMessageStore: localMessageStore{
-			dgRound1Messages:  make([]tss.ParsedMessage, oldPC),
-			dgRound2Message1s: make([]tss.ParsedMessage, newPC),
-			dgRound2Message2s: make([]tss.ParsedMessage, newPC),
-			dgRound3Message1s: make([]tss.ParsedMessage, oldPC),
-			dgRound3Message2s: make([]tss.ParsedMessage, oldPC),
-			dgRound4Message1s: make([]tss.ParsedMessage, newPC),
-			dgRound4Message2s: make([]tss.ParsedMessage, newPC),
+			dgRound1Messages:  make([]*tss.Message, oldPC),
+			dgRound2Message1s: make([]*tss.Message, newPC),
+			dgRound2Message2s: make([]*tss.Message, newPC),
+			dgRound3Message1s: make([]*tss.Message, oldPC),
+			dgRound3Message2s: make([]*tss.Message, oldPC),
+			dgRound4Message1s: make([]*tss.Message, newPC),
+			dgRound4Message2s: make([]*tss.Message, newPC),
 		},
 	}
 
@@ -152,7 +149,7 @@ func ReshareRound1(
 //
 // r1Msgs are DGRound1Message broadcasts from old committee.
 // Only new committee members produce output.
-func ReshareRound2(state *ReshareState, r1Msgs []tss.ParsedMessage) (*ReshareRoundOutput, error) {
+func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOutput, error) {
 	params, save, temp := state.params, state.save, state.temp
 	tss.MergeMsgs(temp.dgRound1Messages, r1Msgs)
 	out := &ReshareRoundOutput{}
@@ -165,14 +162,14 @@ func ReshareRound2(state *ReshareState, r1Msgs []tss.ParsedMessage) (*ReshareRou
 	i := Pi.Index
 
 	// Validate SSID consistency across old committee
-	r1msg0 := r1Msgs[0].Content().(*DGRound1Message)
-	SSID := r1msg0.UnmarshalSSID()
+	r1msg0 := r1Msgs[0].Content.(*DGRound1Message)
+	SSID := r1msg0.SSID
 	for j := range params.OldParties().IDs() {
 		if j == 0 {
 			continue
 		}
-		r1msg := r1Msgs[j].Content().(*DGRound1Message)
-		SSIDj := r1msg.UnmarshalSSID()
+		r1msg := r1Msgs[j].Content.(*DGRound1Message)
+		SSIDj := r1msg.SSID
 		if !bytes.Equal(SSID, SSIDj) {
 			return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi, params.OldParties().IDs()[j])
 		}
@@ -181,10 +178,10 @@ func ReshareRound2(state *ReshareState, r1Msgs []tss.ParsedMessage) (*ReshareRou
 
 	// Save ECDSAPub from old committee
 	for j := range params.OldParties().IDs() {
-		r1msg := r1Msgs[j].Content().(*DGRound1Message)
-		candidate, err := r1msg.UnmarshalECDSAPub(params.EC())
-		if err != nil {
-			return nil, fmt.Errorf("round 2 unmarshal ecdsa pub from party %d: %w", j, err)
+		r1msg := r1Msgs[j].Content.(*DGRound1Message)
+		candidate := r1msg.ECDSAPub
+		if candidate == nil {
+			return nil, fmt.Errorf("round 2: ecdsa pub nil from party %d", j)
 		}
 		if save.ECDSAPub != nil && !candidate.Equals(save.ECDSAPub) {
 			return nil, errors.New("ecdsa pub key mismatch from old committee")
@@ -200,9 +197,9 @@ func ReshareRound2(state *ReshareState, r1Msgs []tss.ParsedMessage) (*ReshareRou
 
 	// Generate pre-params if not provided
 	var preParams *keygen.LocalPreParams
-	if save.LocalPreParams.Validate() && !save.LocalPreParams.ValidateWithProof() {
+	if save.Validate() && !save.ValidateWithProof() {
 		return nil, errors.New("preParams failed validation")
-	} else if save.LocalPreParams.ValidateWithProof() {
+	} else if save.ValidateWithProof() {
 		preParams = &save.LocalPreParams
 	} else {
 		var err error
@@ -235,14 +232,11 @@ func ReshareRound2(state *ReshareState, r1Msgs []tss.ParsedMessage) (*ReshareRou
 		}
 	}
 
-	r2msg2, err := NewDGRound2Message1(
+	r2msg2 := NewDGRound2Message1(
 		params.NewParties().IDs().Exclude(Pi), Pi,
 		&preParams.PaillierSK.PublicKey, modProofObj,
 		preParams.NTildei, preParams.H1i, preParams.H2i,
 		dlnProof1, dlnProof2)
-	if err != nil {
-		return nil, fmt.Errorf("round 2 message: %w", err)
-	}
 	temp.dgRound2Message1s[i] = r2msg2
 	out.Messages = append(out.Messages, r2msg2)
 
@@ -256,7 +250,7 @@ func ReshareRound2(state *ReshareState, r1Msgs []tss.ParsedMessage) (*ReshareRou
 // Only old committee members produce output.
 //
 // r2AckMsgs are DGRound2Message2 broadcasts from new committee.
-func ReshareRound3(state *ReshareState, r2AckMsgs []tss.ParsedMessage) (*ReshareRoundOutput, error) {
+func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
 	params, temp := state.params, state.temp
 	tss.MergeMsgs(temp.dgRound2Message2s, r2AckMsgs)
 	out := &ReshareRoundOutput{}
@@ -293,8 +287,8 @@ func ReshareRound3(state *ReshareState, r2AckMsgs []tss.ParsedMessage) (*Reshare
 func ReshareRound4(
 	ctx context.Context,
 	state *ReshareState,
-	r2NewMsgs []tss.ParsedMessage,
-	r3P2P, r3Bcast []tss.ParsedMessage,
+	r2NewMsgs []*tss.Message,
+	r3P2P, r3Bcast []*tss.Message,
 ) (*ReshareRoundOutput, error) {
 	params, save, temp := state.params, state.save, state.temp
 	tss.MergeMsgs(temp.dgRound2Message1s, r2NewMsgs)
@@ -321,66 +315,66 @@ func ReshareRound4(
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
 	for j, msg := range r2NewMsgs {
-		r2msg1 := msg.Content().(*DGRound2Message1)
-		paiPK, NTildej, H1j, H2j := r2msg1.UnmarshalPaillierPK(),
-			r2msg1.UnmarshalNTilde(), r2msg1.UnmarshalH1(), r2msg1.UnmarshalH2()
+		r2msg1 := msg.Content.(*DGRound2Message1)
+		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
+			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
 		if H1j.Cmp(H2j) == 0 {
-			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 4, Pi, msg.From)
 		}
 		if H1j.Cmp(reshareOne) == 0 || H2j.Cmp(reshareOne) == 0 {
-			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 4, Pi, msg.From)
 		}
 		if paiPK.N.BitLen() < resharePaiBitsLen {
-			return nil, tss.NewError(errors.New("paillier N insufficient bits"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("paillier N insufficient bits"), TaskName, 4, Pi, msg.From)
 		}
 		if paiPK.N.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even paillier N"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("even paillier N"), TaskName, 4, Pi, msg.From)
 		}
 		if paiPK.N.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime paillier N"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("prime paillier N"), TaskName, 4, Pi, msg.From)
 		}
 		sqrtN := new(big.Int).Sqrt(paiPK.N)
 		if new(big.Int).Mul(sqrtN, sqrtN).Cmp(paiPK.N) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square paillier N"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("perfect-square paillier N"), TaskName, 4, Pi, msg.From)
 		}
 		if NTildej.BitLen() < resharePaiBitsLen {
-			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 4, Pi, msg.From)
 		}
 		if NTildej.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 4, Pi, msg.From)
 		}
 		if NTildej.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 4, Pi, msg.From)
 		}
 		sqrtNT := new(big.Int).Sqrt(NTildej)
 		if new(big.Int).Mul(sqrtNT, sqrtNT).Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 4, Pi, msg.From)
 		}
 		if paiPK.N.Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 4, Pi, msg.From)
 		}
 		if new(big.Int).GCD(nil, nil, H1j, NTildej).Cmp(reshareOne) != 0 {
-			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 4, Pi, msg.From)
 		}
 		if new(big.Int).GCD(nil, nil, H2j, NTildej).Cmp(reshareOne) != 0 {
-			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 4, Pi, msg.From)
 		}
 		h1Hex, h2Hex := hex.EncodeToString(H1j.Bytes()), hex.EncodeToString(H2j.Bytes())
 		if _, found := h1H2Map[h1Hex]; found {
-			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 4, Pi, msg.From)
 		}
 		if _, found := h1H2Map[h2Hex]; found {
-			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 4, Pi, msg.From)
 		}
 		h1H2Map[h1Hex], h1H2Map[h2Hex] = struct{}{}, struct{}{}
 		paiNHex := hex.EncodeToString(paiPK.N.Bytes())
 		if _, found := paillierNMap[paiNHex]; found {
-			return nil, tss.NewError(errors.New("duplicate paillier N"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate paillier N"), TaskName, 4, Pi, msg.From)
 		}
 		paillierNMap[paiNHex] = struct{}{}
 		ntHex := hex.EncodeToString(NTildej.Bytes())
 		if _, found := nTildeMap[ntHex]; found {
-			return nil, tss.NewError(errors.New("duplicate NTilde"), TaskName, 4, Pi, msg.GetFrom())
+			return nil, tss.NewError(errors.New("duplicate NTilde"), TaskName, 4, Pi, msg.From)
 		}
 		nTildeMap[ntHex] = struct{}{}
 
@@ -389,7 +383,7 @@ func ReshareRound4(
 			nTasks = 3
 		}
 		wg.Add(nTasks)
-		go func(j int, msg tss.ParsedMessage, r2msg1 *DGRound2Message1) {
+		go func(j int, msg *tss.Message, r2msg1 *DGRound2Message1) {
 			defer wg.Done()
 			if gctx.Err() != nil {
 				return
@@ -397,31 +391,31 @@ func ReshareRound4(
 			if params.NoProofMod() {
 				return
 			}
-			modProof, err := r2msg1.UnmarshalModProof()
-			if err != nil {
-				paiProofCulprits[j] = msg.GetFrom()
+			modProof := r2msg1.ModProof
+			if modProof == nil {
+				paiProofCulprits[j] = msg.From
 				gcancel()
 				return
 			}
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
 			if ok := modProof.Verify(ContextJ, paiPK.N); !ok {
-				paiProofCulprits[j] = msg.GetFrom()
+				paiProofCulprits[j] = msg.From
 				gcancel()
 			}
 		}(j, msg, r2msg1)
 		if !params.NoProofDLN() {
 			_j, _msg := j, msg
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
-			dlnVerifier.VerifyDLNProof1(r2msg1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
+			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof1FailCulprits[_j] = _msg.GetFrom()
+					dlnProof1FailCulprits[_j] = _msg.From
 					gcancel()
 				}
 				wg.Done()
 			})
-			dlnVerifier.VerifyDLNProof2(r2msg1, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
+			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof2FailCulprits[_j] = _msg.GetFrom()
+					dlnProof2FailCulprits[_j] = _msg.From
 					gcancel()
 				}
 				wg.Done()
@@ -432,9 +426,11 @@ func ReshareRound4(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, c := range append(append(paiProofCulprits, dlnProof1FailCulprits...), dlnProof2FailCulprits...) {
-		if c != nil {
-			return nil, tss.NewError(errors.New("proof verification failed"), TaskName, 4, Pi, c)
+	for _, culprits := range [][]*tss.PartyID{paiProofCulprits, dlnProof1FailCulprits, dlnProof2FailCulprits} {
+		for _, c := range culprits {
+			if c != nil {
+				return nil, tss.NewError(errors.New("proof verification failed"), TaskName, 4, Pi, c)
+			}
 		}
 	}
 
@@ -443,10 +439,10 @@ func ReshareRound4(
 		if j == i {
 			continue
 		}
-		r2msg1 := msg.Content().(*DGRound2Message1)
-		save.NTildej[j] = new(big.Int).SetBytes(r2msg1.NTilde)
-		save.H1j[j] = new(big.Int).SetBytes(r2msg1.H1)
-		save.H2j[j] = new(big.Int).SetBytes(r2msg1.H2)
+		r2msg1 := msg.Content.(*DGRound2Message1)
+		save.NTildej[j] = r2msg1.NTilde
+		save.H1j[j] = r2msg1.H1
+		save.H2j[j] = r2msg1.H2
 	}
 
 	// Verify old committee shares and commitments
@@ -454,9 +450,9 @@ func ReshareRound4(
 	newXi := big.NewInt(0)
 	vjc := make([][]*crypto.ECPoint, len(params.OldParties().IDs()))
 	for j := 0; j < len(vjc); j++ {
-		r1msg := temp.dgRound1Messages[j].Content().(*DGRound1Message)
-		r3msg2 := r3Bcast[j].Content().(*DGRound3Message2)
-		vCj, vDj := r1msg.UnmarshalVCommitment(), r3msg2.UnmarshalVDeCommitment()
+		r1msg := temp.dgRound1Messages[j].Content.(*DGRound1Message)
+		r3msg2 := r3Bcast[j].Content.(*DGRound3Message2)
+		vCj, vDj := r1msg.VCommitment, r3msg2.VDeCommitment
 		cmtDeCmt := commitments.HashCommitDecommit{C: vCj, D: vDj}
 		ok, flatVs := cmtDeCmt.DeCommit()
 		if !ok || len(flatVs) != (params.NewThreshold()+1)*2 {
@@ -468,15 +464,15 @@ func ReshareRound4(
 		}
 		vjc[j] = vj
 
-		r3msg1 := r3P2P[j].Content().(*DGRound3Message1)
+		r3msg1 := r3P2P[j].Content.(*DGRound3Message1)
 		myKey := Pi.KeyInt().Bytes()
-		if !bytes.Equal(r3msg1.GetReceiverId(), myKey) {
+		if !bytes.Equal(r3msg1.ReceiverID, myKey) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 4, Pi, params.OldParties().IDs()[j])
 		}
 		sharej := &vss.Share{
 			Threshold: params.NewThreshold(),
 			ID:        Pi.KeyInt(),
-			Share:     new(big.Int).SetBytes(r3msg1.Share),
+			Share:     r3msg1.Share,
 		}
 		if ok := sharej.Verify(params.EC(), params.NewThreshold(), vj); !ok {
 			return nil, tss.NewError(errors.New("vss share verify failed"), TaskName, 4, Pi, params.OldParties().IDs()[j])
@@ -570,7 +566,7 @@ func ReshareRound4(
 // r4Bcast[j] is new party j's DGRound4Message2 (ACK broadcast).
 func ReshareRound5(
 	state *ReshareState,
-	r4P2P, r4Bcast []tss.ParsedMessage,
+	r4P2P, r4Bcast []*tss.Message,
 ) (*ReshareRoundOutput, error) {
 	params, save, temp, input := state.params, state.save, state.temp, state.input
 	tss.MergeMsgs(temp.dgRound4Message1s, r4P2P)
@@ -591,25 +587,25 @@ func ReshareRound5(
 			if j == i {
 				continue
 			}
-			r2msg1 := msg.Content().(*DGRound2Message1)
-			save.PaillierPKs[j] = r2msg1.UnmarshalPaillierPK()
+			r2msg1 := msg.Content.(*DGRound2Message1)
+			save.PaillierPKs[j] = r2msg1.PaillierPK
 		}
 		for j, msg := range r4P2P {
 			if j == i {
 				continue
 			}
-			r4msg1 := msg.Content().(*DGRound4Message1)
-			receiverId := r4msg1.UnmarshalReceiverId()
-			if !bytes.Equal(receiverId, Pi.GetKey()) {
+			r4msg1 := msg.Content.(*DGRound4Message1)
+			receiverId := r4msg1.ReceiverID
+			if !bytes.Equal(receiverId, Pi.Key) {
 				return nil, tss.NewError(errors.New("DGRound4Message1 receiverId mismatch"),
 					TaskName, 5, Pi, params.NewParties().IDs()[j])
 			}
 			if params.NoProofFac() {
 				continue
 			}
-			proof, err := r4msg1.UnmarshalFacProof()
-			if err != nil {
-				return nil, tss.NewError(err, TaskName, 5, Pi, params.NewParties().IDs()[j])
+			proof := r4msg1.FacProof
+			if proof == nil {
+				return nil, tss.NewError(errors.New("facProof missing"), TaskName, 5, Pi, params.NewParties().IDs()[j])
 			}
 			if ok := proof.Verify(ContextI, params.EC(), save.PaillierPKs[j].N,
 				save.NTildei, save.H1i, save.H2i); !ok {

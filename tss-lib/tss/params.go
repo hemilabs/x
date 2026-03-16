@@ -80,30 +80,37 @@ func NewParameters(ec elliptic.Curve, ctx *PeerContext, partyID *PartyID, partyC
 	}
 }
 
+// EC returns the elliptic curve for this protocol run.
 func (params *Parameters) EC() elliptic.Curve {
 	return params.ec
 }
 
+// Parties returns the peer context with all party IDs.
 func (params *Parameters) Parties() *PeerContext {
 	return params.parties
 }
 
+// PartyID returns this party's ID.
 func (params *Parameters) PartyID() *PartyID {
 	return params.partyID
 }
 
+// PartyCount returns the total number of parties.
 func (params *Parameters) PartyCount() int {
 	return params.partyCount
 }
 
+// Threshold returns the signing threshold (t in t+1-of-n).
 func (params *Parameters) Threshold() int {
 	return params.threshold
 }
 
+// Concurrency returns the parallelism level for proof verification.
 func (params *Parameters) Concurrency() int {
 	return params.concurrency
 }
 
+// SafePrimeGenTimeout returns the timeout for safe prime generation.
 func (params *Parameters) SafePrimeGenTimeout() time.Duration {
 	return params.safePrimeGenTimeout
 }
@@ -113,14 +120,17 @@ func (params *Parameters) SetConcurrency(concurrency int) {
 	params.concurrency = concurrency
 }
 
+// SetSafePrimeGenTimeout sets the timeout for safe prime generation.
 func (params *Parameters) SetSafePrimeGenTimeout(timeout time.Duration) {
 	params.safePrimeGenTimeout = timeout
 }
 
+// NoProofMod returns true if modular proof verification is disabled.
 func (params *Parameters) NoProofMod() bool {
 	return params.noProofMod
 }
 
+// NoProofFac returns true if factorization proof verification is disabled.
 func (params *Parameters) NoProofFac() bool {
 	return params.noProofFac
 }
@@ -152,6 +162,7 @@ func (params *Parameters) SetCeremonyID(id []byte) {
 	params.ceremonyID = id
 }
 
+// NoProofDLN returns true if DLN proof verification is disabled.
 func (params *Parameters) NoProofDLN() bool {
 	return params.noProofDLN
 }
@@ -182,18 +193,22 @@ func (params *Parameters) SetNoProofFac() {
 	params.noProofFac = true
 }
 
+// PartialKeyRand returns the randomness source for partial key generation.
 func (params *Parameters) PartialKeyRand() io.Reader {
 	return params.partialKeyRand
 }
 
+// Rand returns the randomness source for protocol operations.
 func (params *Parameters) Rand() io.Reader {
 	return params.rand
 }
 
+// SetPartialKeyRand sets the randomness source for partial key generation.
 func (params *Parameters) SetPartialKeyRand(rand io.Reader) {
 	params.partialKeyRand = rand
 }
 
+// SetRand sets the randomness source for protocol operations.
 func (params *Parameters) SetRand(rand io.Reader) {
 	params.rand = rand
 }
@@ -220,22 +235,27 @@ func NewReSharingParameters(ec elliptic.Curve, ctx, newCtx *PeerContext, partyID
 	}
 }
 
+// OldParties returns the peer context for the old committee.
 func (rgParams *ReSharingParameters) OldParties() *PeerContext {
 	return rgParams.Parties() // wr use the original method for old parties
 }
 
+// OldPartyCount returns the number of parties in the old committee.
 func (rgParams *ReSharingParameters) OldPartyCount() int {
 	return rgParams.partyCount
 }
 
+// NewParties returns the peer context for the new committee.
 func (rgParams *ReSharingParameters) NewParties() *PeerContext {
 	return rgParams.newParties
 }
 
+// NewPartyCount returns the number of parties in the new committee.
 func (rgParams *ReSharingParameters) NewPartyCount() int {
 	return rgParams.newPartyCount
 }
 
+// NewThreshold returns the new signing threshold.
 func (rgParams *ReSharingParameters) NewThreshold() int {
 	return rgParams.newThreshold
 }
@@ -250,10 +270,12 @@ func (rgParams *ReSharingParameters) OldAndNewParties() []*PartyID {
 	return append(out, rgParams.NewParties().IDs()...)
 }
 
+// OldAndNewPartyCount returns the total unique party count across both committees.
 func (rgParams *ReSharingParameters) OldAndNewPartyCount() int {
 	return rgParams.OldPartyCount() + rgParams.NewPartyCount()
 }
 
+// IsOldCommittee returns true if this party is in the old committee.
 func (rgParams *ReSharingParameters) IsOldCommittee() bool {
 	partyID := rgParams.partyID
 	for _, Pj := range rgParams.parties.IDs() {
@@ -264,6 +286,7 @@ func (rgParams *ReSharingParameters) IsOldCommittee() bool {
 	return false
 }
 
+// IsNewCommittee returns true if this party is in the new committee.
 func (rgParams *ReSharingParameters) IsNewCommittee() bool {
 	partyID := rgParams.partyID
 	for _, Pj := range rgParams.newParties.IDs() {

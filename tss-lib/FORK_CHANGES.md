@@ -1,130 +1,217 @@
-# TSS-Lib Fork Changes Summary
+# TSS-Lib v3 Fork — Security Audit Changes
 
-~112 distinct changes across 72 files, all annotated with `[FORK]` comments.
+~112 security fixes from Max's audit of the upstream binance/tss-lib,
+remapped to the v3 channel-free round function architecture.
+
+All fixes are annotated with `[FORK]` comments in source.
+
+## v3 Architecture Note
+
+v3 deletes the channel-based `Party`/`Round`/`BaseUpdate` API.  Each
+ceremony round is a pure function: takes state + inbound messages,
+returns outbound messages.  No channels, no goroutines in the protocol
+layer.  Some v2 fixes (marked below) are eliminated by the v3
+architecture rather than ported — the attack surface they addressed
+no longer exists.
+
+---
 
 ## 1. SSID Domain Separation (Cross-Ceremony Replay Prevention)
 
-- Added `SSIDNonce` field and getter/setter to `Parameters` — upstream uses hardcoded 0, enabling cross-attempt replay
-- Changed nonce type from signed `int` to `uint` — prevents negative nonces producing ambiguous encodings
-- All Fiat-Shamir challenges now use `SHA512_256i_TAGGED(Session, ...)` instead of untagged hashes
-- SSID includes curve params, party keys, threshold, round number, and nonce
-- Length-prefixed `big.Int` encoding in SSID computation — upstream's raw `Bytes()` concatenation is ambiguous (e.g., `[0x01, 0x02]` vs `[0x0102]`)
-- EdDSA resharing: added SSID from scratch (upstream had none at all)
-- EdDSA signing: binds the message being signed into SSID to prevent cross-session reuse
-- MtA: split single Session into per-party `AliceSession`/`BobSession` for directional domain separation
+**v3 location:** `tss/params.go` (SetSSIDNonce, SetCeremonyID),
+`ecdsa/keygen/round_fn.go` getSSID, `ecdsa/signing/round_fn.go`
+getSigningSSID, `ecdsa/resharing/round_fn.go` getReshareSSID
+
+- SSIDNonce field and getter/setter on Parameters
+- Nonce type `uint` (not signed int) — prevents ambiguous encoding
+- All Fiat-Shamir challenges use SHA512_256i_TAGGED(Session, ...)
+- SSID includes: protocol tag, curve params (P,N,B,Gx,Gy), party keys,
+  partyCount, threshold, round number, nonce, ceremonyID
+- Length-prefixed big.Int encoding (not raw Bytes() concatenation)
+- MtA: per-party AliceSession/BobSession directional separation
+
+**EdDSA (pending):** SSID pattern will be replicated in eddsa/round_fn.go.
 
 ## 2. ReceiverID Binding (Message Redirection Prevention)
 
-- Added `ReceiverId` field to all P2P messages — upstream doesn't bind intended recipient, allowing share redirection attacks
-- Receiver verified on receipt: each round checks `receiverId == myKey` before processing
-- New `UnmarshalReceiverId()` methods on all P2P message types
+**v3 location:** `ecdsa/*/messages.go` (proto fields),
+`ecdsa/signing/round_fn.go` SignRound2/SignRound3 (verification)
+
+- ReceiverId field on all P2P messages
+- Receiver verified on receipt: `receiverId == myKey`
+- UnmarshalReceiverId() methods on all P2P message types
 
 ## 3. ValidateBasic Hardening (Message Bounds)
 
-- Upstream `ValidateBasic()` typically checks `m != nil` and `NonEmptyBytes` only
-- Fork adds upper bounds on all fields: pubkey coordinates <= 33B, shares <= 32B, commitments <= 32B, decommitments bounded per-element
-- Several upstream `ValidateBasic()` returned `true` unconditionally (no nil check) — all fixed
-- Prevents memory exhaustion from oversized message fields
+**v3 location:** `ecdsa/*/messages.go` (unchanged from v2)
+
+- Upper bounds on all fields: pubkey coords ≤ 33B, shares ≤ 32B,
+  commitments ≤ 32B, decommitments bounded per-element
+- Fixed unconditional-true ValidateBasic() methods
+- Prevents memory exhaustion from oversized fields
 
 ## 4. Key-at-Index Verification + Duplicate Message Rejection
 
-- **Key-at-Index**: upstream only checked index bounds; fork verifies `party.Key == Ks[index]` to prevent party impersonation
-- **Dedup**: reject duplicate `(round, sender)` pairs — upstream processes duplicates, enabling equivocation attacks
+**v3 status:** Eliminated by architecture.
+
+v2 implemented Key-at-Index in `local_party.go` StoreMessage and
+duplicate (round, sender) rejection in the same method.  In v3, the
+caller (continuum's HandleMessage) validates sender identity against
+the ceremony PID set before delivering to the round function.  Message
+dedup is handled by the caller's indexed slot array (msgBuf) — a
+duplicate sender overwrites its own slot, which is idempotent.
 
 ## 5. Nil/Zero Guards (Panic Prevention)
 
-- `wire.go`: nil guard on `from` — upstream dereferences without checking
-- `hash.go`: nil guard on `big.Int` inputs — upstream panics on nil
-- `int.go`: nil guard on `ModInt` operations — upstream panics on nil bound
-- `ecpoint.go`: nil guard on `p1` in `Add()`, identity-point handling in `ScalarMult` and `ScalarBaseMult`
-- `paillier.go`: nil check on `ModInverse` result — upstream doesn't check
-- Signing `local_party.go`: nil guard on incoming messages
+**v3 location:** `tss/wire.go`, `common/hash.go`, `common/int.go`,
+`crypto/ecpoint.go`, `crypto/paillier/paillier.go` (all unchanged)
+
+- wire.go: nil guard on `from`
+- hash.go: nil guard on big.Int inputs
+- int.go: nil guard on ModInt operations, IsInInterval nil check (fix 112)
+- ecpoint.go: nil guard on p1 in Add(), identity handling in ScalarMult
+- paillier.go: nil check on ModInverse result
+
+**v2 only (eliminated):** signing local_party.go nil guard on incoming
+messages — v3 has no local_party; caller validates before delivery.
 
 ## 6. Identity Point Checks
 
-- Reject identity-point (0,0) public key shares `BigXj` — means party has zero secret share
-- Reject identity-point aggregate public key (`ECDSAPub`/`EDDSAPub`) — means all shares cancel
-- Reject identity-point nonce `R` in signing — would make signature verification trivial
-- `ecpoint.go`: `IsIdentity()` method added; `ScalarMult`/`ScalarBaseMult` return proper identity instead of panicking on zero scalar
+**v3 location:** `crypto/ecpoint.go` (IsIdentity method),
+`ecdsa/keygen/round_fn.go` Round3/Round4 (Xi zero, ECDSAPub identity,
+BigXj identity — fixes 95-97), `ecdsa/signing/round_fn.go` SignRound5
+(R identity), SignRound7 (Vj/Aj — fix 108), SignRound9 (Uj/Tj — fix 109),
+`ecdsa/resharing/round_fn.go` ReshareRound4/5 (newXi zero, newBigXj
+identity — fix 104)
+
+- Reject identity-point public key shares, aggregate pubkeys, nonce R
+- Reject zero Xi (private key share)
+
+**EdDSA (pending):** Same checks for EDDSAPub, BigXj (fix 98), newXi/
+newBigXj (fix 105).
 
 ## 7. Secret Zeroing (Memory Hygiene)
 
-- Clear `ui` (partial key share) after last use in keygen
-- Clear signing nonces (`ki`, `gammai`, `wi`) after use — nonce leak enables private key recovery
-- Unconditionally zero old `Xi` in resharing for parties leaving the committee
-- Fix pointer aliasing: upstream `wi = xi` aliases the secret; fork uses explicit copy
+**v3 location:** `ecdsa/keygen/round_fn.go` Round1 (clear ui after VSS
+— fix 102), `ecdsa/signing/round_fn.go` SignRound5 (clear k, gamma, w,
+sigma — fix 106), `ecdsa/resharing/round_fn.go` ReshareRound5
+(unconditionally zero old Xi)
+
+- Explicit pointer copy instead of aliasing (wi = new(big.Int).Set(xi))
+
+**EdDSA (pending):** Clear ui in keygen round 2, clear ri/wi in signing
+round 3 (fix 110).
 
 ## 8. Parameter / Modulus Validation
 
-- Reject invalid `partyCount`/`threshold` combinations (upstream silently accepts)
-- Post-sort validation: reject duplicate or empty party keys
-- Fix sort comparator: upstream `<= 0` treats equal keys as less-than; fork uses `< 0`
-- All proof verifiers reject moduli < 2048 bits (NTilde, Paillier N, N0, NCap)
-- Resharing: comprehensive parameter validation battery (NTilde, H1/H2, Paillier) on received data
+**v3 location:** `tss/params.go` (threshold/partyCount validation,
+sort comparator fix, duplicate key rejection),
+`ecdsa/keygen/round_fn.go` Round2 (comprehensive parameter validation
+battery — Paillier N, NTilde, H1/H2, DLN proofs),
+`ecdsa/resharing/round_fn.go` ReshareRound4 (same battery for new
+committee)
+
+- Reject ≤2048-bit moduli, even moduli, prime moduli, perfect squares
+- Reject duplicate/equal H1/H2/NTilde/PaillierN
+- Reject non-coprime H1/H2 with NTilde
 
 ## 9. ZK Proof Hardening
 
-- **MtA Alice**: s2 upper bound `2*q^3*NTilde` — prevents DoS via oversized exponents
-- **MtA Bob**: s2 and t2 upper bounds (same bound) — same motivation
-- **MtA both**: reject degenerate Pedersen params (h1=1 or h2=1), verify ciphertext coprimality with N^2
-- **Schnorr**: reject proof scalars outside `[0, q)` — prevents malleability (`T + k*q` verifies identically)
-- **Schnorr**: check `Add()` error instead of discarding it
-- **DLN**: session parameter for SSID domain separation; reject undersized moduli
-- **ModProof**: reject undersized N; fail-fast if no quadratic residue found during generation
-- **FacProof**: sign-magnitude encoding for V (can be negative) — upstream silently drops sign, causing ~50% honest proof failure; reject undersized N0 and NCap
+**v3 location:** `crypto/mta/*`, `crypto/schnorr/*`,
+`crypto/dlnproof/*`, `crypto/facproof/*`, `crypto/modproof/*`
+(all unchanged from v2)
+
+- MtA Alice/Bob: s2/t2 upper bounds, degenerate Pedersen rejection,
+  ciphertext coprimality check, nil input validation (fixes 99-100),
+  Paillier N minimum bitlen (fix 101)
+- Schnorr: reject scalars outside [0,q), check Add() error (fix 103)
+- DLN: session parameter for SSID, reject undersized moduli
+- ModProof: reject undersized N, fail-fast on no quadratic residue
+- FacProof: sign-magnitude V encoding (upstream drops sign → ~50%
+  honest failure), reject undersized N0/NCap
 
 ## 10. Wire Format / Serialization
 
-- Deterministic protobuf marshaling (`proto.MarshalOptions{Deterministic: true}`) — upstream uses non-deterministic default
-- Propagate `anypb.New` errors — upstream silently discards
-- Length-prefixed `big.Int` encoding to prevent ambiguous concatenation
-- O(n) zero-padding instead of upstream's O(n^2) prepend loop
-- EC point deserialization: bound coordinate length to prevent crafted oversized inputs
+**v3 location:** `tss/wire.go`, `ecdsa/*/messages.go`
+(unchanged from v2)
+
+- Deterministic protobuf marshaling
+- Propagate anypb.New errors
+- Length-prefixed big.Int encoding
+- O(n) zero-padding (not O(n²) prepend)
+- EC point deserialization: bound coordinate length
 
 ## 11. VSS Hardening
 
-- Return polynomial coefficients as third return value (for SNARK witness extraction)
-- Reject shares that are zero or outside `[1, q-1]`
-- Reject share ID that is nil or zero mod q — evaluation at x=0 leaks the secret
-- Detect duplicate share IDs (reduced mod q) — prevents silently wrong interpolation
-- Nil-check on `ModInverse` during Lagrange interpolation
+**v3 location:** `crypto/vss/feldman_vss.go` (unchanged from v2),
+`ecdsa/keygen/round_fn.go` Round1 (polynomial coefficients in
+RoundOutput.Poly for SNARK witness)
+
+- Reject zero/out-of-range shares, nil/zero share IDs
+- Detect duplicate share IDs (reduced mod q)
+- Nil-check ModInverse during Lagrange interpolation
 
 ## 12. Lagrange Interpolation (PrepareForSigning)
 
-- Explicit pointer copy instead of aliasing (`wi = new(big.Int).Set(xi)` instead of `wi = xi`)
-- Nil-check on `ModInverse` — returns nil if two party keys collide (modular inverse doesn't exist)
-- `wi == 0` check — zero Lagrange coefficient means party contributes nothing to the signature
-- Same nil-check pattern in `BigXj` Lagrange interpolation loop
+**v3 location:** `ecdsa/signing/prepare.go` (unchanged from v2)
 
-## 13. SNARK Integration
+- Explicit pointer copy (wi = new(big.Int).Set(xi))
+- Nil-check ModInverse for colliding party keys
+- wi == 0 check (zero Lagrange coefficient)
 
-- `NoProofDLN()`, `NoProofMod()`, `NoProofFac()` flags — skip classical ZK proofs when replaced by SNARK coverage
-- `GetPoly()` method to extract VSS polynomial coefficients for SNARK witness
-- `GetNewVs()` method to extract Feldman VSS commitments for SNARK witness
-- Store VSS polynomial and commitments in temp data during keygen/resharing Round 1
+## 13. SNARK Integration Seams
+
+**v3 location:** `tss/params.go` (NoProofDLN/NoProofMod/NoProofFac
+flags), `ecdsa/keygen/round_state.go` (RoundOutput.Poly),
+`ecdsa/resharing/round_fn.go` (ReshareRoundOutput.Poly, NewVs),
+`ecdsa/keygen/round_fn.go` Round2/Round3 (conditional proof skip)
+
+- Skip classical ZK proofs when SNARK covers the same property
+- Expose VSS polynomial/commitments for SNARK witness extraction
 
 ## 14. Save Data Validation
 
-- **`ValidateWithProof()`** (ECDSA pre-params): verifies P!=Q, NTilde=(2P+1)(2Q+1), H2=H1^Alpha mod NTilde — catches corrupted/tampered pre-params before they silently produce invalid proofs
-- **`ValidateSaveData()`** (ECDSA + EdDSA): nil checks, array consistency, on-curve verification, ShareID lookup, Feldman VSS invariant (Xi*G == BigXj[ownIndex]) — catches storage corruption before signing
+**v3 location:** `ecdsa/keygen/save_data.go` (unchanged from v2)
+
+- ValidateWithProof(): P!=Q, NTilde consistency, H2=H1^Alpha
+- ValidateSaveData(): nil checks, array consistency, on-curve, Feldman invariant
 
 ## 15. Signing Protocol Hardening
 
-- Message range check: verify `m >= 0` (upstream only checks `m < N`)
-- Theta zero-check in round 4 — zero theta causes division-by-zero
-- Zero-r check in round 5 — ECDSA requires `r = R.x mod N != 0`
-- Range check on each party's `s_j` share in finalize — reject values outside `[0, q)`
-- Zero-S rejection — final signature `S = 0` is invalid
-- Ceiling division for byte-length: `(BitSize + 7) / 8` instead of `BitSize / 8` (correct for non-8-aligned curves like P-521)
-- EdDSA: reject values exceeding 32 bytes (upstream silently truncates)
-- EdDSA: R identity check in round 3
+**v3 location:** `ecdsa/signing/round_fn.go`
+
+- Message range check: m >= 0
+- Theta zero-check in SignRound4
+- Zero-r check in SignRound5 (R.x mod N != 0)
+- Range check on each s_j share in SignFinalize
+- Zero-S rejection in SignFinalize
+- Ceiling division for byte-length: (BitSize+7)/8
+- Low-S normalization in SignFinalize
 
 ## 16. Commitment Scheme
 
-- Reject decommitments with `len(D) < 2` — a single-element decommitment has no payload after the blinding factor
+**v3 location:** `crypto/commitments/commitment.go` (unchanged from v2)
+
+- Reject decommitments with len(D) < 2
 
 ## 17. Miscellaneous
 
-- Append-aliasing fix in `ReSharingParameters`: upstream's `append(old, new...)` can mutate the old slice's backing array
-- `GenerateNTildei`: reject equal primes (P==Q makes NTilde a perfect square, breaking DLN)
-- `EightInvEight()` call ordering fix in EdDSA signing round 3
+**v3 location:** `tss/params.go` (OldAndNewParties append-aliasing —
+fix 107), `crypto/utils.go` (GenerateNTildei distinct primes — fix 111)
+
+---
+
+## Deferred Items (carried from v2 audit)
+
+1. MtA inverted lower-bound checks (proofs.go, range_proof.go) — don't
+   reject honest proofs in practice
+2. ProofIters=13 (paillier.go) — matches GG18 spec
+3. BuildLocalSaveDataSubset panic (save_data.go) — changing signature
+   breaks callers
+4. NSquare() caching (paillier.go) — performance only
+5. MustGetRandomInt off-by-one (random.go) — negligible for 256-bit
+6. Concurrent io.Reader in safe prime gen — safe with crypto/rand.Reader
+7. CKD only works for secp256k1 — non-blocking
+8. Commitment scheme no domain separation — prevented by 256-bit nonce
+9. Threshold=0 accepted — VSS rejects downstream
+10. SHA512_256i sign-blindness — all callers pass non-negative

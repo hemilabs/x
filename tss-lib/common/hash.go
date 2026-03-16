@@ -8,9 +8,10 @@ package common
 
 import (
 	"crypto"
-	_ "crypto/sha512"
 	"encoding/binary"
 	"math/big"
+
+	_ "crypto/sha512"
 )
 
 const (
@@ -20,7 +21,6 @@ const (
 // SHA-512/256 is protected against length extension attacks and is more performant than SHA-256 on 64-bit architectures.
 // https://en.wikipedia.org/wiki/Template:Comparison_of_SHA_functions
 func SHA512_256(in ...[]byte) []byte {
-	var data []byte
 	state := crypto.SHA512_256.New()
 	inLen := len(in)
 	if inLen == 0 {
@@ -36,7 +36,7 @@ func SHA512_256(in ...[]byte) []byte {
 		bzSize += len(bz)
 	}
 	dataCap := len(inLenBz) + bzSize + inLen + (inLen * 8)
-	data = make([]byte, 0, dataCap)
+	data := make([]byte, 0, dataCap)
 	data = append(data, inLenBz...)
 	for _, bz := range in {
 		data = append(data, bz...)
@@ -56,7 +56,6 @@ func SHA512_256(in ...[]byte) []byte {
 }
 
 func SHA512_256i(in ...*big.Int) *big.Int {
-	var data []byte
 	state := crypto.SHA512_256.New()
 	inLen := len(in)
 	if inLen == 0 {
@@ -81,7 +80,7 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 		bzSize += len(ptrs[i])
 	}
 	dataCap := len(inLenBz) + bzSize + inLen + (inLen * 8)
-	data = make([]byte, 0, dataCap)
+	data := make([]byte, 0, dataCap)
 	data = append(data, inLenBz...)
 	for i := range in {
 		data = append(data, ptrs[i]...)
@@ -106,7 +105,6 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 // replay attacks.
 func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 	tagBz := SHA512_256(tag)
-	var data []byte
 	state := crypto.SHA512_256.New()
 	state.Write(tagBz)
 	state.Write(tagBz)
@@ -131,7 +129,7 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 		bzSize += len(ptrs[i])
 	}
 	dataCap := len(inLenBz) + bzSize + inLen + (inLen * 8)
-	data = make([]byte, 0, dataCap)
+	data := make([]byte, 0, dataCap)
 	data = append(data, inLenBz...)
 	for i := range in {
 		data = append(data, ptrs[i]...)
@@ -151,12 +149,11 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 }
 
 func SHA512_256iOne(in *big.Int) *big.Int {
-	var data []byte
 	state := crypto.SHA512_256.New()
 	if in == nil {
 		return nil
 	}
-	data = in.Bytes()
+	data := in.Bytes()
 	// n < len(data) or an error will never happen.
 	// see: https://golang.org/pkg/hash/#Hash and https://github.com/golang/go/wiki/Hashing#the-hashhash-interface
 	if _, err := state.Write(data); err != nil {

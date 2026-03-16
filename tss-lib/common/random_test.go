@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 const (

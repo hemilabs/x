@@ -8,7 +8,7 @@ package tss
 // any entries (such as self-messages from a previous round) that
 // are already set in dst.  Using copy() instead would overwrite
 // populated slots with nil when the source slice is sparse.
-func MergeMsgs(dst, src []ParsedMessage) {
+func MergeMsgs(dst, src []*Message) {
 	for j, m := range src {
 		if m != nil {
 			dst[j] = m

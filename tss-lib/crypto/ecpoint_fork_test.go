@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 package crypto_test
 
 import (
@@ -7,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 func TestIsIdentityWeierstrass(t *testing.T) {

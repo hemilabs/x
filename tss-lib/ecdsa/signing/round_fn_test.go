@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // TestRoundFnSignThreeParties runs keygen + signing using pure round
@@ -35,7 +35,7 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 	peerCtx := tss.NewPeerContext(pIDs)
 
 	kgStates := make([]*keygen.KeygenState, n)
-	kgR1 := make([]tss.ParsedMessage, n)
+	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
@@ -43,13 +43,13 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
 		kgStates[i] = st
-		kgR1[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR1[i] = out.Messages[0]
 	}
 
-	kgR2P2P := make([][]tss.ParsedMessage, n)
-	kgR2Bcast := make([]tss.ParsedMessage, n)
+	kgR2P2P := make([][]*tss.Message, n)
+	kgR2Bcast := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		kgR2P2P[i] = make([]tss.ParsedMessage, n)
+		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
@@ -57,11 +57,11 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 			t.Fatalf("keygen Round2[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				kgR2Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					kgR2P2P[to.Index][i] = pm
 				}
 			}
@@ -74,13 +74,13 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 		}
 	}
 
-	kgR3 := make([]tss.ParsedMessage, n)
+	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("keygen Round3[%d]: %v", i, err)
 		}
-		kgR3[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR3[i] = out.Messages[0]
 	}
 
 	saves := make([]keygen.LocalPartySaveData, n)
@@ -98,10 +98,10 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 	m := new(big.Int).SetBytes(msgHash[:])
 
 	sigStates := make([]*SigningState, n)
-	sigR1P2P := make([][]tss.ParsedMessage, n)
-	sigR1Bcast := make([]tss.ParsedMessage, n)
+	sigR1P2P := make([][]*tss.Message, n)
+	sigR1Bcast := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		sigR1P2P[i] = make([]tss.ParsedMessage, n)
+		sigR1P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
@@ -111,11 +111,11 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 		}
 		sigStates[i] = st
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				sigR1Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					sigR1P2P[to.Index][i] = pm
 				}
 			}
@@ -123,9 +123,9 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 	}
 
 	// Round 2
-	sigR2P2P := make([][]tss.ParsedMessage, n)
+	sigR2P2P := make([][]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		sigR2P2P[i] = make([]tss.ParsedMessage, n)
+		sigR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		out, err := SignRound2(context.Background(), sigStates[i], sigR1P2P[i], sigR1Bcast)
@@ -133,81 +133,81 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 			t.Fatalf("SignRound2[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			for _, to := range pm.GetTo() {
+			pm := msg
+			for _, to := range pm.To {
 				sigR2P2P[to.Index][i] = pm
 			}
 		}
 	}
 
 	// Round 3
-	sigR3 := make([]tss.ParsedMessage, n)
+	sigR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound3(context.Background(), sigStates[i], sigR2P2P[i])
 		if err != nil {
 			t.Fatalf("SignRound3[%d]: %v", i, err)
 		}
-		sigR3[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR3[i] = out.Messages[0]
 	}
 
 	// Round 4
-	sigR4 := make([]tss.ParsedMessage, n)
+	sigR4 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound4(sigStates[i], sigR3)
 		if err != nil {
 			t.Fatalf("SignRound4[%d]: %v", i, err)
 		}
-		sigR4[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR4[i] = out.Messages[0]
 	}
 
 	// Round 5
-	sigR5 := make([]tss.ParsedMessage, n)
+	sigR5 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound5(sigStates[i], sigR4)
 		if err != nil {
 			t.Fatalf("SignRound5[%d]: %v", i, err)
 		}
-		sigR5[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR5[i] = out.Messages[0]
 	}
 
 	// Round 6
-	sigR6 := make([]tss.ParsedMessage, n)
+	sigR6 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound6(sigStates[i])
 		if err != nil {
 			t.Fatalf("SignRound6[%d]: %v", i, err)
 		}
-		sigR6[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR6[i] = out.Messages[0]
 	}
 
 	// Round 7
-	sigR7 := make([]tss.ParsedMessage, n)
+	sigR7 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound7(sigStates[i], sigR5, sigR6)
 		if err != nil {
 			t.Fatalf("SignRound7[%d]: %v", i, err)
 		}
-		sigR7[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR7[i] = out.Messages[0]
 	}
 
 	// Round 8
-	sigR8 := make([]tss.ParsedMessage, n)
+	sigR8 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound8(sigStates[i])
 		if err != nil {
 			t.Fatalf("SignRound8[%d]: %v", i, err)
 		}
-		sigR8[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR8[i] = out.Messages[0]
 	}
 
 	// Round 9
-	sigR9 := make([]tss.ParsedMessage, n)
+	sigR9 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound9(sigStates[i], sigR7, sigR8)
 		if err != nil {
 			t.Fatalf("SignRound9[%d]: %v", i, err)
 		}
-		sigR9[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR9[i] = out.Messages[0]
 	}
 
 	// Finalize
@@ -256,7 +256,7 @@ func TestRoundFnSignSubset(t *testing.T) {
 	peerCtx := tss.NewPeerContext(pIDs)
 
 	kgStates := make([]*keygen.KeygenState, nKeygen)
-	kgR1 := make([]tss.ParsedMessage, nKeygen)
+	kgR1 := make([]*tss.Message, nKeygen)
 	for i := 0; i < nKeygen; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], nKeygen, threshold)
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
@@ -264,13 +264,13 @@ func TestRoundFnSignSubset(t *testing.T) {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
 		kgStates[i] = st
-		kgR1[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR1[i] = out.Messages[0]
 	}
 
-	kgR2P2P := make([][]tss.ParsedMessage, nKeygen)
-	kgR2Bcast := make([]tss.ParsedMessage, nKeygen)
+	kgR2P2P := make([][]*tss.Message, nKeygen)
+	kgR2Bcast := make([]*tss.Message, nKeygen)
 	for i := 0; i < nKeygen; i++ {
-		kgR2P2P[i] = make([]tss.ParsedMessage, nKeygen)
+		kgR2P2P[i] = make([]*tss.Message, nKeygen)
 	}
 	for i := 0; i < nKeygen; i++ {
 		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
@@ -278,11 +278,11 @@ func TestRoundFnSignSubset(t *testing.T) {
 			t.Fatalf("keygen Round2[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				kgR2Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					kgR2P2P[to.Index][i] = pm
 				}
 			}
@@ -293,13 +293,13 @@ func TestRoundFnSignSubset(t *testing.T) {
 		}
 	}
 
-	kgR3 := make([]tss.ParsedMessage, nKeygen)
+	kgR3 := make([]*tss.Message, nKeygen)
 	for i := 0; i < nKeygen; i++ {
 		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("keygen Round3[%d]: %v", i, err)
 		}
-		kgR3[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR3[i] = out.Messages[0]
 	}
 
 	allKeys := make([]keygen.LocalPartySaveData, nKeygen)
@@ -321,10 +321,10 @@ func TestRoundFnSignSubset(t *testing.T) {
 	m := new(big.Int).SetBytes(msgHash[:])
 
 	sigStates := make([]*SigningState, nSign)
-	sigR1P2P := make([][]tss.ParsedMessage, nSign)
-	sigR1Bcast := make([]tss.ParsedMessage, nSign)
+	sigR1P2P := make([][]*tss.Message, nSign)
+	sigR1Bcast := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
-		sigR1P2P[i] = make([]tss.ParsedMessage, nSign)
+		sigR1P2P[i] = make([]*tss.Message, nSign)
 	}
 
 	// Find original key index for each signer
@@ -347,11 +347,11 @@ func TestRoundFnSignSubset(t *testing.T) {
 		}
 		sigStates[i] = st
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				sigR1Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					sigR1P2P[to.Index][i] = pm
 				}
 			}
@@ -359,9 +359,9 @@ func TestRoundFnSignSubset(t *testing.T) {
 	}
 
 	// Rounds 2-9 + Finalize
-	sigR2P2P := make([][]tss.ParsedMessage, nSign)
+	sigR2P2P := make([][]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
-		sigR2P2P[i] = make([]tss.ParsedMessage, nSign)
+		sigR2P2P[i] = make([]*tss.Message, nSign)
 	}
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound2(context.Background(), sigStates[i], sigR1P2P[i], sigR1Bcast)
@@ -369,74 +369,74 @@ func TestRoundFnSignSubset(t *testing.T) {
 			t.Fatalf("SignRound2[%d]: %v", i, err)
 		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			for _, to := range pm.GetTo() {
+			pm := msg
+			for _, to := range pm.To {
 				sigR2P2P[to.Index][i] = pm
 			}
 		}
 	}
 
-	sigR3 := make([]tss.ParsedMessage, nSign)
+	sigR3 := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound3(context.Background(), sigStates[i], sigR2P2P[i])
 		if err != nil {
 			t.Fatalf("SignRound3[%d]: %v", i, err)
 		}
-		sigR3[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR3[i] = out.Messages[0]
 	}
 
-	sigR4 := make([]tss.ParsedMessage, nSign)
+	sigR4 := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound4(sigStates[i], sigR3)
 		if err != nil {
 			t.Fatalf("SignRound4[%d]: %v", i, err)
 		}
-		sigR4[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR4[i] = out.Messages[0]
 	}
 
-	sigR5 := make([]tss.ParsedMessage, nSign)
+	sigR5 := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound5(sigStates[i], sigR4)
 		if err != nil {
 			t.Fatalf("SignRound5[%d]: %v", i, err)
 		}
-		sigR5[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR5[i] = out.Messages[0]
 	}
 
-	sigR6 := make([]tss.ParsedMessage, nSign)
+	sigR6 := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound6(sigStates[i])
 		if err != nil {
 			t.Fatalf("SignRound6[%d]: %v", i, err)
 		}
-		sigR6[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR6[i] = out.Messages[0]
 	}
 
-	sigR7 := make([]tss.ParsedMessage, nSign)
+	sigR7 := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound7(sigStates[i], sigR5, sigR6)
 		if err != nil {
 			t.Fatalf("SignRound7[%d]: %v", i, err)
 		}
-		sigR7[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR7[i] = out.Messages[0]
 	}
 
-	sigR8 := make([]tss.ParsedMessage, nSign)
+	sigR8 := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound8(sigStates[i])
 		if err != nil {
 			t.Fatalf("SignRound8[%d]: %v", i, err)
 		}
-		sigR8[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR8[i] = out.Messages[0]
 	}
 
-	sigR9 := make([]tss.ParsedMessage, nSign)
+	sigR9 := make([]*tss.Message, nSign)
 	for i := 0; i < nSign; i++ {
 		out, err := SignRound9(sigStates[i], sigR7, sigR8)
 		if err != nil {
 			t.Fatalf("SignRound9[%d]: %v", i, err)
 		}
-		sigR9[i] = out.Messages[0].(tss.ParsedMessage)
+		sigR9[i] = out.Messages[0]
 	}
 
 	for i := 0; i < nSign; i++ {
@@ -477,7 +477,7 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 
 	// Keygen
 	kgStates := make([]*keygen.KeygenState, n)
-	kgR1 := make([]tss.ParsedMessage, n)
+	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
@@ -485,21 +485,21 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
 		kgStates[i] = st
-		kgR1[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR1[i] = out.Messages[0]
 	}
-	kgR2P2P := make([][]tss.ParsedMessage, n)
-	kgR2Bcast := make([]tss.ParsedMessage, n)
+	kgR2P2P := make([][]*tss.Message, n)
+	kgR2Bcast := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		kgR2P2P[i] = make([]tss.ParsedMessage, n)
+		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		out, _ := keygen.Round2(context.Background(), kgStates[i], kgR1)
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				kgR2Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					kgR2P2P[to.Index][i] = pm
 				}
 			}
@@ -509,10 +509,10 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 			kgR2Bcast[i] = kgStates[i].ExportR2BcastSelf()
 		}
 	}
-	kgR3 := make([]tss.ParsedMessage, n)
+	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, _ := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
-		kgR3[i] = out.Messages[0].(tss.ParsedMessage)
+		kgR3[i] = out.Messages[0]
 	}
 	saves := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
@@ -521,17 +521,19 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 	}
 
 	// Sign with leading-zero message (first byte = 0x00)
-	msgData := []byte{0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+	msgData := []byte{
+		0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
 		0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
 		0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
-		0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e}
+		0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
+	}
 	m := new(big.Int).SetBytes(msgData)
 
 	sigStates := make([]*SigningState, n)
-	sigR1P2P := make([][]tss.ParsedMessage, n)
-	sigR1Bcast := make([]tss.ParsedMessage, n)
+	sigR1P2P := make([][]*tss.Message, n)
+	sigR1Bcast := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		sigR1P2P[i] = make([]tss.ParsedMessage, n)
+		sigR1P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
@@ -541,11 +543,11 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 		}
 		sigStates[i] = st
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			if pm.GetTo() == nil {
+			pm := msg
+			if pm.To == nil {
 				sigR1Bcast[i] = pm
 			} else {
-				for _, to := range pm.GetTo() {
+				for _, to := range pm.To {
 					sigR1P2P[to.Index][i] = pm
 				}
 			}
@@ -553,57 +555,77 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 	}
 
 	// Run rounds 2-9 + finalize (same boilerplate)
-	r2P2P := make([][]tss.ParsedMessage, n)
-	for i := 0; i < n; i++ { r2P2P[i] = make([]tss.ParsedMessage, n) }
+	r2P2P := make([][]*tss.Message, n)
+	for i := 0; i < n; i++ {
+		r2P2P[i] = make([]*tss.Message, n)
+	}
 	for i := 0; i < n; i++ {
 		out, err := SignRound2(context.Background(), sigStates[i], sigR1P2P[i], sigR1Bcast)
-		if err != nil { t.Fatalf("R2[%d]: %v", i, err) }
+		if err != nil {
+			t.Fatalf("R2[%d]: %v", i, err)
+		}
 		for _, msg := range out.Messages {
-			pm := msg.(tss.ParsedMessage)
-			for _, to := range pm.GetTo() { r2P2P[to.Index][i] = pm }
+			pm := msg
+			for _, to := range pm.To {
+				r2P2P[to.Index][i] = pm
+			}
 		}
 	}
-	r3 := make([]tss.ParsedMessage, n)
+	r3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound3(context.Background(), sigStates[i], r2P2P[i])
-		if err != nil { t.Fatalf("R3[%d]: %v", i, err) }
-		r3[i] = out.Messages[0].(tss.ParsedMessage)
+		if err != nil {
+			t.Fatalf("R3[%d]: %v", i, err)
+		}
+		r3[i] = out.Messages[0]
 	}
-	r4 := make([]tss.ParsedMessage, n)
+	r4 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound4(sigStates[i], r3)
-		if err != nil { t.Fatalf("R4[%d]: %v", i, err) }
-		r4[i] = out.Messages[0].(tss.ParsedMessage)
+		if err != nil {
+			t.Fatalf("R4[%d]: %v", i, err)
+		}
+		r4[i] = out.Messages[0]
 	}
-	r5 := make([]tss.ParsedMessage, n)
+	r5 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound5(sigStates[i], r4)
-		if err != nil { t.Fatalf("R5[%d]: %v", i, err) }
-		r5[i] = out.Messages[0].(tss.ParsedMessage)
+		if err != nil {
+			t.Fatalf("R5[%d]: %v", i, err)
+		}
+		r5[i] = out.Messages[0]
 	}
-	r6 := make([]tss.ParsedMessage, n)
+	r6 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound6(sigStates[i])
-		if err != nil { t.Fatalf("R6[%d]: %v", i, err) }
-		r6[i] = out.Messages[0].(tss.ParsedMessage)
+		if err != nil {
+			t.Fatalf("R6[%d]: %v", i, err)
+		}
+		r6[i] = out.Messages[0]
 	}
-	r7 := make([]tss.ParsedMessage, n)
+	r7 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound7(sigStates[i], r5, r6)
-		if err != nil { t.Fatalf("R7[%d]: %v", i, err) }
-		r7[i] = out.Messages[0].(tss.ParsedMessage)
+		if err != nil {
+			t.Fatalf("R7[%d]: %v", i, err)
+		}
+		r7[i] = out.Messages[0]
 	}
-	r8 := make([]tss.ParsedMessage, n)
+	r8 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound8(sigStates[i])
-		if err != nil { t.Fatalf("R8[%d]: %v", i, err) }
-		r8[i] = out.Messages[0].(tss.ParsedMessage)
+		if err != nil {
+			t.Fatalf("R8[%d]: %v", i, err)
+		}
+		r8[i] = out.Messages[0]
 	}
-	r9 := make([]tss.ParsedMessage, n)
+	r9 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := SignRound9(sigStates[i], r7, r8)
-		if err != nil { t.Fatalf("R9[%d]: %v", i, err) }
-		r9[i] = out.Messages[0].(tss.ParsedMessage)
+		if err != nil {
+			t.Fatalf("R9[%d]: %v", i, err)
+		}
+		r9[i] = out.Messages[0]
 	}
 	for i := 0; i < n; i++ {
 		out, err := SignFinalize(sigStates[i], r9)

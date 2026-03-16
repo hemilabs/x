@@ -18,7 +18,7 @@ import (
 
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // ECPoint convenience helper
@@ -256,7 +256,7 @@ func (p *ECPoint) GobDecode(buf []byte) error {
 	x := make([]byte, length)
 	n, err := reader.Read(x)
 	if n != int(length) || err != nil {
-		return fmt.Errorf("gob decode failed: %v", err)
+		return fmt.Errorf("gob decode failed: %w", err)
 	}
 	if err := binary.Read(reader, binary.LittleEndian, &length); err != nil {
 		return err
@@ -267,7 +267,7 @@ func (p *ECPoint) GobDecode(buf []byte) error {
 	y := make([]byte, length)
 	n, err = reader.Read(y)
 	if n != int(length) || err != nil {
-		return fmt.Errorf("gob decode failed: %v", err)
+		return fmt.Errorf("gob decode failed: %w", err)
 	}
 
 	X := new(big.Int)

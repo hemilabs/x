@@ -13,7 +13,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 const (

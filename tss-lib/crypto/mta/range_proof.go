@@ -13,17 +13,12 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
 )
 
 const (
 	RangeProofAliceBytesParts = 6
-)
-
-var (
-	zero = big.NewInt(0)
-	one  = big.NewInt(1)
 )
 
 type (

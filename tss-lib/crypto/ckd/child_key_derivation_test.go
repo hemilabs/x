@@ -9,8 +9,9 @@ package ckd_test
 import (
 	"testing"
 
-	. "github.com/hemilabs/x/tss-lib/v2/crypto/ckd"
 	"github.com/btcsuite/btcd/btcec/v2"
+
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/ckd"
 )
 
 func TestPublicDerivation(t *testing.T) {

@@ -315,7 +315,6 @@ func runGenPrimeRoutine(
 				if q.ProbablyPrime(20) &&
 					isPocklingtonCriterionSatisfied(p) &&
 					q.BitLen() == qBitLen {
-
 					if sgp := (&GermainSafePrime{p: p, q: q}); sgp.Validate() {
 						primeCh <- &GermainSafePrime{p: p, q: q}
 					}

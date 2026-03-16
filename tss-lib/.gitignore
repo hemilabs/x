@@ -1,0 +1,6 @@
+test.log
+*.swp
+bin/
+.gocache/
+pkg/
+coverage.out

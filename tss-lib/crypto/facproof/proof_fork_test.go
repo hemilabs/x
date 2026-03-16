@@ -13,10 +13,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 var forkSession = []byte("facproof-fork-test")
@@ -32,7 +32,7 @@ func generateFacProofFixture(t *testing.T) (*ProofFac, *big.Int, *big.Int, *big.
 	// Generate Paillier keypair for N0.
 	sk, _, err := paillier.GenerateKeyPair(ctx, rand.Reader, 2048)
 	assert.NoError(t, err)
-	N0 := sk.PublicKey.N
+	N0 := sk.N
 	N0p := sk.P
 	N0q := sk.Q
 
@@ -148,7 +148,7 @@ func TestFacProofForkNilSession(t *testing.T) {
 
 	sk, _, err := paillier.GenerateKeyPair(ctx, rand.Reader, 2048)
 	assert.NoError(t, err)
-	N0 := sk.PublicKey.N
+	N0 := sk.N
 
 	primes := [2]*big.Int{
 		common.GetRandomPrimeInt(rand.Reader, 1024),

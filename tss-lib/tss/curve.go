@@ -15,6 +15,7 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 )
 
+// CurveName is a registered name for an elliptic curve.
 type CurveName string
 
 const (
@@ -36,6 +37,7 @@ func init() {
 	registry[Ed25519] = edwards.Edwards()
 }
 
+// RegisterCurve adds a named curve to the global registry.
 func RegisterCurve(name CurveName, curve elliptic.Curve) {
 	registry[name] = curve
 }
@@ -90,6 +92,7 @@ func S256() elliptic.Curve {
 	return s256k1.S256()
 }
 
+// Edwards returns the Edwards25519 curve for EdDSA.
 func Edwards() elliptic.Curve {
 	return edwards.Edwards()
 }

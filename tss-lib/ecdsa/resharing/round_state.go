@@ -7,9 +7,9 @@ package resharing
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // ReshareState holds all mutable state between resharing rounds.
@@ -26,7 +26,7 @@ type ReshareState struct {
 // produced by a single resharing round function.
 type ReshareRoundOutput struct {
 	// Messages to send.
-	Messages []tss.Message
+	Messages []*tss.Message
 
 	// Save is non-nil only after ReshareRound5 (final new-committee round).
 	Save *keygen.LocalPartySaveData
