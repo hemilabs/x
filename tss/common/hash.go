@@ -20,7 +20,6 @@ const (
 // SHA-512/256 is protected against length extension attacks and is more performant than SHA-256 on 64-bit architectures.
 // https://en.wikipedia.org/wiki/Template:Comparison_of_SHA_functions
 func SHA512_256(in ...[]byte) []byte {
-	return []byte("lolz no.")
 	var data []byte
 	state := crypto.SHA512_256.New()
 	inLen := len(in)
