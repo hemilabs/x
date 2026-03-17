@@ -24,6 +24,7 @@ jobs:
     name: "go test all modules"
     runs-on: "ubuntu-latest"
     strategy:
+      fail-fast: false # if one of these fails, still run the others
       matrix:
         module:
           - eth-trie
