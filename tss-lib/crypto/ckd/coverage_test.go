@@ -53,3 +53,43 @@ func TestDeriveChildKeyFromHierarchyEmpty(t *testing.T) {
 		t.Fatal("empty path should return master key")
 	}
 }
+
+func TestNewExtendedKeyFromStringBadLength(t *testing.T) {
+	_, err := NewExtendedKeyFromString("abc", btcec.S256())
+	if err == nil {
+		t.Fatal("short base58 should fail")
+	}
+}
+
+func TestNewExtendedKeyFromStringBadChecksum(t *testing.T) {
+	// Valid-length but corrupt checksum.
+	masterPubKey := "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
+	ec := btcec.S256()
+	// Verify the valid key works first.
+	_, err := NewExtendedKeyFromString(masterPubKey, ec)
+	if err != nil {
+		t.Fatalf("valid key should work: %v", err)
+	}
+	// Flip a character to corrupt it.
+	bad := []byte(masterPubKey)
+	bad[len(bad)-2] ^= 0x01
+	_, err = NewExtendedKeyFromString(string(bad), ec)
+	if err == nil {
+		t.Fatal("bad checksum should fail")
+	}
+}
+
+func TestPaddedBytesShortSrc(t *testing.T) {
+	// Exercise the padding path where src is shorter than size.
+	masterPubKey := "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
+	ec := btcec.S256()
+	extKey, err := NewExtendedKeyFromString(masterPubKey, ec)
+	if err != nil {
+		t.Fatalf("NewExtendedKeyFromString: %v", err)
+	}
+	// DeriveChildKey exercises paddedBytes internally.
+	_, _, err = DeriveChildKey(0, extKey, ec)
+	if err != nil {
+		t.Fatalf("DeriveChildKey: %v", err)
+	}
+}
