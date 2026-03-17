@@ -268,3 +268,55 @@ func TestAliceInitNilArgs(t *testing.T) {
 		t.Fatal("expected error for nil pkA")
 	}
 }
+
+// TestProofBobWCRoundTrip tests create → verify → bytes → from bytes for WC variant.
+func TestProofBobWCRoundTrip(t *testing.T) {
+	p := setup(t)
+	ec := tss.S256()
+	q := ec.Params().N
+
+	b := common.GetRandomPositiveInt(rand.Reader, q)
+	a := common.GetRandomPositiveInt(rand.Reader, q)
+	B := crypto.ScalarBaseMult(ec, b) // witness
+
+	cA, _, err := p.pkA.EncryptAndReturnRandomness(rand.Reader, a)
+	if err != nil {
+		t.Fatalf("Encrypt(a): %v", err)
+	}
+
+	beta := common.GetRandomPositiveInt(rand.Reader, q)
+	cBeta, rBeta, err := p.pkA.EncryptAndReturnRandomness(rand.Reader, beta)
+	if err != nil {
+		t.Fatalf("Encrypt(beta): %v", err)
+	}
+	N2 := new(big.Int).Mul(p.pkA.N, p.pkA.N)
+	c2 := new(big.Int).Exp(cA, b, N2)
+	c2.Mul(c2, cBeta)
+	c2.Mod(c2, N2)
+
+	pf, err := mta.ProveBobWC(testSession, ec, p.pkA,
+		p.NTildeA, p.h1A, p.h2A, cA, c2, b, beta, rBeta, B, rand.Reader)
+	if err != nil {
+		t.Fatalf("ProveBobWC: %v", err)
+	}
+	if !pf.Verify(testSession, ec, p.pkA, p.NTildeA, p.h1A, p.h2A, cA, c2, B) {
+		t.Fatal("ProofBobWC verify failed")
+	}
+	if !pf.ValidateBasic() {
+		t.Fatal("ValidateBasic failed")
+	}
+
+	// Bytes round-trip
+	bzs := pf.Bytes()
+	pf2, err := mta.ProofBobWCFromBytes(ec, bzs[:])
+	if err != nil {
+		t.Fatalf("ProofBobWCFromBytes: %v", err)
+	}
+	if !pf2.Verify(testSession, ec, p.pkA, p.NTildeA, p.h1A, p.h2A, cA, c2, B) {
+		t.Fatal("ProofBobWC verify after round-trip failed")
+	}
+	if !pf2.ValidateBasic() {
+		t.Fatal("ValidateBasic after round-trip failed")
+	}
+	t.Log("ProofBobWC round-trip OK")
+}
