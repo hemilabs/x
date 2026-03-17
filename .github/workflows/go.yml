@@ -41,7 +41,7 @@ jobs:
 
       - name: "go get"
         working-directory: ${{ matrix.module }}
-        run: go get ./...
+        run: go get -t ./...
 
       - name: "go test"
         working-directory: ${{ matrix.module }}
