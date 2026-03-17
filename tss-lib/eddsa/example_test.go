@@ -3,6 +3,7 @@
 // which can be found in the LICENSE file.
 
 //go:build tssexamples
+// +build tssexamples
 
 // Package eddsa_test contains the canonical usage examples for the
 // tss-lib v3 EdDSA round function API.

@@ -48,6 +48,16 @@ linters:
         text: "QF1001:" # "could apply De Morgan's law"
       - linters: [ "staticcheck" ]
         text: "QF1007:" # "could merge conditional assignment"
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*elliptic\\." # tss-lib requires raw curve arithmetic (Add, ScalarMult, etc.)
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.Add has been deprecated" # elliptic.Curve.Add
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.ScalarMult has been deprecated" # elliptic.Curve.ScalarMult
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.ScalarBaseMult has been deprecated" # elliptic.Curve.ScalarBaseMult
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.IsOnCurve has been deprecated" # elliptic.Curve.IsOnCurve
 
 formatters:
   enable:
