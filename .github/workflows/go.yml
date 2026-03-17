@@ -1,0 +1,44 @@
+# Copyright (c) 2024 Hemi Labs, Inc.
+# Use of this source code is governed by the MIT License,
+# which can be found in the LICENSE file.
+
+# GitHub Actions workflow to lint, build and test.
+name: "Go"
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: "go-${{ github.workflow }}-${{ github.event.number || github.ref }}"
+  cancel-in-progress: "${{ github.event_name == 'pull_request' }}"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: "go test all modules"
+    runs-on: "ubuntu-latest"
+    strategy:
+      matrix:
+        module:
+          - eth-trie
+          - merkle
+          - tss
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: "Setup Go"
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        working-directory: "${{ matrix.module }}"
+        with:
+          go-version-file: "go.mod"
+
+      - name: "go test"
+        working-directory: "${{ matrix.module }}"
+        run: go test -v ./...
