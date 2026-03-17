@@ -10,7 +10,7 @@ export GOCACHE=$(PROJECTPATH)/.gocache
 export GOPKG=$(PROJECTPATH)/pkg
 
 # renovate: datasource=github-releases depName=golangci/golangci-lint versioning=semver
-GOLANGCI_LINT_VERSION="v2.7.2"
+GOLANGCI_LINT_VERSION="v2.11.3"
 # renovate: datasource=github-releases depName=joshuasing/golicenser versioning=semver
 GOLICENSER_VERSION="v0.3.1"
 # renovate: datasource=github-releases depName=mvdan/gofumpt versioning=semver
