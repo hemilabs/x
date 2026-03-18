@@ -156,7 +156,7 @@ func TestGeneratePreParamsResultValidates(t *testing.T) {
 
 	// Verify all fields are populated
 	assert.NotNil(t, preParams.PaillierSK)
-	assert.NotNil(t, preParams.PaillierSK.PublicKey.N)
+	assert.NotNil(t, preParams.PaillierSK.N)
 	assert.NotNil(t, preParams.PaillierSK.LambdaN)
 	assert.NotNil(t, preParams.NTildei)
 	assert.NotNil(t, preParams.H1i)
@@ -177,7 +177,7 @@ func TestGeneratePreParamsResultValidates(t *testing.T) {
 	assert.GreaterOrEqual(t, preParams.NTildei.BitLen(), 2000, "NTilde should be ~2048 bits")
 
 	// Paillier modulus should be 2048 bits
-	assert.Equal(t, paillierModulusLen, preParams.PaillierSK.PublicKey.N.BitLen(),
+	assert.Equal(t, paillierModulusLen, preParams.PaillierSK.N.BitLen(),
 		"Paillier modulus should be exactly 2048 bits")
 }
 

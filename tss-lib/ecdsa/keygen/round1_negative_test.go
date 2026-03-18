@@ -71,10 +71,10 @@ func TestRound1WithInvalidPreParamsGeneratesFresh(t *testing.T) {
 	}
 
 	// Verify the generated pre-params are valid.
-	if !state.save.LocalPreParams.Validate() {
+	if !state.save.Validate() {
 		t.Fatal("freshly generated preParams should pass Validate()")
 	}
-	if !state.save.LocalPreParams.ValidateWithProof() {
+	if !state.save.ValidateWithProof() {
 		t.Fatal("freshly generated preParams should pass ValidateWithProof()")
 	}
 

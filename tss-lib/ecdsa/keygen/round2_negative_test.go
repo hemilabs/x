@@ -232,8 +232,8 @@ func TestRound2RejectsEvenNTilde(t *testing.T) {
 	msgs := cloneR1Msgs(fix.allR1)
 	bad := cloneR1MsgContent(msgs[victimIdx])
 	nt := bad.Content.(*KGRound1Message).NTilde
-	nt.SetBit(nt, 0, 0)       // make even
-	nt.SetBit(nt, 2047, 1)    // keep 2048 bits
+	nt.SetBit(nt, 0, 0)    // make even
+	nt.SetBit(nt, 2047, 1) // keep 2048 bits
 	msgs[victimIdx] = bad
 	expectRound2Error(t, fix, msgs, "even NTildej")
 }

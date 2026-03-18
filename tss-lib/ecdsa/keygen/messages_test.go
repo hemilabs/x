@@ -111,8 +111,8 @@ func TestValidateBasicKGRound2Message2(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name   string
-		msg    *KGRound2Message2
+		name string
+		msg  *KGRound2Message2
 	}{
 		{"empty struct", &KGRound2Message2{}},
 		{"nil decommitment", &KGRound2Message2{DeCommitment: nil}},
@@ -170,7 +170,7 @@ func TestNewKGRound1MessageFields(t *testing.T) {
 	pIDs := tss.GenerateTestPartyIDs(3)
 	from := pIDs[0]
 
-	ct := cmt.HashCommitment(big.NewInt(42))
+	ct := big.NewInt(42)
 	pk := &paillier.PublicKey{N: big.NewInt(12345)}
 	nTilde := big.NewInt(100)
 	h1 := big.NewInt(200)

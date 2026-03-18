@@ -25,7 +25,7 @@ import (
 // safe primes.  Creating these is slow (~seconds) so tests that need them
 // should call generateDLNTestParams once and reuse the result.
 type dlnTestParams struct {
-	H1, H2 *big.Int
+	H1, H2  *big.Int
 	Alpha   *big.Int // discrete log: H2 = H1^Alpha mod N
 	Beta    *big.Int // modular inverse of Alpha mod p*q
 	P, Q    *big.Int // Sophie Germain primes
