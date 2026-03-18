@@ -204,50 +204,191 @@ func TestValidatePreParamsNilFields(t *testing.T) {
 	}
 }
 
-func TestValidateWithProofNilAlpha(t *testing.T) {
-	pp := LocalPreParams{
-		PaillierSK: &paillier.PrivateKey{PublicKey: paillier.PublicKey{N: big.NewInt(1)}},
-		NTildei:    big.NewInt(1),
-		H1i:        big.NewInt(1),
-		H2i:        big.NewInt(1),
-		// Alpha nil
-		Beta: big.NewInt(1),
-		P:    big.NewInt(1),
-		Q:    big.NewInt(2),
+// validPreParams builds a minimal LocalPreParams that passes ValidateWithProof
+// using small safe primes. Sophie Germain primes: P=5, Q=11.
+// Safe primes: safeP=2*5+1=11, safeQ=2*11+1=23. NTilde=11*23=253.
+// H1=4 (=2^2 mod 253), Alpha=3, H2=H1^Alpha mod NTilde=4^3 mod 253=64.
+// PaillierSK.P and PaillierSK.Q are set to dummy non-nil values (not used
+// algebraically by ValidateWithProof, only nil-checked).
+func validPreParams() LocalPreParams {
+	return LocalPreParams{
+		PaillierSK: &paillier.PrivateKey{
+			PublicKey: paillier.PublicKey{N: big.NewInt(1)},
+			P:         big.NewInt(7),
+			Q:         big.NewInt(11),
+		},
+		NTildei: big.NewInt(253), // 11 * 23
+		H1i:     big.NewInt(4),   // f1^2 mod 253, f1=2
+		H2i:     big.NewInt(64),  // 4^3 mod 253
+		Alpha:   big.NewInt(3),
+		Beta:    big.NewInt(1),
+		P:       big.NewInt(5),  // Sophie Germain prime
+		Q:       big.NewInt(11), // Sophie Germain prime
 	}
+}
+
+// --- ValidateWithProof: happy path ---
+
+func TestValidateWithProofHappyPath(t *testing.T) {
+	pp := validPreParams()
+	if !pp.ValidateWithProof() {
+		t.Fatal("valid pre-params should pass ValidateWithProof")
+	}
+}
+
+// --- ValidateWithProof: nil field tests (one per nil-checked field) ---
+
+func TestValidateWithProofNilPaillierSK(t *testing.T) {
+	pp := validPreParams()
+	pp.PaillierSK = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil PaillierSK should be invalid")
+	}
+}
+
+func TestValidateWithProofNilPaillierSKP(t *testing.T) {
+	pp := validPreParams()
+	pp.PaillierSK.P = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil PaillierSK.P should be invalid")
+	}
+}
+
+func TestValidateWithProofNilPaillierSKQ(t *testing.T) {
+	pp := validPreParams()
+	pp.PaillierSK.Q = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil PaillierSK.Q should be invalid")
+	}
+}
+
+func TestValidateWithProofNilAlpha(t *testing.T) {
+	pp := validPreParams()
+	pp.Alpha = nil
 	if pp.ValidateWithProof() {
 		t.Fatal("nil Alpha should be invalid")
 	}
 }
 
-func TestValidateWithProofPEqualsQ(t *testing.T) {
-	pp := LocalPreParams{
-		PaillierSK: &paillier.PrivateKey{PublicKey: paillier.PublicKey{N: big.NewInt(1)}},
-		NTildei:    big.NewInt(1),
-		H1i:        big.NewInt(1),
-		H2i:        big.NewInt(1),
-		Alpha:      big.NewInt(1),
-		Beta:       big.NewInt(1),
-		P:          big.NewInt(5),
-		Q:          big.NewInt(5),
-	}
+func TestValidateWithProofNilBeta(t *testing.T) {
+	pp := validPreParams()
+	pp.Beta = nil
 	if pp.ValidateWithProof() {
-		t.Fatal("P == Q should be invalid")
+		t.Fatal("nil Beta should be invalid")
+	}
+}
+
+func TestValidateWithProofNilP(t *testing.T) {
+	pp := validPreParams()
+	pp.P = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil P should be invalid")
+	}
+}
+
+func TestValidateWithProofNilQ(t *testing.T) {
+	pp := validPreParams()
+	pp.Q = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil Q should be invalid")
+	}
+}
+
+func TestValidateWithProofNilNTilde(t *testing.T) {
+	pp := validPreParams()
+	pp.NTildei = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil NTildei should be invalid")
+	}
+}
+
+func TestValidateWithProofNilH1(t *testing.T) {
+	pp := validPreParams()
+	pp.H1i = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil H1i should be invalid")
+	}
+}
+
+func TestValidateWithProofNilH2(t *testing.T) {
+	pp := validPreParams()
+	pp.H2i = nil
+	if pp.ValidateWithProof() {
+		t.Fatal("nil H2i should be invalid")
+	}
+}
+
+// --- ValidateWithProof: algebraic consistency tests ---
+
+func TestValidateWithProofPEqualsQ(t *testing.T) {
+	pp := validPreParams()
+	// Set Q = P (both = 5). To truly isolate the P==Q guard, also fix
+	// NTilde and H2 so the NTilde and H2 checks would PASS if the P==Q
+	// guard didn't exist: NTilde = (2*5+1)^2 = 121, H2 = H1^Alpha mod 121.
+	pp.Q = new(big.Int).Set(pp.P) // Q = 5 = P
+	pp.NTildei = big.NewInt(121)  // (2*5+1)*(2*5+1) = 11*11
+	// H2 = H1^Alpha mod NTilde = 4^3 mod 121 = 64
+	pp.H2i = new(big.Int).Exp(pp.H1i, pp.Alpha, pp.NTildei)
+	if pp.ValidateWithProof() {
+		t.Fatal("P == Q should be invalid even when NTilde and H2 are consistent")
 	}
 }
 
 func TestValidateWithProofBadNTilde(t *testing.T) {
-	pp := LocalPreParams{
-		PaillierSK: &paillier.PrivateKey{PublicKey: paillier.PublicKey{N: big.NewInt(1)}},
-		NTildei:    big.NewInt(999), // wrong
-		H1i:        big.NewInt(1),
-		H2i:        big.NewInt(1),
-		Alpha:      big.NewInt(1),
-		Beta:       big.NewInt(1),
-		P:          big.NewInt(5),
-		Q:          big.NewInt(7),
-	}
+	pp := validPreParams()
+	pp.NTildei = big.NewInt(999) // wrong: expected 253
 	if pp.ValidateWithProof() {
 		t.Fatal("wrong NTilde should be invalid")
+	}
+}
+
+func TestValidateWithProofBadH2(t *testing.T) {
+	pp := validPreParams()
+	// H2 should be H1^Alpha mod NTilde = 4^3 mod 253 = 64.
+	// Set it to something else to trigger the final check.
+	pp.H2i = big.NewInt(65)
+	if pp.ValidateWithProof() {
+		t.Fatal("H2 != H1^Alpha mod NTilde should be invalid")
+	}
+}
+
+// --- Validate: individual nil field tests ---
+
+func TestValidateNilPaillierSK(t *testing.T) {
+	pp := validPreParams()
+	pp.PaillierSK = nil
+	if pp.Validate() {
+		t.Fatal("nil PaillierSK should fail Validate")
+	}
+}
+
+func TestValidateNilNTilde(t *testing.T) {
+	pp := validPreParams()
+	pp.NTildei = nil
+	if pp.Validate() {
+		t.Fatal("nil NTildei should fail Validate")
+	}
+}
+
+func TestValidateNilH1(t *testing.T) {
+	pp := validPreParams()
+	pp.H1i = nil
+	if pp.Validate() {
+		t.Fatal("nil H1i should fail Validate")
+	}
+}
+
+func TestValidateNilH2(t *testing.T) {
+	pp := validPreParams()
+	pp.H2i = nil
+	if pp.Validate() {
+		t.Fatal("nil H2i should fail Validate")
+	}
+}
+
+func TestValidateHappyPath(t *testing.T) {
+	pp := validPreParams()
+	if !pp.Validate() {
+		t.Fatal("valid pre-params should pass Validate")
 	}
 }
