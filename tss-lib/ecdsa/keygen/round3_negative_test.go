@@ -24,9 +24,9 @@ const (
 // round3TestFixture holds all state needed to call Round3 for a single
 // party (party 0) with valid Round2 messages from the other parties.
 type round3TestFixture struct {
-	states    []*KeygenState
-	allR2P2P [][]*tss.Message // allR2P2P[receiver][sender]
-	allR2Bcast []*tss.Message  // allR2Bcast[sender]
+	states     []*KeygenState
+	allR2P2P   [][]*tss.Message // allR2P2P[receiver][sender]
+	allR2Bcast []*tss.Message   // allR2Bcast[sender]
 }
 
 // setupRound3Fixture runs Round1 + Round2 for a 3-party keygen and

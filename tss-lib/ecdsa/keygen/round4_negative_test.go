@@ -6,6 +6,7 @@ package keygen
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"strings"
 	"testing"
@@ -239,7 +240,8 @@ func TestRound4HonestPassesForAllParties(t *testing.T) {
 
 // isError is a helper that uses errors.As to unwrap to a *tss.Error.
 func isError(err error, target interface{}) bool {
-	tssErr, ok := err.(*tss.Error)
+	tssErr := &tss.Error{}
+	ok := errors.As(err, &tssErr)
 	if ok {
 		*(target.(**tss.Error)) = tssErr
 		return true
