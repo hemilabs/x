@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/binance-chain/edwards25519/edwards25519"
 	decredEdwards "github.com/decred/dcrd/dcrec/edwards/v2"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
@@ -140,11 +139,11 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 	params := state.params
 	temp := &state.temp
 	i := params.PartyID().Index
+	ec := params.EC()
+	N := ec.Params().N
 
-	// Init R with own Ri.
-	riBytes := bigIntToEncodedBytes(temp.ri)
-	var R edwards25519.ExtendedGroupElement
-	edwards25519.GeScalarMultBase(&R, riBytes)
+	// Init R with own Ri = ri·G.
+	Rx, Ry := ec.ScalarBaseMult(temp.ri.Bytes())
 
 	// Verify each party's decommitment + proof, accumulate R.
 	for j, Pj := range params.Parties().IDs() {
@@ -160,7 +159,7 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 			return nil, tss.NewError(errors.New("de-commitment verify failed"), TaskName, 3, params.PartyID(), Pj)
 		}
 
-		Rj, err := crypto.NewECPoint(params.EC(), coordinates[0], coordinates[1])
+		Rj, err := crypto.NewECPoint(ec, coordinates[0], coordinates[1])
 		if err != nil {
 			return nil, tss.NewError(fmt.Errorf("NewECPoint(Rj): %w", err), TaskName, 3, params.PartyID(), Pj)
 		}
@@ -173,22 +172,16 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 			return nil, tss.NewError(errors.New("schnorr proof verify failed"), TaskName, 3, params.PartyID(), Pj)
 		}
 
-		extendedRj := ecPointToExtendedElement(params.EC(), Rj.X(), Rj.Y(), params.Rand())
-		R = addExtendedElements(R, extendedRj)
+		Rx, Ry = ec.Add(Rx, Ry, Rj.X(), Rj.Y())
 	}
 
-	// Compute lambda = H(R || A || M).
-	var encodedR [32]byte
-	R.ToBytes(&encodedR)
+	// Encode R in Ed25519 compressed form.
+	encodedR := ecPointToEncodedBytes(Rx, Ry)
 
-	// R identity check.
-	isIdentity := encodedR[0] == 0x01
-	for k := 1; k < 32 && isIdentity; k++ {
-		if encodedR[k] != 0x00 {
-			isIdentity = false
-		}
-	}
-	if isIdentity {
+	// R identity check: the identity encodes as (0, 1) → LE bytes
+	// [0x01, 0x00, ...].
+	Rpoint, err := crypto.NewECPoint(ec, Rx, Ry)
+	if err != nil || Rpoint.IsIdentity() {
 		return nil, tss.NewError(errors.New("r is the identity point"), TaskName, 3, params.PartyID())
 	}
 
@@ -207,21 +200,19 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 
 	var lambda [64]byte
 	h.Sum(lambda[:0])
-	var lambdaReduced [32]byte
-	edwards25519.ScReduce(&lambdaReduced, &lambda)
+	lambdaReduced := scReduce(&lambda, N)
 
-	// Compute si = ri + lambda*wi.
-	var localS [32]byte
-	edwards25519.ScMulAdd(&localS, &lambdaReduced, bigIntToEncodedBytes(temp.wi), riBytes)
+	// Compute si = lambda*wi + ri mod N.
+	localS := scMulAdd(lambdaReduced, temp.wi, temp.ri, N)
 
 	// Clear signing nonces.
 	temp.ri = new(big.Int)
 	temp.wi = new(big.Int)
 
-	temp.si = &localS
-	temp.r = encodedBytesToBigInt(&encodedR)
+	temp.si = localS
+	temp.r = encodedBytesToBigInt(encodedR)
 
-	r3msg := NewSignRound3Message(params.PartyID(), encodedBytesToBigInt(&localS))
+	r3msg := NewSignRound3Message(params.PartyID(), localS)
 	temp.signRound3Messages[i] = r3msg
 
 	return &SignRoundOutput{Messages: []*tss.Message{r3msg}}, nil
@@ -250,22 +241,19 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 				fmt.Errorf("party %d sent s_i outside [0, N)", j),
 				TaskName, 4, params.PartyID(), params.Parties().IDs()[j])
 		}
-		sjBytes := bigIntToEncodedBytes(sj)
-		var tmpSumS [32]byte
-		edwards25519.ScMulAdd(&tmpSumS, sumS, bigIntToEncodedBytes(big.NewInt(1)), sjBytes)
-		sumS = &tmpSumS
+		sumS = new(big.Int).Mod(new(big.Int).Add(sumS, sj), N)
 	}
-	s := encodedBytesToBigInt(sumS)
 
-	if s.Sign() == 0 {
+	if sumS.Sign() == 0 {
 		return nil, fmt.Errorf("accumulated S is zero: malicious share detected")
 	}
 
 	// Build signature data.
 	data := state.data
-	data.Signature = append(bigIntToEncodedBytes(temp.r)[:], sumS[:]...)
+	encodedSumS := bigIntToEncodedBytes(sumS)
+	data.Signature = append(bigIntToEncodedBytes(temp.r)[:], encodedSumS[:]...)
 	data.R = temp.r.Bytes()
-	data.S = s.Bytes()
+	data.S = sumS.Bytes()
 	if temp.fullBytesLen == 0 {
 		data.M = temp.m.Bytes()
 	} else {
@@ -280,7 +268,7 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 		X:     state.key.EDDSAPub.X(),
 		Y:     state.key.EDDSAPub.Y(),
 	}
-	if !decredEdwards.Verify(&pk, data.M, temp.r, s) {
+	if !decredEdwards.Verify(&pk, data.M, temp.r, sumS) {
 		return nil, fmt.Errorf("signature verification failed")
 	}
 

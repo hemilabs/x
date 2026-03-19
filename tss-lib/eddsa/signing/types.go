@@ -29,7 +29,7 @@ type localTempData struct {
 	cjs      []*big.Int
 
 	// round 3
-	si           *[32]byte
+	si           *big.Int
 	r            *big.Int
 	m            *big.Int
 	fullBytesLen int
