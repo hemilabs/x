@@ -170,7 +170,7 @@ func NewDGRound3Message2(
 	}
 }
 
-// DGRound4Message1 is P2P from new to old: FacProof.
+// DGRound4Message1 is P2P from new to new: FacProof.
 type DGRound4Message1 struct {
 	FacProof   *facproof.ProofFac // nil in SNARK mode
 	ReceiverID []byte
