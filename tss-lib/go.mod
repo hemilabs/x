@@ -3,7 +3,6 @@ module github.com/hemilabs/x/tss-lib/v3
 go 1.25
 
 require (
-	github.com/binance-chain/edwards25519 v0.0.0-20200305024217-f36fc4b53d43
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.3
