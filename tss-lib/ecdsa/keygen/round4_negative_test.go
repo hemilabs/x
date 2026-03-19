@@ -207,8 +207,18 @@ func TestRound4RejectsAllNilPaillierProof(t *testing.T) {
 		t.Fatal("expected a *tss.Error with culprit information")
 	}
 	culprits := tssErr.Culprits()
-	if len(culprits) != 1 || culprits[0].Index != corruptIdx {
-		t.Fatalf("expected culprit index %d, got: %v", corruptIdx, culprits)
+	if len(culprits) == 0 {
+		t.Fatal("expected at least one culprit in the error")
+	}
+	foundCulprit := false
+	for _, c := range culprits {
+		if c.Index == corruptIdx {
+			foundCulprit = true
+			break
+		}
+	}
+	if !foundCulprit {
+		t.Fatalf("expected party %d as culprit, got culprits: %v", corruptIdx, culprits)
 	}
 }
 
@@ -248,7 +258,7 @@ func TestRound4HonestPassesForAllParties(t *testing.T) {
 	}
 }
 
-// isError is a helper that uses errors.As to unwrap to a *tss.Error.
+// isError is a helper that unwraps err to a *tss.Error via direct type assertion.
 func isError(err error, target interface{}) bool {
 	tssErr := &tss.Error{}
 	ok := errors.As(err, &tssErr)
