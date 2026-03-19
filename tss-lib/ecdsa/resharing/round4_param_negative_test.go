@@ -14,8 +14,9 @@ import (
 )
 
 // expectRound4ParamError calls ReshareRound4 on new-committee party 0 with the
-// given R2 messages and asserts that the error contains the expected substring.
-func expectRound4ParamError(t *testing.T, fix *ReshareFixture, msgs []*tss.Message, wantErrSubstr string) {
+// given R2 messages and asserts that the error contains the expected substring
+// and that the culprit has the expected index.
+func expectRound4ParamError(t *testing.T, fix *ReshareFixture, msgs []*tss.Message, wantErrSubstr string, wantCulpritIdx int) {
 	t.Helper()
 	_, err := ReshareRound4(context.Background(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
 	if err == nil {
@@ -24,6 +25,7 @@ func expectRound4ParamError(t *testing.T, fix *ReshareFixture, msgs []*tss.Messa
 	if !strings.Contains(err.Error(), wantErrSubstr) {
 		t.Fatalf("expected error containing %q, got: %v", wantErrSubstr, err)
 	}
+	requireCulprit(t, err, wantCulpritIdx)
 }
 
 // r4VictimIdx is the index of the party whose R2 message we corrupt.
@@ -38,7 +40,7 @@ func TestRound4RejectsPaillierNInsufficientBits(t *testing.T) {
 	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
 	bad.Content.(*DGRound2Message1).PaillierPK.N = big.NewInt(1023) // tiny
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "paillier N insufficient bits")
+	expectRound4ParamError(t, fix, msgs, "paillier N insufficient bits", r4VictimIdx)
 }
 
 func TestRound4RejectsEvenPaillierN(t *testing.T) {
@@ -49,7 +51,7 @@ func TestRound4RejectsEvenPaillierN(t *testing.T) {
 	n.SetBit(n, 0, 0)    // make even
 	n.SetBit(n, 2047, 1) // keep >= 2048 bits
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "even paillier N")
+	expectRound4ParamError(t, fix, msgs, "even paillier N", r4VictimIdx)
 }
 
 func TestRound4RejectsPrimePaillierN(t *testing.T) {
@@ -74,7 +76,7 @@ func TestRound4RejectsPrimePaillierN(t *testing.T) {
 	}
 	bad.Content.(*DGRound2Message1).PaillierPK.N = prime
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "prime paillier N")
+	expectRound4ParamError(t, fix, msgs, "prime paillier N", r4VictimIdx)
 }
 
 func TestRound4RejectsPerfectSquarePaillierN(t *testing.T) {
@@ -93,7 +95,7 @@ func TestRound4RejectsPerfectSquarePaillierN(t *testing.T) {
 	}
 	bad.Content.(*DGRound2Message1).PaillierPK.N = pp
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "perfect-square paillier N")
+	expectRound4ParamError(t, fix, msgs, "perfect-square paillier N", r4VictimIdx)
 }
 
 func TestRound4RejectsH1EqualsH2(t *testing.T) {
@@ -103,7 +105,7 @@ func TestRound4RejectsH1EqualsH2(t *testing.T) {
 	content := bad.Content.(*DGRound2Message1)
 	content.H2 = new(big.Int).Set(content.H1) // H1 == H2
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "h1j == h2j")
+	expectRound4ParamError(t, fix, msgs, "h1j == h2j", r4VictimIdx)
 }
 
 func TestRound4RejectsH1IsOne(t *testing.T) {
@@ -112,7 +114,7 @@ func TestRound4RejectsH1IsOne(t *testing.T) {
 	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
 	bad.Content.(*DGRound2Message1).H1 = big.NewInt(1)
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "h1j or h2j is 1")
+	expectRound4ParamError(t, fix, msgs, "h1j or h2j is 1", r4VictimIdx)
 }
 
 func TestRound4RejectsH2IsOne(t *testing.T) {
@@ -121,7 +123,7 @@ func TestRound4RejectsH2IsOne(t *testing.T) {
 	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
 	bad.Content.(*DGRound2Message1).H2 = big.NewInt(1)
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "h1j or h2j is 1")
+	expectRound4ParamError(t, fix, msgs, "h1j or h2j is 1", r4VictimIdx)
 }
 
 func TestRound4RejectsNTildeInsufficientBits(t *testing.T) {
@@ -130,7 +132,7 @@ func TestRound4RejectsNTildeInsufficientBits(t *testing.T) {
 	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
 	bad.Content.(*DGRound2Message1).NTilde = big.NewInt(999) // tiny
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "NTildej insufficient bits")
+	expectRound4ParamError(t, fix, msgs, "NTildej insufficient bits", r4VictimIdx)
 }
 
 func TestRound4RejectsEvenNTilde(t *testing.T) {
@@ -141,7 +143,7 @@ func TestRound4RejectsEvenNTilde(t *testing.T) {
 	nt.SetBit(nt, 0, 0)    // make even
 	nt.SetBit(nt, 2047, 1) // keep >= 2048 bits
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "even NTildej")
+	expectRound4ParamError(t, fix, msgs, "even NTildej", r4VictimIdx)
 }
 
 func TestRound4RejectsPrimeNTilde(t *testing.T) {
@@ -162,7 +164,7 @@ func TestRound4RejectsPrimeNTilde(t *testing.T) {
 			"15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
 	bad.Content.(*DGRound2Message1).NTilde = prime
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "prime NTildej")
+	expectRound4ParamError(t, fix, msgs, "prime NTildej", r4VictimIdx)
 }
 
 func TestRound4RejectsPerfectSquareNTilde(t *testing.T) {
@@ -180,7 +182,7 @@ func TestRound4RejectsPerfectSquareNTilde(t *testing.T) {
 	}
 	bad.Content.(*DGRound2Message1).NTilde = pp
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "perfect-square NTildej")
+	expectRound4ParamError(t, fix, msgs, "perfect-square NTildej", r4VictimIdx)
 }
 
 func TestRound4RejectsPaillierNEqualsNTilde(t *testing.T) {
@@ -190,7 +192,7 @@ func TestRound4RejectsPaillierNEqualsNTilde(t *testing.T) {
 	content := bad.Content.(*DGRound2Message1)
 	content.NTilde = new(big.Int).Set(content.PaillierPK.N)
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "paillier N == NTilde")
+	expectRound4ParamError(t, fix, msgs, "paillier N == NTilde", r4VictimIdx)
 }
 
 func TestRound4RejectsH1NotCoprimeNTilde(t *testing.T) {
@@ -204,7 +206,7 @@ func TestRound4RejectsH1NotCoprimeNTilde(t *testing.T) {
 	safeP.Add(safeP, big.NewInt(1))
 	content.H1 = safeP
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "h1j not coprime with NTildej")
+	expectRound4ParamError(t, fix, msgs, "h1j not coprime with NTildej", r4VictimIdx)
 }
 
 func TestRound4RejectsH2NotCoprimeNTilde(t *testing.T) {
@@ -218,7 +220,7 @@ func TestRound4RejectsH2NotCoprimeNTilde(t *testing.T) {
 	safeP.Add(safeP, big.NewInt(1))
 	content.H2 = safeP
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "h2j not coprime with NTildej")
+	expectRound4ParamError(t, fix, msgs, "h2j not coprime with NTildej", r4VictimIdx)
 }
 
 func TestRound4RejectsDuplicateH1(t *testing.T) {
@@ -229,7 +231,7 @@ func TestRound4RejectsDuplicateH1(t *testing.T) {
 	party0Content := msgs[0].Content.(*DGRound2Message1)
 	bad.Content.(*DGRound2Message1).H1 = new(big.Int).Set(party0Content.H1)
 	msgs[2] = bad
-	expectRound4ParamError(t, fix, msgs, "duplicate h1j")
+	expectRound4ParamError(t, fix, msgs, "duplicate h1j", 2)
 }
 
 func TestRound4RejectsDuplicateH2(t *testing.T) {
@@ -240,7 +242,7 @@ func TestRound4RejectsDuplicateH2(t *testing.T) {
 	party0Content := msgs[0].Content.(*DGRound2Message1)
 	bad.Content.(*DGRound2Message1).H2 = new(big.Int).Set(party0Content.H2)
 	msgs[2] = bad
-	expectRound4ParamError(t, fix, msgs, "duplicate h2j")
+	expectRound4ParamError(t, fix, msgs, "duplicate h2j", 2)
 }
 
 func TestRound4RejectsDuplicatePaillierN(t *testing.T) {
@@ -251,7 +253,7 @@ func TestRound4RejectsDuplicatePaillierN(t *testing.T) {
 	party0Content := msgs[0].Content.(*DGRound2Message1)
 	bad.Content.(*DGRound2Message1).PaillierPK.N = new(big.Int).Set(party0Content.PaillierPK.N)
 	msgs[2] = bad
-	expectRound4ParamError(t, fix, msgs, "duplicate modulus (paillier N)")
+	expectRound4ParamError(t, fix, msgs, "duplicate modulus (paillier N)", 2)
 }
 
 func TestRound4RejectsDuplicateNTilde(t *testing.T) {
@@ -262,7 +264,7 @@ func TestRound4RejectsDuplicateNTilde(t *testing.T) {
 	party0Content := msgs[0].Content.(*DGRound2Message1)
 	bad.Content.(*DGRound2Message1).NTilde = new(big.Int).Set(party0Content.NTilde)
 	msgs[2] = bad
-	expectRound4ParamError(t, fix, msgs, "duplicate modulus (NTilde)")
+	expectRound4ParamError(t, fix, msgs, "duplicate modulus (NTilde)", 2)
 }
 
 // TestRound4RejectsCrossDuplicateH1H2 verifies that the shared h1H2Map
@@ -276,7 +278,7 @@ func TestRound4RejectsCrossDuplicateH1H2(t *testing.T) {
 	party0Content := msgs[0].Content.(*DGRound2Message1)
 	bad.Content.(*DGRound2Message1).H1 = new(big.Int).Set(party0Content.H2)
 	msgs[2] = bad
-	expectRound4ParamError(t, fix, msgs, "duplicate h1j")
+	expectRound4ParamError(t, fix, msgs, "duplicate h1j", 2)
 }
 
 // TestRound4RejectsCrossPartyPaillierNEqualsNTilde verifies that the merged
@@ -290,7 +292,7 @@ func TestRound4RejectsCrossPartyPaillierNEqualsNTilde(t *testing.T) {
 	party0Content := msgs[0].Content.(*DGRound2Message1)
 	bad.Content.(*DGRound2Message1).PaillierPK.N = new(big.Int).Set(party0Content.NTilde)
 	msgs[2] = bad
-	expectRound4ParamError(t, fix, msgs, "duplicate modulus (paillier N)")
+	expectRound4ParamError(t, fix, msgs, "duplicate modulus (paillier N)", 2)
 }
 
 // TestRound4RejectsCrossPartyNTildeEqualsPaillierN verifies the reverse
@@ -303,5 +305,5 @@ func TestRound4RejectsCrossPartyNTildeEqualsPaillierN(t *testing.T) {
 	party0Content := msgs[0].Content.(*DGRound2Message1)
 	bad.Content.(*DGRound2Message1).NTilde = new(big.Int).Set(party0Content.PaillierPK.N)
 	msgs[2] = bad
-	expectRound4ParamError(t, fix, msgs, "duplicate modulus (NTilde)")
+	expectRound4ParamError(t, fix, msgs, "duplicate modulus (NTilde)", 2)
 }

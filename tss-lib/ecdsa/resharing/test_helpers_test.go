@@ -770,6 +770,19 @@ func newIndex2(pid *tss.PartyID, pids tss.SortedPartyIDs) int {
 	return -1
 }
 
+// requireCulprit unwraps a *tss.Error and asserts the culprit has the expected index.
+func requireCulprit(t *testing.T, err error, wantIdx int) {
+	t.Helper()
+	tssErr, ok := err.(*tss.Error)
+	if !ok {
+		t.Fatalf("expected *tss.Error, got %T", err)
+	}
+	culprits := tssErr.Culprits()
+	if len(culprits) != 1 || culprits[0].Index != wantIdx {
+		t.Fatalf("expected culprit index %d, got: %v", wantIdx, culprits)
+	}
+}
+
 // Compile-time check: ensure all setup functions and clone helpers are usable.
 var (
 	_ = doKeygen

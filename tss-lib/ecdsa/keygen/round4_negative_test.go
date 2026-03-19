@@ -200,6 +200,16 @@ func TestRound4RejectsAllNilPaillierProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "paillier") {
 		t.Fatalf("expected paillier-related error, got: %v", err)
 	}
+
+	// Verify the culprit is party 1 (corruptIdx).
+	var tssErr *tss.Error
+	if ok := isError(err, &tssErr); !ok {
+		t.Fatal("expected a *tss.Error with culprit information")
+	}
+	culprits := tssErr.Culprits()
+	if len(culprits) != 1 || culprits[0].Index != corruptIdx {
+		t.Fatalf("expected culprit index %d, got: %v", corruptIdx, culprits)
+	}
 }
 
 // TestRound4ContextCancellation verifies that Round4 respects context
