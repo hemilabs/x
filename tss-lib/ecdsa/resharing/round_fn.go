@@ -328,8 +328,10 @@ func ReshareRound4(
 
 	// Parameter validation
 	h1H2Map := make(map[string]struct{}, len(r2NewMsgs)*2)
-	paillierNMap := make(map[string]struct{}, len(r2NewMsgs))
-	nTildeMap := make(map[string]struct{}, len(r2NewMsgs))
+	// Single modulus map for both PaillierN and NTilde: catches cross-party
+	// collisions (e.g., Party A's PaillierN == Party B's NTilde) that separate
+	// maps would miss. Such a collision lets A forge range proofs against B.
+	modulusMap := make(map[string]struct{}, len(r2NewMsgs)*2)
 	paiProofCulprits := make([]*tss.PartyID, len(r2NewMsgs))
 	dlnProof1FailCulprits := make([]*tss.PartyID, len(r2NewMsgs))
 	dlnProof2FailCulprits := make([]*tss.PartyID, len(r2NewMsgs))
@@ -390,15 +392,15 @@ func ReshareRound4(
 		}
 		h1H2Map[h1Hex], h1H2Map[h2Hex] = struct{}{}, struct{}{}
 		paiNHex := hex.EncodeToString(paiPK.N.Bytes())
-		if _, found := paillierNMap[paiNHex]; found {
-			return nil, tss.NewError(errors.New("duplicate paillier N"), TaskName, 4, Pi, msg.From)
+		if _, found := modulusMap[paiNHex]; found {
+			return nil, tss.NewError(errors.New("duplicate modulus (paillier N)"), TaskName, 4, Pi, msg.From)
 		}
-		paillierNMap[paiNHex] = struct{}{}
+		modulusMap[paiNHex] = struct{}{}
 		ntHex := hex.EncodeToString(NTildej.Bytes())
-		if _, found := nTildeMap[ntHex]; found {
-			return nil, tss.NewError(errors.New("duplicate NTilde"), TaskName, 4, Pi, msg.From)
+		if _, found := modulusMap[ntHex]; found {
+			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 4, Pi, msg.From)
 		}
-		nTildeMap[ntHex] = struct{}{}
+		modulusMap[ntHex] = struct{}{}
 
 		nTasks := 1
 		if !params.NoProofDLN() {

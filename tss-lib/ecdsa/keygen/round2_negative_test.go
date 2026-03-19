@@ -358,7 +358,7 @@ func TestRound2RejectsDuplicatePaillierN(t *testing.T) {
 	// and we only changed paillierN, so NTilde is still party 2's original
 	// which differs from party 0's N.  Should be fine.
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate Paillier N")
+	expectRound2Error(t, fix, msgs, "duplicate modulus (Paillier N)")
 }
 
 func TestRound2RejectsDuplicateNTilde(t *testing.T) {
@@ -369,7 +369,7 @@ func TestRound2RejectsDuplicateNTilde(t *testing.T) {
 	party0Content := msgs[0].Content.(*KGRound1Message)
 	bad.Content.(*KGRound1Message).NTilde = new(big.Int).Set(party0Content.NTilde)
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate NTilde")
+	expectRound2Error(t, fix, msgs, "duplicate modulus (NTilde)")
 }
 
 // TestRound2RejectsCrossDuplicateH1H2 verifies that the shared h1H2Map
@@ -384,6 +384,37 @@ func TestRound2RejectsCrossDuplicateH1H2(t *testing.T) {
 	bad.Content.(*KGRound1Message).H1 = new(big.Int).Set(party0Content.H2)
 	msgs[2] = bad
 	expectRound2Error(t, fix, msgs, "duplicate h1j")
+}
+
+// TestRound2RejectsCrossPartyPaillierNEqualsNTilde verifies that the merged
+// modulusMap catches the case where Party A's PaillierN equals Party B's NTilde
+// (cross-party collision). This prevents an attacker who knows the factorization
+// of their own Paillier N from forging range proofs against another party's
+// auxiliary modulus.
+func TestRound2RejectsCrossPartyPaillierNEqualsNTilde(t *testing.T) {
+	fix := setupRound1ForNegativeTests(t)
+	msgs := cloneR1Msgs(fix.allR1)
+	// Set party 2's PaillierPK.N to party 0's NTilde. Party 0 is processed
+	// first, so its NTilde is already in the modulusMap when party 2's
+	// PaillierN is checked.
+	bad := cloneR1MsgContent(msgs[2])
+	party0Content := msgs[0].Content.(*KGRound1Message)
+	bad.Content.(*KGRound1Message).PaillierPK.N = new(big.Int).Set(party0Content.NTilde)
+	msgs[2] = bad
+	expectRound2Error(t, fix, msgs, "duplicate modulus (Paillier N)")
+}
+
+// TestRound2RejectsCrossPartyNTildeEqualsPaillierN verifies the reverse
+// direction: Party A's NTilde equals Party B's PaillierN.
+func TestRound2RejectsCrossPartyNTildeEqualsPaillierN(t *testing.T) {
+	fix := setupRound1ForNegativeTests(t)
+	msgs := cloneR1Msgs(fix.allR1)
+	// Set party 2's NTilde to party 0's PaillierN.
+	bad := cloneR1MsgContent(msgs[2])
+	party0Content := msgs[0].Content.(*KGRound1Message)
+	bad.Content.(*KGRound1Message).NTilde = new(big.Int).Set(party0Content.PaillierPK.N)
+	msgs[2] = bad
+	expectRound2Error(t, fix, msgs, "duplicate modulus (NTilde)")
 }
 
 // TestRound2RejectsOversizedPaillierN verifies that the != 2048 check

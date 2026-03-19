@@ -175,8 +175,10 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 
 	// Comprehensive parameter validation battery.
 	h1H2Map := make(map[string]struct{}, len(r1Msgs)*2)
-	paillierNMap := make(map[string]struct{}, len(r1Msgs))
-	nTildeMap := make(map[string]struct{}, len(r1Msgs))
+	// Single modulus map for both PaillierN and NTilde: catches cross-party
+	// collisions (e.g., Party A's PaillierN == Party B's NTilde) that separate
+	// maps would miss. Such a collision lets A forge range proofs against B.
+	modulusMap := make(map[string]struct{}, len(r1Msgs)*2)
 	dlnProof1FailCulprits := make([]*tss.PartyID, len(r1Msgs))
 	dlnProof2FailCulprits := make([]*tss.PartyID, len(r1Msgs))
 	wg := new(sync.WaitGroup)
@@ -236,15 +238,15 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 		}
 		h1H2Map[h1JHex], h1H2Map[h2JHex] = struct{}{}, struct{}{}
 		paillierNHex := hex.EncodeToString(paillierPKj.N.Bytes())
-		if _, found := paillierNMap[paillierNHex]; found {
-			return nil, tss.NewError(errors.New("duplicate Paillier N"), TaskName, 2, params.PartyID(), msg.From)
+		if _, found := modulusMap[paillierNHex]; found {
+			return nil, tss.NewError(errors.New("duplicate modulus (Paillier N)"), TaskName, 2, params.PartyID(), msg.From)
 		}
-		paillierNMap[paillierNHex] = struct{}{}
+		modulusMap[paillierNHex] = struct{}{}
 		nTildeHex := hex.EncodeToString(NTildej.Bytes())
-		if _, found := nTildeMap[nTildeHex]; found {
-			return nil, tss.NewError(errors.New("duplicate NTilde"), TaskName, 2, params.PartyID(), msg.From)
+		if _, found := modulusMap[nTildeHex]; found {
+			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 2, params.PartyID(), msg.From)
 		}
-		nTildeMap[nTildeHex] = struct{}{}
+		modulusMap[nTildeHex] = struct{}{}
 
 		if !params.NoProofDLN() {
 			wg.Add(2)
