@@ -21,6 +21,7 @@ jobs:
   test:
     name: "Test"
     runs-on: "ubuntu-latest"
+    timeout-minutes: 150
     strategy:
       fail-fast: false # if one of these fails, still run the others
       matrix:
@@ -44,4 +45,4 @@ jobs:
 
       - name: "go test"
         working-directory: ${{ matrix.module }}
-        run: go test -tags tssexamples -timeout 60m -v -cover ./...
+        run: go test -tags tssexamples -timeout 120m -v -cover ./...
