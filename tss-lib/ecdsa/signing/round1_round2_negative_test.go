@@ -124,6 +124,7 @@ func TestSignRound2RejectsReceiverIDMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "receiverId mismatch") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("correctly rejected receiverId mismatch: %v", err)
 }
 
@@ -148,6 +149,7 @@ func TestSignRound2RejectsNilRangeProofAlice(t *testing.T) {
 	if !strings.Contains(err.Error(), "RangeProofAlice missing") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("correctly rejected nil RangeProofAlice: %v", err)
 }
 

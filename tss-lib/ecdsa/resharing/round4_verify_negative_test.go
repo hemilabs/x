@@ -49,6 +49,7 @@ func TestReshareRound4RejectsBadDecommitment(t *testing.T) {
 	if !strings.Contains(err.Error(), "decommit") {
 		t.Fatalf("expected decommit error, got: %v", err)
 	}
+	requireCulprit(t, err, target)
 	t.Logf("correctly rejected bad decommitment: %v", err)
 }
 
@@ -79,6 +80,7 @@ func TestReshareRound4RejectsReceiverIDMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "receiverId mismatch") {
 		t.Fatalf("expected receiverId mismatch error, got: %v", err)
 	}
+	requireCulprit(t, err, corruptFrom)
 	t.Logf("correctly rejected ReceiverID mismatch: %v", err)
 }
 
@@ -109,6 +111,7 @@ func TestReshareRound4RejectsBadVSSShare(t *testing.T) {
 	if !strings.Contains(err.Error(), "vss share verify failed") {
 		t.Fatalf("expected vss share verify error, got: %v", err)
 	}
+	requireCulprit(t, err, corruptFrom)
 	t.Logf("correctly rejected bad VSS share: %v", err)
 }
 
@@ -150,6 +153,7 @@ func TestReshareRound4RejectsNilModProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "proof verification failed") {
 		t.Fatalf("expected 'proof verification failed', got: %v", err)
 	}
+	requireCulprit(t, err, r4VictimIdx)
 	t.Logf("correctly rejected nil ModProof: %v", err)
 }
 
@@ -212,6 +216,7 @@ func TestReshareRound4RejectsWrongLengthDecommitment(t *testing.T) {
 	if !strings.Contains(err.Error(), "decommit") {
 		t.Fatalf("expected decommit error, got: %v", err)
 	}
+	requireCulprit(t, err, target)
 	t.Logf("correctly rejected wrong-length decommitment: %v", err)
 }
 
@@ -247,5 +252,6 @@ func TestReshareRound4RejectsOffCurveDecommitment(t *testing.T) {
 	if !strings.Contains(err.Error(), "not on the elliptic curve") {
 		t.Fatalf("expected curve error, got: %v", err)
 	}
+	requireCulprit(t, err, target)
 	t.Logf("correctly rejected off-curve decommitment: %v", err)
 }

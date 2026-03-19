@@ -35,6 +35,7 @@ func TestSignRound3RejectsReceiverIDMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "receiverId mismatch") {
 		t.Fatalf("expected 'receiverId mismatch' in error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("correctly rejected ReceiverID mismatch: %v", err)
 }
 
@@ -61,6 +62,7 @@ func TestSignRound3RejectsNilProofBob(t *testing.T) {
 	if !strings.Contains(err.Error(), "ProofBob missing") {
 		t.Fatalf("expected 'ProofBob missing' in error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("correctly rejected nil ProofBob: %v", err)
 }
 
@@ -87,6 +89,7 @@ func TestSignRound3RejectsNilProofBobWC(t *testing.T) {
 	if !strings.Contains(err.Error(), "ProofBobWC missing") {
 		t.Fatalf("expected 'ProofBobWC missing' in error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("correctly rejected nil ProofBobWC: %v", err)
 }
 

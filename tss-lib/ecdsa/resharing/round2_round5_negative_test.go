@@ -323,6 +323,7 @@ func TestReshareRound5RejectsReceiverIDMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "receiverId mismatch") {
 		t.Fatalf("expected 'receiverId mismatch' error, got: %v", err)
 	}
+	requireCulprit(t, err, corruptIdx)
 	t.Logf("correctly rejected corrupted ReceiverID: %v", err)
 }
 
@@ -357,6 +358,7 @@ func TestReshareRound5RejectsNilFacProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "facProof missing") {
 		t.Fatalf("expected 'facProof missing' error, got: %v", err)
 	}
+	requireCulprit(t, err, corruptIdx)
 	t.Logf("correctly rejected nil FacProof: %v", err)
 }
 
@@ -394,6 +396,7 @@ func TestReshareRound5RejectsBadFacProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "facProof verify failed") {
 		t.Fatalf("expected 'facProof verify failed' error, got: %v", err)
 	}
+	requireCulprit(t, err, corruptIdx)
 	t.Logf("correctly rejected corrupted FacProof: %v", err)
 }
 
@@ -836,6 +839,7 @@ func TestReshareRound2RejectsSSIDMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "ssid mismatch") {
 		t.Fatalf("expected 'ssid mismatch' error, got: %v", err)
 	}
+	requireCulprit(t, err, 1) // corrupted old party 1
 	t.Logf("correctly rejected SSID mismatch: %v", err)
 }
 

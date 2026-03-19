@@ -102,8 +102,9 @@ func cloneR1MsgContent(msg *tss.Message) *tss.Message {
 }
 
 // expectRound2Error calls Round2 on party 0 with the given messages and
-// asserts that the returned error contains the expected substring.
-func expectRound2Error(t *testing.T, fix *round1Fixture, msgs []*tss.Message, wantErrSubstr string) {
+// asserts that the returned error contains the expected substring and
+// identifies the correct culprit party.
+func expectRound2Error(t *testing.T, fix *round1Fixture, msgs []*tss.Message, wantErrSubstr string, wantCulpritIdx int) {
 	t.Helper()
 	_, err := Round2(context.Background(), fix.states[0], msgs)
 	if err == nil {
@@ -111,6 +112,14 @@ func expectRound2Error(t *testing.T, fix *round1Fixture, msgs []*tss.Message, wa
 	}
 	if !strings.Contains(err.Error(), wantErrSubstr) {
 		t.Fatalf("expected error containing %q, got: %v", wantErrSubstr, err)
+	}
+	var tssErr *tss.Error
+	if ok := isError(err, &tssErr); !ok {
+		t.Fatal("expected a *tss.Error with culprit information")
+	}
+	culprits := tssErr.Culprits()
+	if len(culprits) != 1 || culprits[0].Index != wantCulpritIdx {
+		t.Fatalf("expected culprit index %d, got: %v", wantCulpritIdx, culprits)
 	}
 }
 
@@ -126,7 +135,7 @@ func TestRound2RejectsPaillierNInsufficientBits(t *testing.T) {
 	bad := cloneR1MsgContent(msgs[victimIdx])
 	bad.Content.(*KGRound1Message).PaillierPK.N = big.NewInt(1023) // tiny, far below 2048 bits
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "paillier modulus insufficient bits")
+	expectRound2Error(t, fix, msgs, "paillier modulus insufficient bits", victimIdx)
 }
 
 func TestRound2RejectsEvenPaillierN(t *testing.T) {
@@ -139,7 +148,7 @@ func TestRound2RejectsEvenPaillierN(t *testing.T) {
 	// Ensure still 2048 bits by setting bit 2047.
 	n.SetBit(n, 2047, 1)
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "even paillier modulus")
+	expectRound2Error(t, fix, msgs, "even paillier modulus", victimIdx)
 }
 
 func TestRound2RejectsPrimePaillierN(t *testing.T) {
@@ -167,7 +176,7 @@ func TestRound2RejectsPrimePaillierN(t *testing.T) {
 	}
 	bad.Content.(*KGRound1Message).PaillierPK.N = prime
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "prime paillier modulus")
+	expectRound2Error(t, fix, msgs, "prime paillier modulus", victimIdx)
 }
 
 func TestRound2RejectsPerfectSquarePaillierN(t *testing.T) {
@@ -187,7 +196,7 @@ func TestRound2RejectsPerfectSquarePaillierN(t *testing.T) {
 	}
 	bad.Content.(*KGRound1Message).PaillierPK.N = pp
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "perfect-square paillier modulus")
+	expectRound2Error(t, fix, msgs, "perfect-square paillier modulus", victimIdx)
 }
 
 func TestRound2RejectsH1EqualsH2(t *testing.T) {
@@ -197,7 +206,7 @@ func TestRound2RejectsH1EqualsH2(t *testing.T) {
 	content := bad.Content.(*KGRound1Message)
 	content.H2 = new(big.Int).Set(content.H1) // H1 == H2
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "h1j == h2j")
+	expectRound2Error(t, fix, msgs, "h1j == h2j", victimIdx)
 }
 
 func TestRound2RejectsH1IsOne(t *testing.T) {
@@ -206,7 +215,7 @@ func TestRound2RejectsH1IsOne(t *testing.T) {
 	bad := cloneR1MsgContent(msgs[victimIdx])
 	bad.Content.(*KGRound1Message).H1 = big.NewInt(1)
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "h1j or h2j is 1")
+	expectRound2Error(t, fix, msgs, "h1j or h2j is 1", victimIdx)
 }
 
 func TestRound2RejectsH2IsOne(t *testing.T) {
@@ -215,7 +224,7 @@ func TestRound2RejectsH2IsOne(t *testing.T) {
 	bad := cloneR1MsgContent(msgs[victimIdx])
 	bad.Content.(*KGRound1Message).H2 = big.NewInt(1)
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "h1j or h2j is 1")
+	expectRound2Error(t, fix, msgs, "h1j or h2j is 1", victimIdx)
 }
 
 func TestRound2RejectsNTildeInsufficientBits(t *testing.T) {
@@ -224,7 +233,7 @@ func TestRound2RejectsNTildeInsufficientBits(t *testing.T) {
 	bad := cloneR1MsgContent(msgs[victimIdx])
 	bad.Content.(*KGRound1Message).NTilde = big.NewInt(999) // tiny
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "NTildej insufficient bits")
+	expectRound2Error(t, fix, msgs, "NTildej insufficient bits", victimIdx)
 }
 
 func TestRound2RejectsEvenNTilde(t *testing.T) {
@@ -235,7 +244,7 @@ func TestRound2RejectsEvenNTilde(t *testing.T) {
 	nt.SetBit(nt, 0, 0)    // make even
 	nt.SetBit(nt, 2047, 1) // keep 2048 bits
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "even NTildej")
+	expectRound2Error(t, fix, msgs, "even NTildej", victimIdx)
 }
 
 func TestRound2RejectsPrimeNTilde(t *testing.T) {
@@ -257,7 +266,7 @@ func TestRound2RejectsPrimeNTilde(t *testing.T) {
 			"15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
 	bad.Content.(*KGRound1Message).NTilde = prime
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "prime NTildej")
+	expectRound2Error(t, fix, msgs, "prime NTildej", victimIdx)
 }
 
 func TestRound2RejectsPerfectSquareNTilde(t *testing.T) {
@@ -275,7 +284,7 @@ func TestRound2RejectsPerfectSquareNTilde(t *testing.T) {
 	}
 	bad.Content.(*KGRound1Message).NTilde = pp
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "perfect-square NTildej")
+	expectRound2Error(t, fix, msgs, "perfect-square NTildej", victimIdx)
 }
 
 func TestRound2RejectsPaillierNEqualsNTilde(t *testing.T) {
@@ -286,7 +295,7 @@ func TestRound2RejectsPaillierNEqualsNTilde(t *testing.T) {
 	// Set NTilde = PaillierPK.N (both already 2048-bit semiprimes).
 	content.NTilde = new(big.Int).Set(content.PaillierPK.N)
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "paillier N == NTilde")
+	expectRound2Error(t, fix, msgs, "paillier N == NTilde", victimIdx)
 }
 
 func TestRound2RejectsH1NotCoprimeNTilde(t *testing.T) {
@@ -305,7 +314,7 @@ func TestRound2RejectsH1NotCoprimeNTilde(t *testing.T) {
 	safeP.Add(safeP, big.NewInt(1))
 	content.H1 = safeP
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "h1j not coprime with NTildej")
+	expectRound2Error(t, fix, msgs, "h1j not coprime with NTildej", victimIdx)
 }
 
 func TestRound2RejectsH2NotCoprimeNTilde(t *testing.T) {
@@ -320,7 +329,7 @@ func TestRound2RejectsH2NotCoprimeNTilde(t *testing.T) {
 	// Keep H1 valid, set H2 = safeP (a factor of NTilde).
 	content.H2 = safeP
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "h2j not coprime with NTildej")
+	expectRound2Error(t, fix, msgs, "h2j not coprime with NTildej", victimIdx)
 }
 
 func TestRound2RejectsDuplicateH2(t *testing.T) {
@@ -331,7 +340,7 @@ func TestRound2RejectsDuplicateH2(t *testing.T) {
 	party0Content := msgs[0].Content.(*KGRound1Message)
 	bad.Content.(*KGRound1Message).H2 = new(big.Int).Set(party0Content.H2)
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate h2j")
+	expectRound2Error(t, fix, msgs, "duplicate h2j", 2)
 }
 
 func TestRound2RejectsDuplicateH1(t *testing.T) {
@@ -342,7 +351,7 @@ func TestRound2RejectsDuplicateH1(t *testing.T) {
 	party0Content := msgs[0].Content.(*KGRound1Message)
 	bad.Content.(*KGRound1Message).H1 = new(big.Int).Set(party0Content.H1)
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate h1j")
+	expectRound2Error(t, fix, msgs, "duplicate h1j", 2)
 }
 
 func TestRound2RejectsDuplicatePaillierN(t *testing.T) {
@@ -358,7 +367,7 @@ func TestRound2RejectsDuplicatePaillierN(t *testing.T) {
 	// and we only changed paillierN, so NTilde is still party 2's original
 	// which differs from party 0's N.  Should be fine.
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate modulus (Paillier N)")
+	expectRound2Error(t, fix, msgs, "duplicate modulus (Paillier N)", 2)
 }
 
 func TestRound2RejectsDuplicateNTilde(t *testing.T) {
@@ -369,7 +378,7 @@ func TestRound2RejectsDuplicateNTilde(t *testing.T) {
 	party0Content := msgs[0].Content.(*KGRound1Message)
 	bad.Content.(*KGRound1Message).NTilde = new(big.Int).Set(party0Content.NTilde)
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate modulus (NTilde)")
+	expectRound2Error(t, fix, msgs, "duplicate modulus (NTilde)", 2)
 }
 
 // TestRound2RejectsCrossDuplicateH1H2 verifies that the shared h1H2Map
@@ -383,7 +392,7 @@ func TestRound2RejectsCrossDuplicateH1H2(t *testing.T) {
 	party0Content := msgs[0].Content.(*KGRound1Message)
 	bad.Content.(*KGRound1Message).H1 = new(big.Int).Set(party0Content.H2)
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate h1j")
+	expectRound2Error(t, fix, msgs, "duplicate h1j", 2)
 }
 
 // TestRound2RejectsCrossPartyPaillierNEqualsNTilde verifies that the merged
@@ -401,7 +410,7 @@ func TestRound2RejectsCrossPartyPaillierNEqualsNTilde(t *testing.T) {
 	party0Content := msgs[0].Content.(*KGRound1Message)
 	bad.Content.(*KGRound1Message).PaillierPK.N = new(big.Int).Set(party0Content.NTilde)
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate modulus (Paillier N)")
+	expectRound2Error(t, fix, msgs, "duplicate modulus (Paillier N)", 2)
 }
 
 // TestRound2RejectsCrossPartyNTildeEqualsPaillierN verifies the reverse
@@ -414,7 +423,7 @@ func TestRound2RejectsCrossPartyNTildeEqualsPaillierN(t *testing.T) {
 	party0Content := msgs[0].Content.(*KGRound1Message)
 	bad.Content.(*KGRound1Message).NTilde = new(big.Int).Set(party0Content.PaillierPK.N)
 	msgs[2] = bad
-	expectRound2Error(t, fix, msgs, "duplicate modulus (NTilde)")
+	expectRound2Error(t, fix, msgs, "duplicate modulus (NTilde)", 2)
 }
 
 // TestRound2RejectsOversizedPaillierN verifies that the != 2048 check
@@ -426,7 +435,7 @@ func TestRound2RejectsOversizedPaillierN(t *testing.T) {
 	n := bad.Content.(*KGRound1Message).PaillierPK.N
 	n.SetBit(n, 2048, 1) // set bit 2048 → 2049-bit value
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "paillier modulus insufficient bits")
+	expectRound2Error(t, fix, msgs, "paillier modulus insufficient bits", victimIdx)
 }
 
 // TestRound2RejectsOversizedNTilde verifies that the != 2048 check
@@ -438,5 +447,5 @@ func TestRound2RejectsOversizedNTilde(t *testing.T) {
 	nt := bad.Content.(*KGRound1Message).NTilde
 	nt.SetBit(nt, 2048, 1) // set bit 2048 → 2049-bit value
 	msgs[victimIdx] = bad
-	expectRound2Error(t, fix, msgs, "NTildej insufficient bits")
+	expectRound2Error(t, fix, msgs, "NTildej insufficient bits", victimIdx)
 }

@@ -116,6 +116,7 @@ func TestSignRound5RejectsBadCommitment(t *testing.T) {
 	if !strings.Contains(err.Error(), "commitment verify failed") {
 		t.Fatalf("expected error containing 'commitment verify failed', got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 }
 
 func TestSignRound5RejectsNilZKProof(t *testing.T) {
@@ -133,6 +134,7 @@ func TestSignRound5RejectsNilZKProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "bigGamma proof missing") {
 		t.Fatalf("expected error containing 'bigGamma proof missing', got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 }
 
 func TestSignRound5RejectsBadZKProof(t *testing.T) {
@@ -151,6 +153,7 @@ func TestSignRound5RejectsBadZKProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "bigGamma proof verify failed") {
 		t.Fatalf("expected error containing 'bigGamma proof verify failed', got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 }
 
 func TestSignRound5RejectsBadDecommitmentPoint(t *testing.T) {
@@ -188,5 +191,6 @@ func TestSignRound5RejectsBadDecommitmentPoint(t *testing.T) {
 	if !strings.Contains(err.Error(), "not on the") {
 		t.Fatalf("expected 'not on the elliptic curve' error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("got expected error for off-curve point: %v", err)
 }

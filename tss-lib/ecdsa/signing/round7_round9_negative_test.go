@@ -61,6 +61,7 @@ func TestSignRound7RejectsBadDecommitment(t *testing.T) {
 	if !strings.Contains(err.Error(), "de-commitment failed") {
 		t.Fatalf("expected 'de-commitment failed' error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("SignRound7 correctly rejected bad decommitment: %v", err)
 }
 
@@ -91,6 +92,7 @@ func TestSignRound7RejectsBadSchnorrProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "schnorr Aj verify failed") {
 		t.Fatalf("expected 'schnorr Aj verify failed' error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("SignRound7 correctly rejected bad Schnorr proof: %v", err)
 }
 
@@ -122,6 +124,7 @@ func TestSignRound7RejectsBadVVerifyProof(t *testing.T) {
 	if !strings.Contains(err.Error(), "vverify Vj failed") {
 		t.Fatalf("expected 'vverify Vj failed' error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("SignRound7 correctly rejected bad ZKVProof: %v", err)
 }
 
@@ -152,5 +155,6 @@ func TestSignRound9RejectsBadDecommitment(t *testing.T) {
 	if !strings.Contains(err.Error(), "Uj/Tj decommit failed") {
 		t.Fatalf("expected 'Uj/Tj decommit failed' error, got: %v", err)
 	}
+	requireCulprit(t, err, 1)
 	t.Logf("SignRound9 correctly rejected bad decommitment: %v", err)
 }

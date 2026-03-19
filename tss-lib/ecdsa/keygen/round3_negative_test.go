@@ -165,8 +165,9 @@ func copyBcastSlice(msgs []*tss.Message) []*tss.Message {
 }
 
 // requireRound3Error calls Round3 for party 0 and asserts that it
-// returns an error containing the expected substring.
-func requireRound3Error(t *testing.T, fix *round3TestFixture, p2p []*tss.Message, bcast []*tss.Message, wantSubstr string) {
+// returns an error containing the expected substring and identifies
+// the correct culprit party.
+func requireRound3Error(t *testing.T, fix *round3TestFixture, p2p []*tss.Message, bcast []*tss.Message, wantSubstr string, wantCulpritIdx int) {
 	t.Helper()
 	_, err := Round3(context.Background(), fix.states[0], p2p, bcast)
 	if err == nil {
@@ -174,6 +175,14 @@ func requireRound3Error(t *testing.T, fix *round3TestFixture, p2p []*tss.Message
 	}
 	if !strings.Contains(err.Error(), wantSubstr) {
 		t.Fatalf("expected error containing %q, got: %v", wantSubstr, err)
+	}
+	var tssErr *tss.Error
+	if ok := isError(err, &tssErr); !ok {
+		t.Fatal("expected a *tss.Error with culprit information")
+	}
+	culprits := tssErr.Culprits()
+	if len(culprits) != 1 || culprits[0].Index != wantCulpritIdx {
+		t.Fatalf("expected culprit index %d, got: %v", wantCulpritIdx, culprits)
 	}
 }
 
@@ -190,7 +199,7 @@ func TestRound3RejectsReceiverIDMismatch(t *testing.T) {
 	content := p2p[1].Content.(*KGRound2Message1)
 	content.ReceiverID = []byte("wrong-receiver-id")
 
-	requireRound3Error(t, fix, p2p, bcast, "receiverId mismatch")
+	requireRound3Error(t, fix, p2p, bcast, "receiverId mismatch", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +220,7 @@ func TestRound3RejectsBadDeCommitment(t *testing.T) {
 		t.Fatal("decommitment too short to corrupt")
 	}
 
-	requireRound3Error(t, fix, p2p, bcast, "de-commitment verify failed")
+	requireRound3Error(t, fix, p2p, bcast, "de-commitment verify failed", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -228,7 +237,7 @@ func TestRound3RejectsNilModProof(t *testing.T) {
 	content := bcast[1].Content.(*KGRound2Message2)
 	content.ModProof = nil
 
-	requireRound3Error(t, fix, p2p, bcast, "modProof missing")
+	requireRound3Error(t, fix, p2p, bcast, "modProof missing", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +261,7 @@ func TestRound3RejectsBadModProof(t *testing.T) {
 	corrupted.Z = content.ModProof.Z
 	content.ModProof = corrupted
 
-	requireRound3Error(t, fix, p2p, bcast, "modProof verify failed")
+	requireRound3Error(t, fix, p2p, bcast, "modProof verify failed", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +278,7 @@ func TestRound3RejectsNilFacProof(t *testing.T) {
 	content := p2p[1].Content.(*KGRound2Message1)
 	content.FacProof = nil
 
-	requireRound3Error(t, fix, p2p, bcast, "facProof missing")
+	requireRound3Error(t, fix, p2p, bcast, "facProof missing", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +308,7 @@ func TestRound3RejectsBadFacProof(t *testing.T) {
 		V:     orig.V,
 	}
 
-	requireRound3Error(t, fix, p2p, bcast, "facProof verify failed")
+	requireRound3Error(t, fix, p2p, bcast, "facProof verify failed", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +325,7 @@ func TestRound3RejectsBadVSSShare(t *testing.T) {
 	content := p2p[1].Content.(*KGRound2Message1)
 	content.Share = new(big.Int).Add(content.Share, big.NewInt(1))
 
-	requireRound3Error(t, fix, p2p, bcast, "vss verify failed")
+	requireRound3Error(t, fix, p2p, bcast, "vss verify failed", 1)
 }
 
 // TestRound3RejectsContextCancellation verifies that Round3 returns
