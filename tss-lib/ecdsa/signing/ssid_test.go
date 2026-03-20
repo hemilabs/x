@@ -255,6 +255,114 @@ func TestGetSigningSSIDDifferentH2j(t *testing.T) {
 	}
 }
 
+// ---------- Party keys, threshold, party count ----------
+
+func TestGetSigningSSIDDifferentPartyKeys(t *testing.T) {
+	params, key, temp := buildSigningSSIDFixture(t, 3, 1)
+	ssidOrig, err := getSigningSSID(params, key, temp, 1)
+	if err != nil {
+		t.Fatalf("original: %v", err)
+	}
+
+	// Rebuild params with a different key for party 1.
+	ids := tss.UnSortedPartyIDs{
+		tss.NewPartyID("0", "P", big.NewInt(101)),
+		tss.NewPartyID("1", "P", big.NewInt(999)), // changed from 102
+		tss.NewPartyID("2", "P", big.NewInt(103)),
+	}
+	sorted := tss.SortPartyIDs(ids)
+	peerCtx := tss.NewPeerContext(sorted)
+	params2 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 3, 1)
+
+	ssid2, err := getSigningSSID(params2, key, temp, 1)
+	if err != nil {
+		t.Fatalf("changed key: %v", err)
+	}
+	if bytes.Equal(ssidOrig, ssid2) {
+		t.Fatal("different party keys must produce different SSIDs")
+	}
+}
+
+func TestGetSigningSSIDDifferentThreshold(t *testing.T) {
+	ec := tss.S256()
+	ids := tss.UnSortedPartyIDs{
+		tss.NewPartyID("0", "P", big.NewInt(101)),
+		tss.NewPartyID("1", "P", big.NewInt(102)),
+		tss.NewPartyID("2", "P", big.NewInt(103)),
+		tss.NewPartyID("3", "P", big.NewInt(104)),
+	}
+	sorted := tss.SortPartyIDs(ids)
+	peerCtx := tss.NewPeerContext(sorted)
+
+	save := keygen.NewLocalPartySaveData(4)
+	for i := 0; i < 4; i++ {
+		save.BigXj[i] = crypto.ScalarBaseMult(ec, big.NewInt(int64(i+7)))
+		save.NTildej[i] = big.NewInt(int64(1000 + i))
+		save.H1j[i] = big.NewInt(int64(2000 + i))
+		save.H2j[i] = big.NewInt(int64(3000 + i))
+	}
+	temp := &localTempData{ssidNonce: big.NewInt(0), m: big.NewInt(12345)}
+
+	params1 := tss.NewParameters(ec, peerCtx, sorted[0], 4, 1)
+	ssid1, err := getSigningSSID(params1, &save, temp, 1)
+	if err != nil {
+		t.Fatalf("threshold=1: %v", err)
+	}
+
+	params2 := tss.NewParameters(ec, peerCtx, sorted[0], 4, 2)
+	ssid2, err := getSigningSSID(params2, &save, temp, 1)
+	if err != nil {
+		t.Fatalf("threshold=2: %v", err)
+	}
+
+	if bytes.Equal(ssid1, ssid2) {
+		t.Fatal("different thresholds must produce different SSIDs")
+	}
+}
+
+func TestGetSigningSSIDDifferentPartyCount(t *testing.T) {
+	ec := tss.S256()
+	temp := &localTempData{ssidNonce: big.NewInt(0), m: big.NewInt(12345)}
+
+	makeSave := func(n int) *keygen.LocalPartySaveData {
+		s := keygen.NewLocalPartySaveData(n)
+		for i := 0; i < n; i++ {
+			s.BigXj[i] = crypto.ScalarBaseMult(ec, big.NewInt(int64(i+7)))
+			s.NTildej[i] = big.NewInt(int64(1000 + i))
+			s.H1j[i] = big.NewInt(int64(2000 + i))
+			s.H2j[i] = big.NewInt(int64(3000 + i))
+		}
+		return &s
+	}
+
+	ids3 := tss.SortPartyIDs(tss.UnSortedPartyIDs{
+		tss.NewPartyID("0", "P", big.NewInt(101)),
+		tss.NewPartyID("1", "P", big.NewInt(102)),
+		tss.NewPartyID("2", "P", big.NewInt(103)),
+	})
+	params3 := tss.NewParameters(ec, tss.NewPeerContext(ids3), ids3[0], 3, 1)
+	ssid3, err := getSigningSSID(params3, makeSave(3), temp, 1)
+	if err != nil {
+		t.Fatalf("n=3: %v", err)
+	}
+
+	ids4 := tss.SortPartyIDs(tss.UnSortedPartyIDs{
+		tss.NewPartyID("0", "P", big.NewInt(101)),
+		tss.NewPartyID("1", "P", big.NewInt(102)),
+		tss.NewPartyID("2", "P", big.NewInt(103)),
+		tss.NewPartyID("3", "P", big.NewInt(104)),
+	})
+	params4 := tss.NewParameters(ec, tss.NewPeerContext(ids4), ids4[0], 4, 1)
+	ssid4, err := getSigningSSID(params4, makeSave(4), temp, 1)
+	if err != nil {
+		t.Fatalf("n=4: %v", err)
+	}
+
+	if bytes.Equal(ssid3, ssid4) {
+		t.Fatal("different party counts must produce different SSIDs")
+	}
+}
+
 // ---------- Output length ----------
 
 func TestGetSigningSSIDOutputLength(t *testing.T) {

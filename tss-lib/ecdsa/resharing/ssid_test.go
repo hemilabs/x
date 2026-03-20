@@ -393,6 +393,131 @@ func TestGetReshareSSIDDifferentH2j(t *testing.T) {
 	}
 }
 
+// ---------- Party key and party count sensitivity ----------
+
+// TestGetReshareSSIDDifferentOldPartyKeys verifies that changing an old
+// committee party's key changes the SSID.
+func TestGetReshareSSIDDifferentOldPartyKeys(t *testing.T) {
+	ec := tss.S256()
+	newPIDs := makeDeterministicPartyIDs(3, 200)
+	newCtx := tss.NewPeerContext(newPIDs)
+
+	makeSave := func(n int) *keygen.LocalPartySaveData {
+		s := keygen.NewLocalPartySaveData(n)
+		for i := 0; i < n; i++ {
+			s.BigXj[i] = crypto.ScalarBaseMult(ec, big.NewInt(int64(i+7)))
+			s.NTildej[i] = big.NewInt(int64(1000 + i))
+			s.H1j[i] = big.NewInt(int64(2000 + i))
+			s.H2j[i] = big.NewInt(int64(3000 + i))
+		}
+		return &s
+	}
+	temp := &localTempData{ssidNonce: big.NewInt(1)}
+
+	oldPIDs1 := makeDeterministicPartyIDs(3, 100)
+	oldCtx1 := tss.NewPeerContext(oldPIDs1)
+	params1 := tss.NewReSharingParameters(ec, oldCtx1, newCtx, oldPIDs1[0], 3, 1, 3, 1)
+	ssid1, err := getReshareSSID(params1, makeSave(3), temp, 1)
+	if err != nil {
+		t.Fatalf("old keys A: %v", err)
+	}
+
+	oldPIDs2 := makeDeterministicPartyIDs(3, 500) // different base → different keys
+	oldCtx2 := tss.NewPeerContext(oldPIDs2)
+	params2 := tss.NewReSharingParameters(ec, oldCtx2, newCtx, oldPIDs2[0], 3, 1, 3, 1)
+	ssid2, err := getReshareSSID(params2, makeSave(3), temp, 1)
+	if err != nil {
+		t.Fatalf("old keys B: %v", err)
+	}
+
+	if bytes.Equal(ssid1, ssid2) {
+		t.Fatal("different old party keys must produce different SSIDs")
+	}
+}
+
+// TestGetReshareSSIDDifferentNewPartyKeys verifies that changing a new
+// committee party's key changes the SSID.
+func TestGetReshareSSIDDifferentNewPartyKeys(t *testing.T) {
+	ec := tss.S256()
+	oldPIDs := makeDeterministicPartyIDs(3, 100)
+	oldCtx := tss.NewPeerContext(oldPIDs)
+
+	makeSave := func(n int) *keygen.LocalPartySaveData {
+		s := keygen.NewLocalPartySaveData(n)
+		for i := 0; i < n; i++ {
+			s.BigXj[i] = crypto.ScalarBaseMult(ec, big.NewInt(int64(i+7)))
+			s.NTildej[i] = big.NewInt(int64(1000 + i))
+			s.H1j[i] = big.NewInt(int64(2000 + i))
+			s.H2j[i] = big.NewInt(int64(3000 + i))
+		}
+		return &s
+	}
+	temp := &localTempData{ssidNonce: big.NewInt(1)}
+
+	newPIDs1 := makeDeterministicPartyIDs(3, 200)
+	newCtx1 := tss.NewPeerContext(newPIDs1)
+	params1 := tss.NewReSharingParameters(ec, oldCtx, newCtx1, oldPIDs[0], 3, 1, 3, 1)
+	ssid1, err := getReshareSSID(params1, makeSave(3), temp, 1)
+	if err != nil {
+		t.Fatalf("new keys A: %v", err)
+	}
+
+	newPIDs2 := makeDeterministicPartyIDs(3, 600) // different base → different keys
+	newCtx2 := tss.NewPeerContext(newPIDs2)
+	params2 := tss.NewReSharingParameters(ec, oldCtx, newCtx2, oldPIDs[0], 3, 1, 3, 1)
+	ssid2, err := getReshareSSID(params2, makeSave(3), temp, 1)
+	if err != nil {
+		t.Fatalf("new keys B: %v", err)
+	}
+
+	if bytes.Equal(ssid1, ssid2) {
+		t.Fatal("different new party keys must produce different SSIDs")
+	}
+}
+
+// TestGetReshareSSIDDifferentPartyCount verifies that changing old or new
+// party counts changes the SSID.
+func TestGetReshareSSIDDifferentPartyCount(t *testing.T) {
+	ec := tss.S256()
+	temp := &localTempData{ssidNonce: big.NewInt(1)}
+
+	makeSave := func(n int) *keygen.LocalPartySaveData {
+		s := keygen.NewLocalPartySaveData(n)
+		for i := 0; i < n; i++ {
+			s.BigXj[i] = crypto.ScalarBaseMult(ec, big.NewInt(int64(i+7)))
+			s.NTildej[i] = big.NewInt(int64(1000 + i))
+			s.H1j[i] = big.NewInt(int64(2000 + i))
+			s.H2j[i] = big.NewInt(int64(3000 + i))
+		}
+		return &s
+	}
+
+	// 3-old → 3-new
+	oldPIDs3 := makeDeterministicPartyIDs(3, 100)
+	newPIDs3 := makeDeterministicPartyIDs(3, 200)
+	params3 := tss.NewReSharingParameters(ec,
+		tss.NewPeerContext(oldPIDs3), tss.NewPeerContext(newPIDs3),
+		oldPIDs3[0], 3, 1, 3, 1)
+	ssid3, err := getReshareSSID(params3, makeSave(3), temp, 1)
+	if err != nil {
+		t.Fatalf("3→3: %v", err)
+	}
+
+	// 4-old → 3-new (different old count, same new count)
+	oldPIDs4 := makeDeterministicPartyIDs(4, 100)
+	params4 := tss.NewReSharingParameters(ec,
+		tss.NewPeerContext(oldPIDs4), tss.NewPeerContext(newPIDs3),
+		oldPIDs4[0], 4, 1, 3, 1)
+	ssid4, err := getReshareSSID(params4, makeSave(4), temp, 1)
+	if err != nil {
+		t.Fatalf("4→3: %v", err)
+	}
+
+	if bytes.Equal(ssid3, ssid4) {
+		t.Fatal("different old party counts must produce different SSIDs")
+	}
+}
+
 // cloneResharingSaveData creates a shallow clone with deep-copied slices.
 func cloneResharingSaveData(src *keygen.LocalPartySaveData, n int) *keygen.LocalPartySaveData {
 	dst := keygen.NewLocalPartySaveData(n)
