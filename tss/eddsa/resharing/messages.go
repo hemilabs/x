@@ -1,170 +1,120 @@
 // Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package resharing
 
 import (
-	"crypto/elliptic"
 	"math/big"
 
-	"github.com/hemilabs/x/tss/v2/common"
-	"github.com/hemilabs/x/tss/v2/crypto"
-	cmt "github.com/hemilabs/x/tss/v2/crypto/commitments"
-	"github.com/hemilabs/x/tss/v2/crypto/vss"
-	"github.com/hemilabs/x/tss/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
-// These messages were generated from Protocol Buffers definitions into eddsa-resharing.pb.go
-
-var (
-	// Ensure that signing messages implement ValidateBasic
-	_ = []tss.MessageContent{
-		(*DGRound1Message)(nil),
-		(*DGRound2Message)(nil),
-		(*DGRound3Message1)(nil),
-		(*DGRound3Message2)(nil),
-		(*DGRound4Message)(nil),
-	}
-)
-
-// ----- //
-
-func NewDGRound1Message(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-	eddsaPub *crypto.ECPoint,
-	vct cmt.HashCommitment,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               to,
-		IsBroadcast:      true,
-		IsToOldCommittee: false,
-	}
-	content := &DGRound1Message{
-		EddsaPubX:   eddsaPub.X().Bytes(),
-		EddsaPubY:   eddsaPub.Y().Bytes(),
-		VCommitment: vct.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
+// DGRound1Message is broadcast by old committee: EdDSA pub + VSS commitment.
+type DGRound1Message struct {
+	EDDSAPub    *crypto.ECPoint
+	VCommitment *big.Int
 }
 
+// ValidateBasic checks that required fields of DGRound1Message are non-nil.
 func (m *DGRound1Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.EddsaPubX) &&
-		common.NonEmptyBytes(m.EddsaPubY) &&
-		common.NonEmptyBytes(m.VCommitment)
+	return m != nil && m.EDDSAPub != nil &&
+		m.VCommitment != nil && m.VCommitment.Sign() > 0
 }
 
-func (m *DGRound1Message) UnmarshalEDDSAPub(ec elliptic.Curve) (*crypto.ECPoint, error) {
-	return crypto.NewECPoint(
-		ec,
-		new(big.Int).SetBytes(m.EddsaPubX),
-		new(big.Int).SetBytes(m.EddsaPubY))
+// NewDGRound1Message constructs a *tss.Message with the given content.
+func NewDGRound1Message(to []*tss.PartyID, from *tss.PartyID, eddsaPub *crypto.ECPoint, vct cmt.HashCommitment) *tss.Message {
+	return &tss.Message{
+		From:        from,
+		To:          to,
+		IsBroadcast: true,
+		Content: &DGRound1Message{
+			EDDSAPub:    eddsaPub,
+			VCommitment: vct,
+		},
+	}
 }
 
-func (m *DGRound1Message) UnmarshalVCommitment() *big.Int {
-	return new(big.Int).SetBytes(m.GetVCommitment())
-}
+// DGRound2Message is an ACK broadcast from new to old committee.
+type DGRound2Message struct{}
 
-// ----- //
+// ValidateBasic checks that the receiver is non-nil.
+func (m *DGRound2Message) ValidateBasic() bool { return m != nil }
 
-func NewDGRound2Message(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewDGRound2Message constructs a *tss.Message with the given content.
+func NewDGRound2Message(to []*tss.PartyID, from *tss.PartyID) *tss.Message {
+	return &tss.Message{
 		From:             from,
 		To:               to,
 		IsBroadcast:      true,
 		IsToOldCommittee: true,
+		Content:          &DGRound2Message{},
 	}
-	content := &DGRound2Message{}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *DGRound2Message) ValidateBasic() bool {
-	return true
+// DGRound3Message1 is P2P from old to new: VSS share.
+type DGRound3Message1 struct {
+	Share      *big.Int
+	ReceiverID []byte
 }
 
-// ----- //
-
-func NewDGRound3Message1(
-	to *tss.PartyID,
-	from *tss.PartyID,
-	share *vss.Share,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               []*tss.PartyID{to},
-		IsBroadcast:      false,
-		IsToOldCommittee: false,
-	}
-	content := &DGRound3Message1{
-		Share: share.Share.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
-}
-
+// ValidateBasic checks that required fields of DGRound3Message1 are non-nil.
 func (m *DGRound3Message1) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.Share)
+	return m != nil && m.Share != nil && m.Share.Sign() > 0 &&
+		len(m.ReceiverID) > 0
 }
 
-// ----- //
-
-func NewDGRound3Message2(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-	vdct cmt.HashDeCommitment,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               to,
-		IsBroadcast:      true,
-		IsToOldCommittee: false,
+// NewDGRound3Message1 constructs a *tss.Message with the given content.
+func NewDGRound3Message1(to *tss.PartyID, from *tss.PartyID, share *vss.Share) *tss.Message {
+	return &tss.Message{
+		From: from,
+		To:   []*tss.PartyID{to},
+		Content: &DGRound3Message1{
+			Share:      share.Share,
+			ReceiverID: to.Key,
+		},
 	}
-	vDctBzs := common.BigIntsToBytes(vdct)
-	content := &DGRound3Message2{
-		VDecommitment: vDctBzs,
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// DGRound3Message2 is broadcast by old committee: VSS decommitment.
+type DGRound3Message2 struct {
+	VDeCommitment cmt.HashDeCommitment
+}
+
+// ValidateBasic checks that the decommitment has enough elements.
 func (m *DGRound3Message2) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.VDecommitment)
+	return m != nil && len(m.VDeCommitment) >= 2
 }
 
-func (m *DGRound3Message2) UnmarshalVDeCommitment() cmt.HashDeCommitment {
-	deComBzs := m.GetVDecommitment()
-	return cmt.NewHashDeCommitmentFromBytes(deComBzs)
+// NewDGRound3Message2 constructs a *tss.Message with the given content.
+func NewDGRound3Message2(to []*tss.PartyID, from *tss.PartyID, vdct cmt.HashDeCommitment) *tss.Message {
+	return &tss.Message{
+		From:        from,
+		To:          to,
+		IsBroadcast: true,
+		Content: &DGRound3Message2{
+			VDeCommitment: vdct,
+		},
+	}
 }
 
-// ----- //
+// DGRound4Message is an ACK broadcast to both committees.
+type DGRound4Message struct{}
 
-func NewDGRound4Message(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// ValidateBasic checks that the receiver is non-nil.
+func (m *DGRound4Message) ValidateBasic() bool { return m != nil }
+
+// NewDGRound4Message constructs a *tss.Message with the given content.
+func NewDGRound4Message(to []*tss.PartyID, from *tss.PartyID) *tss.Message {
+	return &tss.Message{
 		From:                    from,
 		To:                      to,
 		IsBroadcast:             true,
 		IsToOldAndNewCommittees: true,
+		Content:                 &DGRound4Message{},
 	}
-	content := &DGRound4Message{}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
-}
-
-func (m *DGRound4Message) ValidateBasic() bool {
-	return true
 }

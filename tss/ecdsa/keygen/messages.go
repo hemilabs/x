@@ -1,218 +1,174 @@
 // Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
-
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 package keygen
 
 import (
-	"github.com/hemilabs/x/tss/v2/crypto/facproof"
-	"github.com/hemilabs/x/tss/v2/crypto/modproof"
 	"math/big"
 
-	"github.com/hemilabs/x/tss/v2/common"
-	cmt "github.com/hemilabs/x/tss/v2/crypto/commitments"
-	"github.com/hemilabs/x/tss/v2/crypto/dlnproof"
-	"github.com/hemilabs/x/tss/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss/v2/crypto/vss"
-	"github.com/hemilabs/x/tss/v2/tss"
+	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
-// These messages were generated from Protocol Buffers definitions into ecdsa-keygen.pb.go
-// The following messages are registered on the Protocol Buffers "wire"
+// KGRound1Message is broadcast by each party in keygen round 1.
+// Contains the commitment hash, Paillier public key, Pedersen
+// parameters (NTilde, H1, H2) and optional DLN proofs.
+type KGRound1Message struct {
+	Commitment *big.Int
+	PaillierPK *paillier.PublicKey
+	NTilde     *big.Int
+	H1         *big.Int
+	H2         *big.Int
+	DLNProof1  *dlnproof.Proof // nil in on-chain SNARK mode
+	DLNProof2  *dlnproof.Proof // nil in on-chain SNARK mode
+}
 
-var (
-	// Ensure that keygen messages implement ValidateBasic
-	_ = []tss.MessageContent{
-		(*KGRound1Message)(nil),
-		(*KGRound2Message1)(nil),
-		(*KGRound2Message2)(nil),
-		(*KGRound3Message)(nil),
+// ValidateBasic checks that all required fields are non-nil and
+// within expected bounds.
+func (m *KGRound1Message) ValidateBasic() bool {
+	if m == nil {
+		return false
 	}
-)
+	if m.Commitment == nil || m.Commitment.Sign() == 0 {
+		return false
+	}
+	if m.PaillierPK == nil || m.PaillierPK.N == nil || m.PaillierPK.N.Sign() == 0 {
+		return false
+	}
+	if m.NTilde == nil || m.NTilde.Sign() == 0 {
+		return false
+	}
+	if m.H1 == nil || m.H1.Sign() == 0 {
+		return false
+	}
+	if m.H2 == nil || m.H2.Sign() == 0 {
+		return false
+	}
+	// DLN proofs optional (SNARK mode)
+	return true
+}
 
-// ----- //
-
+// NewKGRound1Message constructs a round 1 broadcast message.
 func NewKGRound1Message(
 	from *tss.PartyID,
 	ct cmt.HashCommitment,
 	paillierPK *paillier.PublicKey,
 	nTildeI, h1I, h2I *big.Int,
 	dlnProof1, dlnProof2 *dlnproof.Proof,
-) (tss.ParsedMessage, error) {
-	meta := tss.MessageRouting{
+) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &KGRound1Message{
+			Commitment: ct,
+			PaillierPK: paillierPK,
+			NTilde:     nTildeI,
+			H1:         h1I,
+			H2:         h2I,
+			DLNProof1:  dlnProof1,
+			DLNProof2:  dlnProof2,
+		},
 	}
-	dlnProof1Bz, err := dlnProof1.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	dlnProof2Bz, err := dlnProof2.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	content := &KGRound1Message{
-		Commitment: ct.Bytes(),
-		PaillierN:  paillierPK.N.Bytes(),
-		NTilde:     nTildeI.Bytes(),
-		H1:         h1I.Bytes(),
-		H2:         h2I.Bytes(),
-		Dlnproof_1: dlnProof1Bz,
-		Dlnproof_2: dlnProof2Bz,
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg), nil
 }
 
-func (m *KGRound1Message) ValidateBasic() bool {
+// KGRound2Message1 is a P2P message sent to each other party in
+// keygen round 2.  Contains the VSS share and optional FacProof.
+type KGRound2Message1 struct {
+	Share      *big.Int
+	FacProof   *facproof.ProofFac // nil in on-chain SNARK mode
+	ReceiverID []byte
+}
+
+// ValidateBasic checks that the share is non-nil and the receiver
+// ID is present.
+func (m *KGRound2Message1) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.GetCommitment()) &&
-		common.NonEmptyBytes(m.GetPaillierN()) &&
-		common.NonEmptyBytes(m.GetNTilde()) &&
-		common.NonEmptyBytes(m.GetH1()) &&
-		common.NonEmptyBytes(m.GetH2()) &&
-		// expected len of dln proof = sizeof(int64) + len(alpha) + len(t)
-		common.NonEmptyMultiBytes(m.GetDlnproof_1(), 2+(dlnproof.Iterations*2)) &&
-		common.NonEmptyMultiBytes(m.GetDlnproof_2(), 2+(dlnproof.Iterations*2))
+		m.Share != nil && m.Share.Sign() > 0 &&
+		len(m.ReceiverID) > 0
 }
 
-func (m *KGRound1Message) UnmarshalCommitment() *big.Int {
-	return new(big.Int).SetBytes(m.GetCommitment())
-}
-
-func (m *KGRound1Message) UnmarshalPaillierPK() *paillier.PublicKey {
-	return &paillier.PublicKey{N: new(big.Int).SetBytes(m.GetPaillierN())}
-}
-
-func (m *KGRound1Message) UnmarshalNTilde() *big.Int {
-	return new(big.Int).SetBytes(m.GetNTilde())
-}
-
-func (m *KGRound1Message) UnmarshalH1() *big.Int {
-	return new(big.Int).SetBytes(m.GetH1())
-}
-
-func (m *KGRound1Message) UnmarshalH2() *big.Int {
-	return new(big.Int).SetBytes(m.GetH2())
-}
-
-func (m *KGRound1Message) UnmarshalDLNProof1() (*dlnproof.Proof, error) {
-	return dlnproof.UnmarshalDLNProof(m.GetDlnproof_1())
-}
-
-func (m *KGRound1Message) UnmarshalDLNProof2() (*dlnproof.Proof, error) {
-	return dlnproof.UnmarshalDLNProof(m.GetDlnproof_2())
-}
-
-// ----- //
-
+// NewKGRound2Message1 constructs a round 2 P2P message.
 func NewKGRound2Message1(
 	to, from *tss.PartyID,
 	share *vss.Share,
 	proof *facproof.ProofFac,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:        from,
-		To:          []*tss.PartyID{to},
-		IsBroadcast: false,
+) *tss.Message {
+	return &tss.Message{
+		From: from,
+		To:   []*tss.PartyID{to},
+		Content: &KGRound2Message1{
+			Share:      share.Share,
+			FacProof:   proof,
+			ReceiverID: to.Key,
+		},
 	}
-	proofBzs := proof.Bytes()
-	content := &KGRound2Message1{
-		Share:    share.Share.Bytes(),
-		FacProof: proofBzs[:],
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *KGRound2Message1) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.GetShare())
-	// This is commented for backward compatibility, which msg has no proof
-	// && common.NonEmptyMultiBytes(m.GetFacProof(), facproof.ProofFacBytesParts)
+// KGRound2Message2 is broadcast by each party in keygen round 2.
+// Contains the decommitment and optional ModProof.
+type KGRound2Message2 struct {
+	DeCommitment cmt.HashDeCommitment
+	ModProof     *modproof.ProofMod // nil in on-chain SNARK mode
 }
 
-func (m *KGRound2Message1) UnmarshalShare() *big.Int {
-	return new(big.Int).SetBytes(m.Share)
+// ValidateBasic checks that the decommitment has at least 2
+// elements (blinding factor + payload).
+func (m *KGRound2Message2) ValidateBasic() bool {
+	return m != nil && len(m.DeCommitment) >= 2
 }
 
-func (m *KGRound2Message1) UnmarshalFacProof() (*facproof.ProofFac, error) {
-	return facproof.NewProofFromBytes(m.GetFacProof())
-}
-
-// ----- //
-
+// NewKGRound2Message2 constructs a round 2 broadcast message.
 func NewKGRound2Message2(
 	from *tss.PartyID,
 	deCommitment cmt.HashDeCommitment,
 	proof *modproof.ProofMod,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &KGRound2Message2{
+			DeCommitment: deCommitment,
+			ModProof:     proof,
+		},
 	}
-	dcBzs := common.BigIntsToBytes(deCommitment)
-	proofBzs := proof.Bytes()
-	content := &KGRound2Message2{
-		DeCommitment: dcBzs,
-		ModProof:     proofBzs[:],
+}
+
+// KGRound3Message is broadcast by each party in keygen round 3.
+// Contains the Paillier proof (array of big.Int).
+type KGRound3Message struct {
+	PaillierProof paillier.Proof
+}
+
+// ValidateBasic checks that the proof has the correct number of
+// iterations and all elements are non-nil.
+func (m *KGRound3Message) ValidateBasic() bool {
+	if m == nil {
+		return false
 	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
+	for _, pi := range m.PaillierProof {
+		if pi == nil {
+			return false
+		}
+	}
+	return true
 }
 
-func (m *KGRound2Message2) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.GetDeCommitment())
-	// This is commented for backward compatibility, which msg has no proof
-	// && common.NonEmptyMultiBytes(m.GetModProof(), modproof.ProofModBytesParts)
-}
-
-func (m *KGRound2Message2) UnmarshalDeCommitment() []*big.Int {
-	deComBzs := m.GetDeCommitment()
-	return cmt.NewHashDeCommitmentFromBytes(deComBzs)
-}
-
-func (m *KGRound2Message2) UnmarshalModProof() (*modproof.ProofMod, error) {
-	return modproof.NewProofFromBytes(m.GetModProof())
-}
-
-// ----- //
-
+// NewKGRound3Message constructs a round 3 broadcast message.
 func NewKGRound3Message(
 	from *tss.PartyID,
 	proof paillier.Proof,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &KGRound3Message{
+			PaillierProof: proof,
+		},
 	}
-	pfBzs := make([][]byte, len(proof))
-	for i := range pfBzs {
-		if proof[i] == nil {
-			continue
-		}
-		pfBzs[i] = proof[i].Bytes()
-	}
-	content := &KGRound3Message{
-		PaillierProof: pfBzs,
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
-}
-
-func (m *KGRound3Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.GetPaillierProof(), paillier.ProofIters)
-}
-
-func (m *KGRound3Message) UnmarshalProofInts() paillier.Proof {
-	var pf paillier.Proof
-	proofBzs := m.GetPaillierProof()
-	for i := range pf {
-		pf[i] = new(big.Int).SetBytes(proofBzs[i])
-	}
-	return pf
 }

@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package commitments
 
@@ -57,7 +60,7 @@ func (b *builder) Secrets() ([]*big.Int, error) {
 }
 
 func ParseSecrets(secrets []*big.Int) ([][]*big.Int, error) {
-	if secrets == nil || len(secrets) < 2 {
+	if len(secrets) < 2 {
 		return nil, errors.New("ParseSecrets: secrets == nil or is too small")
 	}
 	var el, nextPartLen int64
@@ -70,8 +73,8 @@ func ParseSecrets(secrets []*big.Int) ([][]*big.Int, error) {
 		}
 		if isLenEl {
 			nextPartLen = secrets[el].Int64()
-			if MaxPartSize < nextPartLen {
-				return nil, fmt.Errorf("ParseSecrets: commitment part too large: part %d, size %d", len(parts), nextPartLen)
+			if nextPartLen < 0 || MaxPartSize < nextPartLen {
+				return nil, fmt.Errorf("ParseSecrets: invalid commitment part size: part %d, size %d", len(parts), nextPartLen)
 			}
 			el += 1
 		} else {

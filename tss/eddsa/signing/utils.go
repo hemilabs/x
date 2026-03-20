@@ -1,8 +1,7 @@
 // Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package signing
 
@@ -11,23 +10,16 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/agl/ed25519/edwards25519"
+	"github.com/binance-chain/edwards25519/edwards25519"
 
-	"github.com/hemilabs/x/tss/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 func encodedBytesToBigInt(s *[32]byte) *big.Int {
-	// Use a copy so we don't screw up our original
-	// memory.
 	sCopy := new([32]byte)
-	for i := 0; i < 32; i++ {
-		sCopy[i] = s[i]
-	}
+	copy(sCopy[:], s[:])
 	reverse(sCopy)
-
-	bi := new(big.Int).SetBytes(sCopy[:])
-
-	return bi
+	return new(big.Int).SetBytes(sCopy[:])
 }
 
 func bigIntToEncodedBytes(a *big.Int) *[32]byte {
@@ -35,14 +27,8 @@ func bigIntToEncodedBytes(a *big.Int) *[32]byte {
 	if a == nil {
 		return s
 	}
-
-	// Caveat: a can be longer than 32 bytes.
 	s = copyBytes(a.Bytes())
-
-	// Reverse the byte string --> little endian after
-	// encoding.
 	reverse(s)
-
 	return s
 }
 
@@ -51,21 +37,17 @@ func copyBytes(aB []byte) *[32]byte {
 		return nil
 	}
 	s := new([32]byte)
-
-	// If we have a short byte string, expand
-	// it so that it's long enough.
+	if len(aB) > 32 {
+		panic("copyBytes: input exceeds 32 bytes, would silently truncate")
+	}
 	aBLen := len(aB)
 	if aBLen < 32 {
 		diff := 32 - aBLen
-		for i := 0; i < diff; i++ {
-			aB = append([]byte{0x00}, aB...)
-		}
+		padded := make([]byte, 32)
+		copy(padded[diff:], aB)
+		aB = padded
 	}
-
-	for i := 0; i < 32; i++ {
-		s[i] = aB[i]
-	}
-
+	copy(s[:], aB)
 	return s
 }
 
@@ -75,13 +57,11 @@ func ecPointToEncodedBytes(x *big.Int, y *big.Int) *[32]byte {
 	xFE := new(edwards25519.FieldElement)
 	edwards25519.FeFromBytes(xFE, xB)
 	isNegative := edwards25519.FeIsNegative(xFE) == 1
-
 	if isNegative {
 		s[31] |= (1 << 7)
 	} else {
 		s[31] &^= (1 << 7)
 	}
-
 	return s
 }
 

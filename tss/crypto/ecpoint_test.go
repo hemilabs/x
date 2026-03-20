@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package crypto_test
 
@@ -17,8 +20,8 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/hemilabs/x/tss/v2/crypto"
-	"github.com/hemilabs/x/tss/v2/tss"
+	. "github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 func TestFlattenECPoints(t *testing.T) {
@@ -39,18 +42,22 @@ func TestFlattenECPoints(t *testing.T) {
 		want: []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)},
 	}, {
 		name: "flatten with nil point (expects err)",
-		args: args{[]*ECPoint{
-			NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
-			nil,
-			NewECPointNoCurveCheck(tss.EC(), big.NewInt(3), big.NewInt(4))},
+		args: args{
+			[]*ECPoint{
+				NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
+				nil,
+				NewECPointNoCurveCheck(tss.EC(), big.NewInt(3), big.NewInt(4)),
+			},
 		},
 		want:    nil,
 		wantErr: true,
 	}, {
 		name: "flatten with nil coordinate (expects err)",
-		args: args{[]*ECPoint{
-			NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
-			NewECPointNoCurveCheck(tss.EC(), nil, big.NewInt(4))},
+		args: args{
+			[]*ECPoint{
+				NewECPointNoCurveCheck(tss.EC(), big.NewInt(1), big.NewInt(2)),
+				NewECPointNoCurveCheck(tss.EC(), nil, big.NewInt(4)),
+			},
 		},
 		want:    nil,
 		wantErr: true,

@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package common
 
@@ -53,12 +56,14 @@ func NonEmptyMultiBytes(bzs [][]byte, expectLen ...int) bool {
 
 // PadToLengthBytesInPlace pad {0, ...} to the front of src if len(src) < length
 // output length is equal to the parameter length
+//
+// [FORK] Upstream uses an O(n^2) prepend loop (repeatedly prepending a zero byte
+// and re-allocating). Replaced with a single O(n) allocation + copy.
 func PadToLengthBytesInPlace(src []byte, length int) []byte {
-	oriLen := len(src)
-	if oriLen < length {
-		for i := 0; i < length-oriLen; i++ {
-			src = append([]byte{0}, src...)
-		}
+	if len(src) >= length {
+		return src
 	}
-	return src
+	padded := make([]byte, length)
+	copy(padded[length-len(src):], src)
+	return padded
 }

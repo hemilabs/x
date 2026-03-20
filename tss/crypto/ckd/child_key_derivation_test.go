@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package ckd_test
 
@@ -10,7 +13,8 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	. "github.com/hemilabs/x/tss/v2/crypto/ckd"
+
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/ckd"
 )
 
 func TestPublicDerivation(t *testing.T) {

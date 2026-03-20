@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package modproof_test
 
@@ -13,10 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hemilabs/x/tss/v2/common"
-	. "github.com/hemilabs/x/tss/v2/crypto/modproof"
-	"github.com/hemilabs/x/tss/v2/ecdsa/keygen"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 )
 
 var Session = []byte("session")
@@ -38,9 +42,7 @@ func TestMod(test *testing.T) {
 	assert.True(test, ok, "proof must verify")
 }
 
-var (
-	one = big.NewInt(1)
-)
+var one = big.NewInt(1)
 
 func NewHackedProof(Session []byte, N, P *big.Int, Q []*big.Int) (*ProofMod, error) {
 	Phi := new(big.Int).Sub(P, one)
@@ -104,6 +106,37 @@ func mustSetString(s string) *big.Int {
 		panic("Failed to parse integer: " + s)
 	}
 	return i
+}
+
+func TestModProofRejectsSmallN(test *testing.T) {
+	// Generate valid 2048-bit parameters and a valid proof.
+	preParams, err := keygen.GeneratePreParams(time.Minute*10, 8)
+	assert.NoError(test, err)
+
+	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
+
+	proof, err := NewProof(Session, N, P, Q, rand.Reader)
+	assert.NoError(test, err)
+
+	// Sanity: the proof must pass with the proper N (>= 2048 bits).
+	ok := proof.Verify(Session, N)
+	assert.True(test, ok, "proof must verify with proper 2048-bit N")
+
+	// Build a small N (1024-bit) from two 512-bit primes.
+	smallP, err := rand.Prime(rand.Reader, 512)
+	assert.NoError(test, err)
+	smallQ, err := rand.Prime(rand.Reader, 512)
+	assert.NoError(test, err)
+	smallN := new(big.Int).Mul(smallP, smallQ)
+	assert.True(test, smallN.BitLen() < 2048, "smallN must be less than 2048 bits")
+
+	// The [FORK] BitLen < 2048 check in Verify must reject smallN.
+	ok = proof.Verify(Session, smallN)
+	assert.False(test, ok, "proof must be rejected when N.BitLen() < 2048")
+
+	// nil N must also be rejected.
+	ok = proof.Verify(Session, nil)
+	assert.False(test, ok, "proof must be rejected when N is nil")
 }
 
 func TestAttackMod(test *testing.T) {

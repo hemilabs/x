@@ -1,21 +1,29 @@
 // Copyright © 2021 Swingby
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package signing
 
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"errors"
 	"math/big"
 
-	"github.com/hemilabs/x/tss/v2/common"
-	"github.com/hemilabs/x/tss/v2/crypto"
-	"github.com/hemilabs/x/tss/v2/crypto/ckd"
-	"github.com/hemilabs/x/tss/v2/ecdsa/keygen"
-
-	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 )
 
+// UpdatePublicKeyAndAdjustBigXj adjusts the distributed public key and BigXj shares for BIP-32 key derivation.
 func UpdatePublicKeyAndAdjustBigXj(keyDerivationDelta *big.Int, keys []keygen.LocalPartySaveData, extendedChildPk *ecdsa.PublicKey, ec elliptic.Curve) error {
+	// [FORK] Guard keyDerivationDelta=0: ScalarBaseMult(0) panics (identity point).
+	// keyDerivationDelta is a sum of BIP-32 IL values mod q; each is validated non-zero
+	// individually, but their sum mod q could be 0 with probability ~2^-256.
+	if keyDerivationDelta.Sign() == 0 {
+		return errors.New("UpdatePublicKeyAndAdjustBigXj: keyDerivationDelta is zero")
+	}
 	var err error
 	gDelta := crypto.ScalarBaseMult(ec, keyDerivationDelta)
 	for k := range keys {
@@ -35,25 +43,4 @@ func UpdatePublicKeyAndAdjustBigXj(keyDerivationDelta *big.Int, keys []keygen.Lo
 		}
 	}
 	return nil
-}
-
-func derivingPubkeyFromPath(masterPub *crypto.ECPoint, chainCode []byte, path []uint32, ec elliptic.Curve) (*big.Int, *ckd.ExtendedKey, error) {
-	// build ecdsa key pair
-	pk := ecdsa.PublicKey{
-		Curve: ec,
-		X:     masterPub.X(),
-		Y:     masterPub.Y(),
-	}
-
-	net := &chaincfg.MainNetParams
-	extendedParentPk := &ckd.ExtendedKey{
-		PublicKey:  pk,
-		Depth:      0,
-		ChildIndex: 0,
-		ChainCode:  chainCode[:],
-		ParentFP:   []byte{0x00, 0x00, 0x00, 0x00},
-		Version:    net.HDPrivateKeyID[:],
-	}
-
-	return ckd.DeriveChildKeyFromHierarchy(path, extendedParentPk, ec.Params().N, ec)
 }

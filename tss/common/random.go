@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package common
 
@@ -25,25 +28,31 @@ func MustGetRandomInt(rand io.Reader, bits int) *big.Int {
 		panic(fmt.Errorf("MustGetRandomInt: bits should be positive, non-zero and less than %d", mustGetRandomIntMaxBits))
 	}
 	// Max random value e.g. 2^256 - 1
-	max := new(big.Int)
-	max = max.Exp(two, big.NewInt(int64(bits)), nil).Sub(max, one)
+	maxVal := new(big.Int)
+	maxVal = maxVal.Exp(two, big.NewInt(int64(bits)), nil).Sub(maxVal, one)
 
 	// Generate cryptographically strong pseudo-random int between 0 - max
-	n, err := cryptorand.Int(rand, max)
+	n, err := cryptorand.Int(rand, maxVal)
 	if err != nil {
 		panic(errors.Wrap(err, "rand.Int failure in MustGetRandomInt!"))
 	}
 	return n
 }
 
+// [FORK] Two fixes vs upstream:
+//  1. Guard: upstream checks `zero.Cmp(lessThan) != -1` which allows lessThan=1
+//     through, then returns 0 (not positive). We require lessThan >= 2 so the
+//     interval [1, lessThan) is non-empty.
+//  2. Loop condition: upstream only checks `try.Cmp(lessThan) < 0` and can
+//     return zero (which is not positive). We add `try.Sign() > 0`.
 func GetRandomPositiveInt(rand io.Reader, lessThan *big.Int) *big.Int {
-	if lessThan == nil || zero.Cmp(lessThan) != -1 {
+	if lessThan == nil || lessThan.Cmp(two) < 0 {
 		return nil
 	}
 	var try *big.Int
 	for {
 		try = MustGetRandomInt(rand, lessThan.BitLen())
-		if try.Cmp(lessThan) < 0 {
+		if try.Sign() > 0 && try.Cmp(lessThan) < 0 {
 			break
 		}
 	}

@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package vss_test
 
@@ -13,9 +16,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hemilabs/x/tss/v2/common"
-	. "github.com/hemilabs/x/tss/v2/crypto/vss"
-	"github.com/hemilabs/x/tss/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/vss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 func TestCheckIndexesDup(t *testing.T) {
@@ -54,7 +57,7 @@ func TestCreate(t *testing.T) {
 		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, tss.EC().Params().N))
 	}
 
-	vs, _, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
+	vs, _, _, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
 	assert.Nil(t, err)
 
 	assert.Equal(t, threshold+1, len(vs))
@@ -82,7 +85,7 @@ func TestVerify(t *testing.T) {
 		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, tss.EC().Params().N))
 	}
 
-	vs, shares, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
+	vs, shares, _, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
 	assert.NoError(t, err)
 
 	for i := 0; i < num; i++ {
@@ -100,7 +103,7 @@ func TestReconstruct(t *testing.T) {
 		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, tss.EC().Params().N))
 	}
 
-	_, shares, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
+	_, shares, _, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
 	assert.NoError(t, err)
 
 	secret2, err2 := shares[:threshold-1].ReConstruct(tss.EC())

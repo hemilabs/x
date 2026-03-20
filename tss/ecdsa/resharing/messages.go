@@ -1,90 +1,77 @@
 // Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
-
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 package resharing
 
 import (
-	"crypto/elliptic"
 	"math/big"
 
-	"github.com/hemilabs/x/tss/v2/common"
-	"github.com/hemilabs/x/tss/v2/crypto"
-	cmt "github.com/hemilabs/x/tss/v2/crypto/commitments"
-	"github.com/hemilabs/x/tss/v2/crypto/dlnproof"
-	"github.com/hemilabs/x/tss/v2/crypto/facproof"
-	"github.com/hemilabs/x/tss/v2/crypto/modproof"
-	"github.com/hemilabs/x/tss/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss/v2/crypto/vss"
-	"github.com/hemilabs/x/tss/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
-// These messages were generated from Protocol Buffers definitions into ecdsa-resharing.pb.go
+// DGRound1Message is broadcast by old committee: ECDSA pub + VSS commitment + SSID.
+type DGRound1Message struct {
+	ECDSAPub    *crypto.ECPoint
+	VCommitment *big.Int
+	SSID        []byte
+}
 
-var (
-	// Ensure that signing messages implement ValidateBasic
-	_ = []tss.MessageContent{
-		(*DGRound1Message)(nil),
-		(*DGRound2Message1)(nil),
-		(*DGRound2Message2)(nil),
-		(*DGRound3Message1)(nil),
-		(*DGRound3Message2)(nil),
-		(*DGRound4Message1)(nil),
-		(*DGRound4Message2)(nil),
-	}
-)
+// ValidateBasic checks that required fields of DGRound1Message are non-nil.
+func (m *DGRound1Message) ValidateBasic() bool {
+	return m != nil && m.ECDSAPub != nil &&
+		m.VCommitment != nil && m.VCommitment.Sign() > 0 &&
+		len(m.SSID) > 0
+}
 
-// ----- //
-
+// NewDGRound1Message constructs a *tss.Message with the given content.
 func NewDGRound1Message(
 	to []*tss.PartyID,
 	from *tss.PartyID,
 	ecdsaPub *crypto.ECPoint,
 	vct cmt.HashCommitment,
 	ssid []byte,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               to,
-		IsBroadcast:      true,
-		IsToOldCommittee: false,
+) *tss.Message {
+	return &tss.Message{
+		From:        from,
+		To:          to,
+		IsBroadcast: true,
+		Content: &DGRound1Message{
+			ECDSAPub:    ecdsaPub,
+			VCommitment: vct,
+			SSID:        ssid,
+		},
 	}
-	content := &DGRound1Message{
-		EcdsaPubX:   ecdsaPub.X().Bytes(),
-		EcdsaPubY:   ecdsaPub.Y().Bytes(),
-		VCommitment: vct.Bytes(),
-		Ssid:        ssid,
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *DGRound1Message) ValidateBasic() bool {
+// DGRound2Message1 is broadcast by new committee: Paillier key + Pedersen params + proofs.
+type DGRound2Message1 struct {
+	PaillierPK *paillier.PublicKey
+	NTilde     *big.Int
+	H1         *big.Int
+	H2         *big.Int
+	ModProof   *modproof.ProofMod // nil in SNARK mode
+	DLNProof1  *dlnproof.Proof    // nil in SNARK mode
+	DLNProof2  *dlnproof.Proof    // nil in SNARK mode
+}
+
+// ValidateBasic checks that required fields of DGRound2Message1 are non-nil.
+func (m *DGRound2Message1) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.EcdsaPubX) &&
-		common.NonEmptyBytes(m.EcdsaPubY) &&
-		common.NonEmptyBytes(m.VCommitment)
+		m.PaillierPK != nil && m.PaillierPK.N != nil && m.PaillierPK.N.Sign() > 0 &&
+		m.NTilde != nil && m.NTilde.Sign() > 0 &&
+		m.H1 != nil && m.H1.Sign() > 0 &&
+		m.H2 != nil && m.H2.Sign() > 0
 }
 
-func (m *DGRound1Message) UnmarshalECDSAPub(ec elliptic.Curve) (*crypto.ECPoint, error) {
-	return crypto.NewECPoint(
-		ec,
-		new(big.Int).SetBytes(m.EcdsaPubX),
-		new(big.Int).SetBytes(m.EcdsaPubY))
-}
-
-func (m *DGRound1Message) UnmarshalVCommitment() *big.Int {
-	return new(big.Int).SetBytes(m.GetVCommitment())
-}
-
-func (m *DGRound1Message) UnmarshalSSID() []byte {
-	return m.GetSsid()
-}
-
-// ----- //
-
+// NewDGRound2Message1 constructs a *tss.Message with the given content.
 func NewDGRound2Message1(
 	to []*tss.PartyID,
 	from *tss.PartyID,
@@ -92,201 +79,140 @@ func NewDGRound2Message1(
 	modProof *modproof.ProofMod,
 	NTildei, H1i, H2i *big.Int,
 	dlnProof1, dlnProof2 *dlnproof.Proof,
-) (tss.ParsedMessage, error) {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               to,
-		IsBroadcast:      true,
-		IsToOldCommittee: false,
-	}
-	modPfBzs := modProof.Bytes()
-	dlnProof1Bz, err := dlnProof1.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	dlnProof2Bz, err := dlnProof2.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	content := &DGRound2Message1{
-		PaillierN:  paillierPK.N.Bytes(),
-		ModProof:   modPfBzs[:],
-		NTilde:     NTildei.Bytes(),
-		H1:         H1i.Bytes(),
-		H2:         H2i.Bytes(),
-		Dlnproof_1: dlnProof1Bz,
-		Dlnproof_2: dlnProof2Bz,
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg), nil
-}
-
-func (m *DGRound2Message1) ValidateBasic() bool {
-	return m != nil &&
-		// use with NoProofFac()
-		// common.NonEmptyMultiBytes(m.ModProof, modproof.ProofModBytesParts) &&
-		common.NonEmptyBytes(m.PaillierN) &&
-		common.NonEmptyBytes(m.NTilde) &&
-		common.NonEmptyBytes(m.H1) &&
-		common.NonEmptyBytes(m.H2) &&
-		// expected len of dln proof = sizeof(int64) + len(alpha) + len(t)
-		common.NonEmptyMultiBytes(m.GetDlnproof_1(), 2+(dlnproof.Iterations*2)) &&
-		common.NonEmptyMultiBytes(m.GetDlnproof_2(), 2+(dlnproof.Iterations*2))
-}
-
-func (m *DGRound2Message1) UnmarshalPaillierPK() *paillier.PublicKey {
-	return &paillier.PublicKey{
-		N: new(big.Int).SetBytes(m.PaillierN),
+) *tss.Message {
+	return &tss.Message{
+		From:        from,
+		To:          to,
+		IsBroadcast: true,
+		Content: &DGRound2Message1{
+			PaillierPK: paillierPK,
+			NTilde:     NTildei,
+			H1:         H1i,
+			H2:         H2i,
+			ModProof:   modProof,
+			DLNProof1:  dlnProof1,
+			DLNProof2:  dlnProof2,
+		},
 	}
 }
 
-func (m *DGRound2Message1) UnmarshalNTilde() *big.Int {
-	return new(big.Int).SetBytes(m.GetNTilde())
-}
+// DGRound2Message2 is an ACK broadcast from new to old committee.
+type DGRound2Message2 struct{}
 
-func (m *DGRound2Message1) UnmarshalH1() *big.Int {
-	return new(big.Int).SetBytes(m.GetH1())
-}
+// ValidateBasic checks that required fields of DGRound2Message2 are non-nil.
+func (m *DGRound2Message2) ValidateBasic() bool { return m != nil }
 
-func (m *DGRound2Message1) UnmarshalH2() *big.Int {
-	return new(big.Int).SetBytes(m.GetH2())
-}
-
-func (m *DGRound2Message1) UnmarshalModProof() (*modproof.ProofMod, error) {
-	return modproof.NewProofFromBytes(m.GetModProof())
-}
-
-func (m *DGRound2Message1) UnmarshalDLNProof1() (*dlnproof.Proof, error) {
-	return dlnproof.UnmarshalDLNProof(m.GetDlnproof_1())
-}
-
-func (m *DGRound2Message1) UnmarshalDLNProof2() (*dlnproof.Proof, error) {
-	return dlnproof.UnmarshalDLNProof(m.GetDlnproof_2())
-}
-
-// ----- //
-
+// NewDGRound2Message2 constructs a *tss.Message with the given content.
 func NewDGRound2Message2(
 	to []*tss.PartyID,
 	from *tss.PartyID,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+) *tss.Message {
+	return &tss.Message{
 		From:             from,
 		To:               to,
 		IsBroadcast:      true,
 		IsToOldCommittee: true,
+		Content:          &DGRound2Message2{},
 	}
-	content := &DGRound2Message2{}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *DGRound2Message2) ValidateBasic() bool {
-	return true
+// DGRound3Message1 is P2P from old to new: VSS share.
+type DGRound3Message1 struct {
+	Share      *big.Int
+	ReceiverID []byte
 }
 
-// ----- //
+// ValidateBasic checks that required fields of DGRound3Message1 are non-nil.
+func (m *DGRound3Message1) ValidateBasic() bool {
+	return m != nil && m.Share != nil && m.Share.Sign() > 0 &&
+		len(m.ReceiverID) > 0
+}
 
+// NewDGRound3Message1 constructs a *tss.Message with the given content.
 func NewDGRound3Message1(
 	to *tss.PartyID,
 	from *tss.PartyID,
 	share *vss.Share,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               []*tss.PartyID{to},
-		IsBroadcast:      false,
-		IsToOldCommittee: false,
+) *tss.Message {
+	return &tss.Message{
+		From: from,
+		To:   []*tss.PartyID{to},
+		Content: &DGRound3Message1{
+			Share:      share.Share,
+			ReceiverID: to.Key,
+		},
 	}
-	content := &DGRound3Message1{
-		Share: share.Share.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *DGRound3Message1) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.Share)
+// DGRound3Message2 is broadcast by old committee: VSS decommitment.
+type DGRound3Message2 struct {
+	VDeCommitment cmt.HashDeCommitment
 }
 
-// ----- //
+// ValidateBasic checks that required fields of DGRound3Message2 are non-nil.
+func (m *DGRound3Message2) ValidateBasic() bool {
+	return m != nil && len(m.VDeCommitment) >= 2
+}
 
+// NewDGRound3Message2 constructs a *tss.Message with the given content.
 func NewDGRound3Message2(
 	to []*tss.PartyID,
 	from *tss.PartyID,
 	vdct cmt.HashDeCommitment,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               to,
-		IsBroadcast:      true,
-		IsToOldCommittee: false,
+) *tss.Message {
+	return &tss.Message{
+		From:        from,
+		To:          to,
+		IsBroadcast: true,
+		Content: &DGRound3Message2{
+			VDeCommitment: vdct,
+		},
 	}
-	vDctBzs := common.BigIntsToBytes(vdct)
-	content := &DGRound3Message2{
-		VDecommitment: vDctBzs,
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *DGRound3Message2) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.VDecommitment)
+// DGRound4Message1 is P2P from new to new: FacProof.
+type DGRound4Message1 struct {
+	FacProof   *facproof.ProofFac // nil in SNARK mode
+	ReceiverID []byte
 }
 
-func (m *DGRound3Message2) UnmarshalVDeCommitment() cmt.HashDeCommitment {
-	deComBzs := m.GetVDecommitment()
-	return cmt.NewHashDeCommitmentFromBytes(deComBzs)
+// ValidateBasic checks that required fields of DGRound4Message1 are non-nil.
+func (m *DGRound4Message1) ValidateBasic() bool {
+	return m != nil && len(m.ReceiverID) > 0
 }
 
-// ----- //
-
-func NewDGRound4Message2(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:                    from,
-		To:                      to,
-		IsBroadcast:             true,
-		IsToOldAndNewCommittees: true,
-	}
-	content := &DGRound4Message2{}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
-}
-
-func (m *DGRound4Message2) ValidateBasic() bool {
-	return true
-}
-
+// NewDGRound4Message1 constructs a *tss.Message with the given content.
 func NewDGRound4Message1(
 	to *tss.PartyID,
 	from *tss.PartyID,
 	proof *facproof.ProofFac,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:             from,
-		To:               []*tss.PartyID{to},
-		IsBroadcast:      false,
-		IsToOldCommittee: false,
+) *tss.Message {
+	return &tss.Message{
+		From: from,
+		To:   []*tss.PartyID{to},
+		Content: &DGRound4Message1{
+			FacProof:   proof,
+			ReceiverID: to.Key,
+		},
 	}
-	pfBzs := proof.Bytes()
-	content := &DGRound4Message1{
-		FacProof: pfBzs[:],
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *DGRound4Message1) ValidateBasic() bool {
-	return m != nil
-	// use with NoProofFac()
-	// && common.NonEmptyMultiBytes(m.GetFacProof(), facproof.ProofFacBytesParts)
-}
+// DGRound4Message2 is an ACK broadcast to both committees.
+type DGRound4Message2 struct{}
 
-func (m *DGRound4Message1) UnmarshalFacProof() (*facproof.ProofFac, error) {
-	return facproof.NewProofFromBytes(m.GetFacProof())
+// ValidateBasic checks that required fields of DGRound4Message2 are non-nil.
+func (m *DGRound4Message2) ValidateBasic() bool { return m != nil }
+
+// NewDGRound4Message2 constructs a *tss.Message with the given content.
+func NewDGRound4Message2(
+	to []*tss.PartyID,
+	from *tss.PartyID,
+) *tss.Message {
+	return &tss.Message{
+		From:                    from,
+		To:                      to,
+		IsBroadcast:             true,
+		IsToOldAndNewCommittees: true,
+		Content:                 &DGRound4Message2{},
+	}
 }

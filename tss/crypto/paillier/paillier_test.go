@@ -3,6 +3,9 @@
 // This file is part of Binance. The full Binance copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package paillier_test
 
@@ -15,10 +18,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hemilabs/x/tss/v2/common"
-	"github.com/hemilabs/x/tss/v2/crypto"
-	. "github.com/hemilabs/x/tss/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // Using a modulus length of 2048 is recommended in the GG18 spec
