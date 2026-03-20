@@ -188,6 +188,77 @@ func TestGetSSIDIncludesNonce(t *testing.T) {
 	}
 }
 
+// TestGetSSIDDifferentThreshold verifies that changing the threshold
+// (e.g., 1-of-4 vs 2-of-4) changes the SSID.
+func TestGetSSIDDifferentThreshold(t *testing.T) {
+	// Use deterministic keys so only the threshold differs.
+	ids := tss.UnSortedPartyIDs{
+		tss.NewPartyID("1", "P", big.NewInt(101)),
+		tss.NewPartyID("2", "P", big.NewInt(102)),
+		tss.NewPartyID("3", "P", big.NewInt(103)),
+		tss.NewPartyID("4", "P", big.NewInt(104)),
+	}
+	sorted := tss.SortPartyIDs(ids)
+	peerCtx := tss.NewPeerContext(sorted)
+
+	params1 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 4, 1)
+	temp1 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
+	ssid1, err := getSSID(params1, temp1, 1)
+	if err != nil {
+		t.Fatalf("threshold=1: %v", err)
+	}
+
+	params2 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 4, 2)
+	temp2 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
+	ssid2, err := getSSID(params2, temp2, 1)
+	if err != nil {
+		t.Fatalf("threshold=2: %v", err)
+	}
+
+	if bytes.Equal(ssid1, ssid2) {
+		t.Fatal("different thresholds must produce different SSIDs")
+	}
+}
+
+// TestGetSSIDDifferentPartyCount verifies that changing the party count
+// (e.g., 3 parties vs 4 parties) changes the SSID.
+func TestGetSSIDDifferentPartyCount(t *testing.T) {
+	// 3-party set
+	ids3 := tss.UnSortedPartyIDs{
+		tss.NewPartyID("1", "P", big.NewInt(101)),
+		tss.NewPartyID("2", "P", big.NewInt(102)),
+		tss.NewPartyID("3", "P", big.NewInt(103)),
+	}
+	sorted3 := tss.SortPartyIDs(ids3)
+	peerCtx3 := tss.NewPeerContext(sorted3)
+	params3 := tss.NewParameters(tss.S256(), peerCtx3, sorted3[0], 3, 1)
+	temp3 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
+	ssid3, err := getSSID(params3, temp3, 1)
+	if err != nil {
+		t.Fatalf("n=3: %v", err)
+	}
+
+	// 4-party set (superset of the 3-party set)
+	ids4 := tss.UnSortedPartyIDs{
+		tss.NewPartyID("1", "P", big.NewInt(101)),
+		tss.NewPartyID("2", "P", big.NewInt(102)),
+		tss.NewPartyID("3", "P", big.NewInt(103)),
+		tss.NewPartyID("4", "P", big.NewInt(104)),
+	}
+	sorted4 := tss.SortPartyIDs(ids4)
+	peerCtx4 := tss.NewPeerContext(sorted4)
+	params4 := tss.NewParameters(tss.S256(), peerCtx4, sorted4[0], 4, 1)
+	temp4 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
+	ssid4, err := getSSID(params4, temp4, 1)
+	if err != nil {
+		t.Fatalf("n=4: %v", err)
+	}
+
+	if bytes.Equal(ssid3, ssid4) {
+		t.Fatal("different party counts must produce different SSIDs")
+	}
+}
+
 // TestGetSSIDOutputLength verifies that getSSID produces a
 // SHA-512/256 output (32 bytes).
 func TestGetSSIDOutputLength(t *testing.T) {
