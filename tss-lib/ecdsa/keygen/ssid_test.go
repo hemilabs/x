@@ -259,6 +259,37 @@ func TestGetSSIDDifferentPartyCount(t *testing.T) {
 	}
 }
 
+// TestGetSSIDDifferentCurve verifies that using a different elliptic
+// curve (Edwards25519 vs secp256k1) produces a different SSID, since
+// the curve parameters (P, N, B, Gx, Gy) are all hashed.
+func TestGetSSIDDifferentCurve(t *testing.T) {
+	ids := tss.UnSortedPartyIDs{
+		tss.NewPartyID("1", "P", big.NewInt(101)),
+		tss.NewPartyID("2", "P", big.NewInt(102)),
+		tss.NewPartyID("3", "P", big.NewInt(103)),
+	}
+	sorted := tss.SortPartyIDs(ids)
+
+	peerCtx := tss.NewPeerContext(sorted)
+	temp := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
+
+	paramsS256 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 3, 1)
+	ssidS256, err := getSSID(paramsS256, temp, 1)
+	if err != nil {
+		t.Fatalf("S256: %v", err)
+	}
+
+	paramsEd := tss.NewParameters(tss.Edwards(), peerCtx, sorted[0], 3, 1)
+	ssidEd, err := getSSID(paramsEd, temp, 1)
+	if err != nil {
+		t.Fatalf("Edwards: %v", err)
+	}
+
+	if bytes.Equal(ssidS256, ssidEd) {
+		t.Fatal("different curves must produce different SSIDs")
+	}
+}
+
 // TestGetSSIDOutputLength verifies that getSSID produces a
 // SHA-512/256 output (32 bytes).
 func TestGetSSIDOutputLength(t *testing.T) {
