@@ -316,6 +316,95 @@ func TestOldAndNewIndexOverlappingParty(t *testing.T) {
 	}
 }
 
+// ---------- Cryptographic material sensitivity ----------
+
+// TestGetReshareSSIDDifferentBigXj verifies that changing any single
+// BigXj (old party public key share) changes the SSID.
+func TestGetReshareSSIDDifferentBigXj(t *testing.T) {
+	params, input, temp, _, _ := buildTestResharingFixture(t)
+	ssidOrig, err := getReshareSSID(params, input, temp, 1)
+	if err != nil {
+		t.Fatalf("original: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		t.Run(big.NewInt(int64(i)).String(), func(t *testing.T) {
+			clone := cloneResharingSaveData(input, 3)
+			clone.BigXj[i] = crypto.ScalarBaseMult(tss.S256(), big.NewInt(999))
+			ssid, err := getReshareSSID(params, clone, temp, 1)
+			if err != nil {
+				t.Fatalf("mutated BigXj[%d]: %v", i, err)
+			}
+			if bytes.Equal(ssidOrig, ssid) {
+				t.Fatalf("changing BigXj[%d] did not change SSID", i)
+			}
+		})
+	}
+}
+
+// TestGetReshareSSIDDifferentNTildej verifies that changing a single
+// NTildej (Pedersen modulus) changes the SSID.
+func TestGetReshareSSIDDifferentNTildej(t *testing.T) {
+	params, input, temp, _, _ := buildTestResharingFixture(t)
+	ssidOrig, _ := getReshareSSID(params, input, temp, 1)
+
+	clone := cloneResharingSaveData(input, 3)
+	clone.NTildej[1] = big.NewInt(99999)
+	ssid, err := getReshareSSID(params, clone, temp, 1)
+	if err != nil {
+		t.Fatalf("mutated NTildej: %v", err)
+	}
+	if bytes.Equal(ssidOrig, ssid) {
+		t.Fatal("changing NTildej did not change SSID")
+	}
+}
+
+// TestGetReshareSSIDDifferentH1j verifies that changing a single H1j
+// (Pedersen generator) changes the SSID.
+func TestGetReshareSSIDDifferentH1j(t *testing.T) {
+	params, input, temp, _, _ := buildTestResharingFixture(t)
+	ssidOrig, _ := getReshareSSID(params, input, temp, 1)
+
+	clone := cloneResharingSaveData(input, 3)
+	clone.H1j[1] = big.NewInt(99999)
+	ssid, err := getReshareSSID(params, clone, temp, 1)
+	if err != nil {
+		t.Fatalf("mutated H1j: %v", err)
+	}
+	if bytes.Equal(ssidOrig, ssid) {
+		t.Fatal("changing H1j did not change SSID")
+	}
+}
+
+// TestGetReshareSSIDDifferentH2j verifies that changing a single H2j
+// (Pedersen generator) changes the SSID.
+func TestGetReshareSSIDDifferentH2j(t *testing.T) {
+	params, input, temp, _, _ := buildTestResharingFixture(t)
+	ssidOrig, _ := getReshareSSID(params, input, temp, 1)
+
+	clone := cloneResharingSaveData(input, 3)
+	clone.H2j[1] = big.NewInt(99999)
+	ssid, err := getReshareSSID(params, clone, temp, 1)
+	if err != nil {
+		t.Fatalf("mutated H2j: %v", err)
+	}
+	if bytes.Equal(ssidOrig, ssid) {
+		t.Fatal("changing H2j did not change SSID")
+	}
+}
+
+// cloneResharingSaveData creates a shallow clone with deep-copied slices.
+func cloneResharingSaveData(src *keygen.LocalPartySaveData, n int) *keygen.LocalPartySaveData {
+	dst := keygen.NewLocalPartySaveData(n)
+	for i := 0; i < n; i++ {
+		dst.BigXj[i] = src.BigXj[i]
+		dst.NTildej[i] = new(big.Int).Set(src.NTildej[i])
+		dst.H1j[i] = new(big.Int).Set(src.H1j[i])
+		dst.H2j[i] = new(big.Int).Set(src.H2j[i])
+	}
+	return &dst
+}
+
 // ---------- SSID length / format sanity ----------
 
 func TestGetReshareSSIDLength(t *testing.T) {
