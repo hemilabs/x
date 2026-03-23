@@ -1,4 +1,7 @@
 // Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
+
 // Tests for DLN proof fork changes: SSID session domain separation,
 // N.BitLen() < 2048 rejection, and consolidated pre-validation.
 

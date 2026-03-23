@@ -11,6 +11,7 @@
 // Usage:
 //
 //	go run ./cmd/tss-ecdsa-demo
+
 package main
 
 import (

@@ -1,4 +1,7 @@
 // Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
+
 // Tests for FacProof fork changes: SSID session domain separation,
 // V sign-magnitude encoding, N0/NCap BitLen < 2048 rejection.
 

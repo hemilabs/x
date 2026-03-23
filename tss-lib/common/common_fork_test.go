@@ -1,5 +1,7 @@
-// Copyright © 2024 Hemi Labs
-//
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
+
 // Tests for fork changes in common utility functions.
 
 package common

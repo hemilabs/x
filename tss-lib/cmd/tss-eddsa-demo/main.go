@@ -9,6 +9,7 @@
 // Usage:
 //
 //	go run ./cmd/tss-eddsa-demo
+
 package main
 
 import (
