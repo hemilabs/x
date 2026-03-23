@@ -95,9 +95,24 @@ func SignRound1(
 	}
 	data := &SignatureData{}
 
-	// Validate message
+	// Validate inputs.
+	if msg == nil {
+		return nil, nil, errors.New("invalid message: msg is nil")
+	}
 	if msg.Sign() < 0 || msg.Cmp(params.EC().Params().N) >= 0 {
 		return nil, nil, errors.New("hashed message is not valid")
+	}
+	if key.Xi == nil || key.Xi.Sign() == 0 {
+		return nil, nil, errors.New("invalid key data: Xi is nil or zero")
+	}
+	if key.ECDSAPub == nil || !key.ECDSAPub.ValidateBasic() {
+		return nil, nil, errors.New("invalid key data: ECDSAPub is nil or not on curve")
+	}
+	if fullBytesLen < 0 {
+		return nil, nil, errors.New("invalid fullBytesLen: must be non-negative")
+	}
+	if fullBytesLen > 0 && len(msg.Bytes()) > fullBytesLen {
+		return nil, nil, fmt.Errorf("fullBytesLen %d too small for message of %d bytes", fullBytesLen, len(msg.Bytes()))
 	}
 
 	// Auto-subset: if the key has more parties than the signing
@@ -174,6 +189,13 @@ func SignRound1(
 // r1bcast[j] is party j's SignRound1Message2 (broadcast).
 func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.Message) (*SignRoundOutput, error) {
 	params, key, temp := state.params, state.key, state.temp
+	n := params.PartyCount()
+	if len(r1p2p) != n {
+		return nil, fmt.Errorf("expected %d round 1 P2P messages, got %d", n, len(r1p2p))
+	}
+	if len(r1bcast) != n {
+		return nil, fmt.Errorf("expected %d round 1 broadcast messages, got %d", n, len(r1bcast))
+	}
 	tss.MergeMsgs(temp.signRound1Message1s, r1p2p)
 	tss.MergeMsgs(temp.signRound1Message2s, r1bcast)
 
@@ -184,6 +206,9 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
+		}
+		if r1p2p[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 1 P2P message"), TaskName, 2, params.PartyID(), Pj)
 		}
 		r1msg := r1p2p[j].Content.(*SignRound1Message1)
 		if !bytes.Equal(r1msg.ReceiverID, myKey) {
@@ -290,6 +315,9 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 // SignRound3 processes round 2 MtA responses and computes theta/sigma.
 func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) (*SignRoundOutput, error) {
 	params, key, temp := state.params, state.key, state.temp
+	if len(r2p2p) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 2 messages, got %d", params.PartyCount(), len(r2p2p))
+	}
 	tss.MergeMsgs(temp.signRound2Messages, r2p2p)
 
 	n := len(params.Parties().IDs())
@@ -302,6 +330,9 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
+		}
+		if r2p2p[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 2 P2P message"), TaskName, 3, params.PartyID(), Pj)
 		}
 		r2msg := r2p2p[j].Content.(*SignRound2Message)
 		if !bytes.Equal(r2msg.ReceiverID, myKey) {
@@ -402,6 +433,9 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 // SignRound4 computes thetaInverse and Schnorr proof for gamma.
 func SignRound4(state *SigningState, r3bcast []*tss.Message) (*SignRoundOutput, error) {
 	params, temp := state.params, state.temp
+	if len(r3bcast) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 3 messages, got %d", params.PartyCount(), len(r3bcast))
+	}
 	tss.MergeMsgs(temp.signRound3Messages, r3bcast)
 
 	theta := new(big.Int).Set(temp.theta)
@@ -411,6 +445,9 @@ func SignRound4(state *SigningState, r3bcast []*tss.Message) (*SignRoundOutput, 
 	for j := range params.Parties().IDs() {
 		if j == i {
 			continue
+		}
+		if r3bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 3 message"), TaskName, 4, params.PartyID(), params.Parties().IDs()[j])
 		}
 		r3msg := r3bcast[j].Content.(*SignRound3Message)
 		theta = modN.Add(theta, r3msg.Theta)
@@ -435,6 +472,9 @@ func SignRound4(state *SigningState, r3bcast []*tss.Message) (*SignRoundOutput, 
 // SignRound5 verifies commitments, computes R, and produces blinding.
 func SignRound5(state *SigningState, r4bcast []*tss.Message) (*SignRoundOutput, error) {
 	params, temp := state.params, state.temp
+	if len(r4bcast) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 4 messages, got %d", params.PartyCount(), len(r4bcast))
+	}
 	tss.MergeMsgs(temp.signRound4Messages, r4bcast)
 
 	i := params.PartyID().Index
@@ -444,6 +484,12 @@ func SignRound5(state *SigningState, r4bcast []*tss.Message) (*SignRoundOutput, 
 			continue
 		}
 		ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
+		if temp.signRound1Message2s[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 1 broadcast message"), TaskName, 5, params.PartyID(), Pj)
+		}
+		if r4bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 4 message"), TaskName, 5, params.PartyID(), Pj)
+		}
 		r1msg2 := temp.signRound1Message2s[j].Content.(*SignRound1Message2)
 		r4msg := r4bcast[j].Content.(*SignRound4Message)
 		SCj, SDj := r1msg2.Commitment, r4msg.DeCommitment
@@ -545,6 +591,13 @@ func SignRound6(state *SigningState) (*SignRoundOutput, error) {
 // SignRound7 verifies blinding proofs, computes Ui/Ti, and commits.
 func SignRound7(state *SigningState, r5bcast, r6bcast []*tss.Message) (*SignRoundOutput, error) {
 	params, key, temp := state.params, state.key, state.temp
+	n := params.PartyCount()
+	if len(r5bcast) != n {
+		return nil, fmt.Errorf("expected %d round 5 messages, got %d", n, len(r5bcast))
+	}
+	if len(r6bcast) != n {
+		return nil, fmt.Errorf("expected %d round 6 messages, got %d", n, len(r6bcast))
+	}
 	tss.MergeMsgs(temp.signRound5Messages, r5bcast)
 	tss.MergeMsgs(temp.signRound6Messages, r6bcast)
 
@@ -556,6 +609,12 @@ func SignRound7(state *SigningState, r5bcast, r6bcast []*tss.Message) (*SignRoun
 			continue
 		}
 		ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
+		if r5bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 5 message"), TaskName, 7, params.PartyID(), Pj)
+		}
+		if r6bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 6 message"), TaskName, 7, params.PartyID(), Pj)
+		}
 		r5msg := r5bcast[j].Content.(*SignRound5Message)
 		r6msg := r6bcast[j].Content.(*SignRound6Message)
 		cj, dj := r5msg.Commitment, r6msg.DeCommitment
@@ -637,6 +696,13 @@ func SignRound8(state *SigningState) (*SignRoundOutput, error) {
 // SignRound9 verifies Ui==Ti consistency and reveals si.
 func SignRound9(state *SigningState, r7bcast, r8bcast []*tss.Message) (*SignRoundOutput, error) {
 	params, temp := state.params, state.temp
+	n := params.PartyCount()
+	if len(r7bcast) != n {
+		return nil, fmt.Errorf("expected %d round 7 messages, got %d", n, len(r7bcast))
+	}
+	if len(r8bcast) != n {
+		return nil, fmt.Errorf("expected %d round 8 messages, got %d", n, len(r8bcast))
+	}
 	tss.MergeMsgs(temp.signRound7Messages, r7bcast)
 	tss.MergeMsgs(temp.signRound8Messages, r8bcast)
 
@@ -646,6 +712,12 @@ func SignRound9(state *SigningState, r7bcast, r8bcast []*tss.Message) (*SignRoun
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
+		}
+		if r7bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 7 message"), TaskName, 9, params.PartyID(), Pj)
+		}
+		if r8bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 8 message"), TaskName, 9, params.PartyID(), Pj)
 		}
 		r7msg := r7bcast[j].Content.(*SignRound7Message)
 		r8msg := r8bcast[j].Content.(*SignRound8Message)
@@ -685,6 +757,9 @@ func SignRound9(state *SigningState, r7bcast, r8bcast []*tss.Message) (*SignRoun
 // and verifies the final ECDSA signature.
 func SignFinalize(state *SigningState, r9bcast []*tss.Message) (*SignRoundOutput, error) {
 	params, key, temp, data := state.params, state.key, state.temp, state.data
+	if len(r9bcast) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 9 messages, got %d", params.PartyCount(), len(r9bcast))
+	}
 	tss.MergeMsgs(temp.signRound9Messages, r9bcast)
 
 	sumS := new(big.Int).Set(temp.si)
@@ -695,6 +770,9 @@ func SignFinalize(state *SigningState, r9bcast []*tss.Message) (*SignRoundOutput
 	for j := range params.Parties().IDs() {
 		if j == i {
 			continue
+		}
+		if r9bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 9 message"), TaskName, 10, params.PartyID(), params.Parties().IDs()[j])
 		}
 		r9msg := r9bcast[j].Content.(*SignRound9Message)
 		sj := r9msg.S

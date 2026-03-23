@@ -71,7 +71,47 @@ func runEdDSAKeygen(t *testing.T) ([]keygen.LocalPartySaveData, tss.SortedPartyI
 	return saves, pIDs
 }
 
-// --- SignRound1 error paths ---
+// --- SignRound1 input validation ---
+
+func TestSignRound1NilMessage(t *testing.T) {
+	saves, pIDs := runEdDSAKeygen(t)
+	peerCtx := tss.NewPeerContext(pIDs)
+	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+
+	_, _, err := SignRound1(params, saves[0], nil, 0)
+	if err == nil {
+		t.Fatal("expected error for nil msg")
+	}
+}
+
+func TestSignRound1NegativeFullBytesLen(t *testing.T) {
+	saves, pIDs := runEdDSAKeygen(t)
+	peerCtx := tss.NewPeerContext(pIDs)
+	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+
+	_, _, err := SignRound1(params, saves[0], big.NewInt(42), -1)
+	if err == nil {
+		t.Fatal("expected error for negative fullBytesLen")
+	}
+}
+
+func TestSignRound1FullBytesLenTooSmall(t *testing.T) {
+	saves, pIDs := runEdDSAKeygen(t)
+	peerCtx := tss.NewPeerContext(pIDs)
+	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+
+	// 0x0102 needs 2 bytes, but fullBytesLen=1
+	_, _, err := SignRound1(params, saves[0], big.NewInt(0x0102), 1)
+	if err == nil {
+		t.Fatal("expected error for fullBytesLen too small for message")
+	}
+
+	// Boundary: fullBytesLen == len(msg.Bytes()) should succeed
+	_, _, err = SignRound1(params, saves[0], big.NewInt(0x0102), 2)
+	if err != nil {
+		t.Fatalf("unexpected error for exact fullBytesLen: %v", err)
+	}
+}
 
 func TestSignRound1NilXi(t *testing.T) {
 	saves, pIDs := runEdDSAKeygen(t)
@@ -112,7 +152,55 @@ func TestSignRound1WrongKeyCount(t *testing.T) {
 	}
 }
 
-// --- SignRound2 error paths ---
+// --- SignRound2 input validation ---
+
+func TestSignRound2ShortR1Msgs(t *testing.T) {
+	saves, pIDs := runEdDSAKeygen(t)
+	peerCtx := tss.NewPeerContext(pIDs)
+
+	msg := sha256.Sum256([]byte("test"))
+	m := new(big.Int).SetBytes(msg[:])
+
+	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+	st, _, err := SignRound1(params, saves[0], m, 0)
+	if err != nil {
+		t.Fatalf("SignRound1: %v", err)
+	}
+
+	_, err = SignRound2(st, make([]*tss.Message, 2)) // too short
+	if err == nil {
+		t.Fatal("expected error for short r1Msgs")
+	}
+}
+
+func TestSignRound2NilR1MsgElement(t *testing.T) {
+	saves, pIDs := runEdDSAKeygen(t)
+	peerCtx := tss.NewPeerContext(pIDs)
+
+	msg := sha256.Sum256([]byte("test"))
+	m := new(big.Int).SetBytes(msg[:])
+
+	states := make([]*SigningState, 3)
+	r1 := make([]*tss.Message, 3)
+	for i := 0; i < 3; i++ {
+		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], 3, 1)
+		st, out, err := SignRound1(params, saves[i], m, 0)
+		if err != nil {
+			t.Fatalf("SignRound1[%d]: %v", i, err)
+		}
+		states[i] = st
+		r1[i] = out.Messages[0]
+	}
+
+	badR1 := make([]*tss.Message, 3)
+	copy(badR1, r1)
+	badR1[1] = nil // nil element
+
+	_, err := SignRound2(states[0], badR1)
+	if err == nil {
+		t.Fatal("expected error for nil r1Msgs element")
+	}
+}
 
 func TestSignRound2InvalidR1(t *testing.T) {
 	saves, pIDs := runEdDSAKeygen(t)
@@ -144,6 +232,27 @@ func TestSignRound2InvalidR1(t *testing.T) {
 	_, err := SignRound2(states[0], badR1)
 	if err == nil {
 		t.Fatal("expected error for invalid round 1 message")
+	}
+}
+
+// --- SignRound3 input validation ---
+
+func TestSignRound3ShortR2Msgs(t *testing.T) {
+	states, _, _ := runToSignRound3(t)
+	_, err := SignRound3(states[0], make([]*tss.Message, 2)) // too short
+	if err == nil {
+		t.Fatal("expected error for short r2Msgs")
+	}
+}
+
+func TestSignRound3NilR2MsgElement(t *testing.T) {
+	states, r2, _ := runToSignRound3(t)
+	badR2 := make([]*tss.Message, 3)
+	copy(badR2, r2)
+	badR2[1] = nil // nil element
+	_, err := SignRound3(states[0], badR2)
+	if err == nil {
+		t.Fatal("expected error for nil r2Msgs element")
 	}
 }
 
@@ -221,6 +330,41 @@ func TestSignRound3WrongProof(t *testing.T) {
 	_, err := SignRound3(states[0], badR2)
 	if err == nil {
 		t.Fatal("expected error for wrong proof")
+	}
+}
+
+// --- SignFinalize input validation ---
+
+func TestSignFinalizeShortR3Msgs(t *testing.T) {
+	states, r2, _ := runToSignRound3(t)
+	for i := 0; i < 3; i++ {
+		_, err := SignRound3(states[i], r2)
+		if err != nil {
+			t.Fatalf("SignRound3[%d]: %v", i, err)
+		}
+	}
+	_, err := SignFinalize(states[0], make([]*tss.Message, 2)) // too short
+	if err == nil {
+		t.Fatal("expected error for short r3Msgs")
+	}
+}
+
+func TestSignFinalizeNilR3MsgElement(t *testing.T) {
+	states, r2, _ := runToSignRound3(t)
+	r3 := make([]*tss.Message, 3)
+	for i := 0; i < 3; i++ {
+		out, err := SignRound3(states[i], r2)
+		if err != nil {
+			t.Fatalf("SignRound3[%d]: %v", i, err)
+		}
+		r3[i] = out.Messages[0]
+	}
+	badR3 := make([]*tss.Message, 3)
+	copy(badR3, r3)
+	badR3[1] = nil // nil element
+	_, err := SignFinalize(states[0], badR3)
+	if err == nil {
+		t.Fatal("expected error for nil r3Msgs element")
 	}
 }
 

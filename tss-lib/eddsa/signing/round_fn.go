@@ -49,6 +49,15 @@ func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.
 	if key.EDDSAPub == nil || !key.EDDSAPub.ValidateBasic() {
 		return nil, nil, errors.New("invalid key data: EDDSAPub is nil or not on curve")
 	}
+	if msg == nil {
+		return nil, nil, errors.New("invalid message: msg is nil")
+	}
+	if fullBytesLen < 0 {
+		return nil, nil, errors.New("invalid fullBytesLen: must be non-negative")
+	}
+	if fullBytesLen > 0 && len(msg.Bytes()) > fullBytesLen {
+		return nil, nil, fmt.Errorf("fullBytesLen %d too small for message of %d bytes", fullBytesLen, len(msg.Bytes()))
+	}
 
 	n := params.PartyCount()
 	i := params.PartyID().Index
@@ -109,8 +118,15 @@ func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, e
 	temp := &state.temp
 	i := params.PartyID().Index
 
+	if len(r1Msgs) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 1 messages, got %d", params.PartyCount(), len(r1Msgs))
+	}
+
 	// Store commitments.
 	for j, msg := range r1Msgs {
+		if msg == nil {
+			return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+		}
 		r1msg := msg.Content.(*SignRound1Message)
 		if !r1msg.ValidateBasic() {
 			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(), msg.From)
@@ -142,6 +158,10 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 	ec := params.EC()
 	N := ec.Params().N
 
+	if len(r2Msgs) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 2 messages, got %d", params.PartyCount(), len(r2Msgs))
+	}
+
 	// Init R with own Ri = ri·G.
 	Rx, Ry := ec.ScalarBaseMult(temp.ri.Bytes())
 
@@ -149,6 +169,9 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
+		}
+		if r2Msgs[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 2 message"), TaskName, 3, params.PartyID(), Pj)
 		}
 		ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
 		r2msg := r2Msgs[j].Content.(*SignRound2Message)
@@ -224,6 +247,10 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 	temp := &state.temp
 	i := params.PartyID().Index
 
+	if len(r3Msgs) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 3 messages, got %d", params.PartyCount(), len(r3Msgs))
+	}
+
 	if temp.si == nil {
 		return nil, fmt.Errorf("si is nil: round 3 did not complete")
 	}
@@ -233,6 +260,9 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 	for j := range params.Parties().IDs() {
 		if j == i {
 			continue
+		}
+		if r3Msgs[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 3 message"), TaskName, 4, params.PartyID(), params.Parties().IDs()[j])
 		}
 		r3msg := r3Msgs[j].Content.(*SignRound3Message)
 		sj := r3msg.S
