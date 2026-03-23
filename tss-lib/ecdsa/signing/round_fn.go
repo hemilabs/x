@@ -210,7 +210,10 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 		if r1p2p[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 1 P2P message"), TaskName, 2, params.PartyID(), Pj)
 		}
-		r1msg := r1p2p[j].Content.(*SignRound1Message1)
+		r1msg, ok := r1p2p[j].Content.(*SignRound1Message1)
+		if !ok {
+			return nil, tss.NewError(errors.New("invalid round 1 P2P message type"), TaskName, 2, params.PartyID(), Pj)
+		}
 		if !bytes.Equal(r1msg.ReceiverID, myKey) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 2, params.PartyID(), Pj)
 		}
@@ -232,7 +235,12 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 			if gctx.Err() != nil {
 				return
 			}
-			r1msg := r1p2p[j].Content.(*SignRound1Message1)
+			r1msg, ok := r1p2p[j].Content.(*SignRound1Message1)
+			if !ok || !r1msg.ValidateBasic() {
+				errs[j] = tss.NewError(errorspkg.New("invalid round 1 P2P message"), TaskName, 2, params.PartyID(), Pj)
+				gcancel()
+				return
+			}
 			rangeProofAliceJ := r1msg.RangeProofAlice
 			if rangeProofAliceJ == nil {
 				errs[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
@@ -263,7 +271,12 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 			if gctx.Err() != nil {
 				return
 			}
-			r1msg := r1p2p[j].Content.(*SignRound1Message1)
+			r1msg, ok := r1p2p[j].Content.(*SignRound1Message1)
+			if !ok || !r1msg.ValidateBasic() {
+				errs[j] = tss.NewError(errorspkg.New("invalid round 1 P2P message"), TaskName, 2, params.PartyID(), Pj)
+				gcancel()
+				return
+			}
 			rangeProofAliceJ := r1msg.RangeProofAlice
 			if rangeProofAliceJ == nil {
 				errs[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
@@ -334,7 +347,10 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 		if r2p2p[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 2 P2P message"), TaskName, 3, params.PartyID(), Pj)
 		}
-		r2msg := r2p2p[j].Content.(*SignRound2Message)
+		r2msg, ok := r2p2p[j].Content.(*SignRound2Message)
+		if !ok {
+			return nil, tss.NewError(errors.New("invalid round 2 P2P message type"), TaskName, 3, params.PartyID(), Pj)
+		}
 		if !bytes.Equal(r2msg.ReceiverID, myKey) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 3, params.PartyID(), Pj)
 		}
@@ -355,7 +371,12 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 			if gctx.Err() != nil {
 				return
 			}
-			r2msg := r2p2p[j].Content.(*SignRound2Message)
+			r2msg, ok := r2p2p[j].Content.(*SignRound2Message)
+			if !ok || !r2msg.ValidateBasic() {
+				errs[j] = tss.NewError(errorspkg.New("invalid round 2 P2P message"), TaskName, 3, params.PartyID(), Pj)
+				gcancel()
+				return
+			}
 			proofBob := r2msg.ProofBob
 			if proofBob == nil {
 				errs[j] = tss.NewError(errorspkg.New("ProofBob missing"), TaskName, 3, params.PartyID(), Pj)
@@ -380,7 +401,12 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 			if gctx.Err() != nil {
 				return
 			}
-			r2msg := r2p2p[j].Content.(*SignRound2Message)
+			r2msg, ok := r2p2p[j].Content.(*SignRound2Message)
+			if !ok || !r2msg.ValidateBasic() {
+				errs[j] = tss.NewError(errorspkg.New("invalid round 2 P2P message"), TaskName, 3, params.PartyID(), Pj)
+				gcancel()
+				return
+			}
 			proofBobWC := r2msg.ProofBobWC
 			if proofBobWC == nil {
 				errs[j] = tss.NewError(errorspkg.New("ProofBobWC missing"), TaskName, 3, params.PartyID(), Pj)
@@ -449,7 +475,10 @@ func SignRound4(state *SigningState, r3bcast []*tss.Message) (*SignRoundOutput, 
 		if r3bcast[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 3 message"), TaskName, 4, params.PartyID(), params.Parties().IDs()[j])
 		}
-		r3msg := r3bcast[j].Content.(*SignRound3Message)
+		r3msg, ok := r3bcast[j].Content.(*SignRound3Message)
+		if !ok || !r3msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 3 message"), TaskName, 4, params.PartyID(), params.Parties().IDs()[j])
+		}
 		theta = modN.Add(theta, r3msg.Theta)
 	}
 	thetaInverse := modN.ModInverse(theta)
@@ -490,8 +519,14 @@ func SignRound5(state *SigningState, r4bcast []*tss.Message) (*SignRoundOutput, 
 		if r4bcast[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 4 message"), TaskName, 5, params.PartyID(), Pj)
 		}
-		r1msg2 := temp.signRound1Message2s[j].Content.(*SignRound1Message2)
-		r4msg := r4bcast[j].Content.(*SignRound4Message)
+		r1msg2, ok1 := temp.signRound1Message2s[j].Content.(*SignRound1Message2)
+		if !ok1 {
+			return nil, tss.NewError(errors.New("invalid round 1 broadcast message type"), TaskName, 5, params.PartyID(), Pj)
+		}
+		r4msg, ok2 := r4bcast[j].Content.(*SignRound4Message)
+		if !ok2 {
+			return nil, tss.NewError(errors.New("invalid round 4 message type"), TaskName, 5, params.PartyID(), Pj)
+		}
 		SCj, SDj := r1msg2.Commitment, r4msg.DeCommitment
 		cmtDeCmt := commitments.HashCommitDecommit{C: SCj, D: SDj}
 		ok, bigGammaJ := cmtDeCmt.DeCommit()
@@ -615,8 +650,14 @@ func SignRound7(state *SigningState, r5bcast, r6bcast []*tss.Message) (*SignRoun
 		if r6bcast[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 6 message"), TaskName, 7, params.PartyID(), Pj)
 		}
-		r5msg := r5bcast[j].Content.(*SignRound5Message)
-		r6msg := r6bcast[j].Content.(*SignRound6Message)
+		r5msg, ok5 := r5bcast[j].Content.(*SignRound5Message)
+		if !ok5 {
+			return nil, tss.NewError(errors.New("invalid round 5 message type"), TaskName, 7, params.PartyID(), Pj)
+		}
+		r6msg, ok6 := r6bcast[j].Content.(*SignRound6Message)
+		if !ok6 {
+			return nil, tss.NewError(errors.New("invalid round 6 message type"), TaskName, 7, params.PartyID(), Pj)
+		}
 		cj, dj := r5msg.Commitment, r6msg.DeCommitment
 		cmtDeCmt := commitments.HashCommitDecommit{C: cj, D: dj}
 		ok, values := cmtDeCmt.DeCommit()
@@ -719,8 +760,14 @@ func SignRound9(state *SigningState, r7bcast, r8bcast []*tss.Message) (*SignRoun
 		if r8bcast[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 8 message"), TaskName, 9, params.PartyID(), Pj)
 		}
-		r7msg := r7bcast[j].Content.(*SignRound7Message)
-		r8msg := r8bcast[j].Content.(*SignRound8Message)
+		r7msg, ok7 := r7bcast[j].Content.(*SignRound7Message)
+		if !ok7 {
+			return nil, tss.NewError(errors.New("invalid round 7 message type"), TaskName, 9, params.PartyID(), Pj)
+		}
+		r8msg, ok8 := r8bcast[j].Content.(*SignRound8Message)
+		if !ok8 {
+			return nil, tss.NewError(errors.New("invalid round 8 message type"), TaskName, 9, params.PartyID(), Pj)
+		}
 		cj, dj := r7msg.Commitment, r8msg.DeCommitment
 		cmt := commitments.HashCommitDecommit{C: cj, D: dj}
 		ok, values := cmt.DeCommit()
@@ -774,7 +821,10 @@ func SignFinalize(state *SigningState, r9bcast []*tss.Message) (*SignRoundOutput
 		if r9bcast[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 9 message"), TaskName, 10, params.PartyID(), params.Parties().IDs()[j])
 		}
-		r9msg := r9bcast[j].Content.(*SignRound9Message)
+		r9msg, ok := r9bcast[j].Content.(*SignRound9Message)
+		if !ok || !r9msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 9 message"), TaskName, 10, params.PartyID(), params.Parties().IDs()[j])
+		}
 		sj := r9msg.S
 		if sj.Sign() < 0 || sj.Cmp(N) >= 0 {
 			return nil, fmt.Errorf("party %d sent s_i outside [0, N)", j)

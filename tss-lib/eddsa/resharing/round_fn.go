@@ -146,10 +146,18 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 		return &ReshareRoundOutput{}, nil
 	}
 
+	oldPC := len(params.OldParties().IDs())
+	if len(r1Msgs) != oldPC {
+		return nil, fmt.Errorf("expected %d round 1 messages, got %d", oldPC, len(r1Msgs))
+	}
+
 	// Validate all old parties agree on the same EdDSA pub key.
 	for j, msg := range r1Msgs {
-		r1msg := msg.Content.(*DGRound1Message)
-		if !r1msg.ValidateBasic() {
+		if msg == nil {
+			return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 2, params.PartyID(), params.OldParties().IDs()[j])
+		}
+		r1msg, ok := msg.Content.(*DGRound1Message)
+		if !ok || !r1msg.ValidateBasic() {
 			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2,
 				params.PartyID(), msg.From)
 		}
@@ -180,6 +188,11 @@ func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRound
 
 	if !params.IsOldCommittee() {
 		return &ReshareRoundOutput{}, nil
+	}
+
+	newPC := len(params.NewParties().IDs())
+	if len(r2AckMsgs) != newPC {
+		return nil, fmt.Errorf("expected %d round 2 ack messages, got %d", newPC, len(r2AckMsgs))
 	}
 
 	Pi := params.PartyID()
@@ -221,9 +234,19 @@ func ReshareRound4(
 		return &ReshareRoundOutput{}, nil
 	}
 
+	oldPC := params.OldPartyCount()
+	if len(r1Msgs) != oldPC {
+		return nil, fmt.Errorf("expected %d round 1 messages, got %d", oldPC, len(r1Msgs))
+	}
+	if len(r3p2p) != oldPC {
+		return nil, fmt.Errorf("expected %d round 3 P2P messages, got %d", oldPC, len(r3p2p))
+	}
+	if len(r3bcast) != oldPC {
+		return nil, fmt.Errorf("expected %d round 3 broadcast messages, got %d", oldPC, len(r3bcast))
+	}
+
 	Pi := params.PartyID()
 	i := newIndex(params)
-	oldPC := params.OldPartyCount()
 	modQ := common.ModInt(params.EC().Params().N)
 
 	// Verify decommitments, shares, accumulate newXi.
@@ -231,8 +254,20 @@ func ReshareRound4(
 	vjc := make([][]*crypto.ECPoint, oldPC)
 
 	for j := 0; j < oldPC; j++ {
-		r1msg := r1Msgs[j].Content.(*DGRound1Message)
-		r3msg2 := r3bcast[j].Content.(*DGRound3Message2)
+		if r1Msgs[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		r1msg, ok1 := r1Msgs[j].Content.(*DGRound1Message)
+		if !ok1 {
+			return nil, tss.NewError(errors.New("invalid round 1 message type"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		if r3bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 3 broadcast message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		r3msg2, ok2 := r3bcast[j].Content.(*DGRound3Message2)
+		if !ok2 || !r3msg2.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 3 broadcast message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
 
 		vCmtDeCmt := commitments.HashCommitDecommit{C: r1msg.VCommitment, D: r3msg2.VDeCommitment}
 		ok, flatVs := vCmtDeCmt.DeCommit()
@@ -252,7 +287,13 @@ func ReshareRound4(
 		vjc[j] = vj
 
 		// Verify receiver binding + share.
-		r3msg1 := r3p2p[j].Content.(*DGRound3Message1)
+		if r3p2p[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 3 P2P message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		r3msg1, ok3 := r3p2p[j].Content.(*DGRound3Message1)
+		if !ok3 || !r3msg1.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 3 P2P message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
 		if !bytes.Equal(r3msg1.ReceiverID, Pi.Key) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"),
 				TaskName, 4, Pi, params.OldParties().IDs()[j])
@@ -335,6 +376,10 @@ func ReshareRound5(
 	r4AckMsgs []*tss.Message,
 ) (*ReshareRoundOutput, error) {
 	if state.params.IsNewCommittee() {
+		newPC := len(state.params.NewParties().IDs())
+		if len(r4AckMsgs) != newPC {
+			return nil, fmt.Errorf("expected %d round 4 ack messages, got %d", newPC, len(r4AckMsgs))
+		}
 		state.save.BigXj = state.temp.newBigXjs
 		state.save.ShareID = state.params.PartyID().KeyInt()
 		state.save.Xi = state.temp.newXi

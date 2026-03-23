@@ -101,10 +101,17 @@ func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 	n := params.PartyCount()
 	i := params.PartyID().Index
 
+	if len(r1Msgs) != n {
+		return nil, fmt.Errorf("expected %d round 1 messages, got %d", n, len(r1Msgs))
+	}
+
 	// Store r1 commitments.
 	for j := 0; j < n; j++ {
-		r1msg := r1Msgs[j].Content.(*KGRound1Message)
-		if !r1msg.ValidateBasic() {
+		if r1Msgs[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+		}
+		r1msg, ok := r1Msgs[j].Content.(*KGRound1Message)
+		if !ok || !r1msg.ValidateBasic() {
 			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(),
 				r1Msgs[j].From)
 		}
@@ -149,13 +156,26 @@ func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, er
 	n := params.PartyCount()
 	PIdx := params.PartyID().Index
 
+	if len(r2p2p) != n {
+		return nil, fmt.Errorf("expected %d round 2 P2P messages, got %d", n, len(r2p2p))
+	}
+	if len(r2bcast) != n {
+		return nil, fmt.Errorf("expected %d round 2 broadcast messages, got %d", n, len(r2bcast))
+	}
+
 	// Compute own Xi from shares.
 	xi := new(big.Int).Set(temp.shares[PIdx].Share)
 	for j := 0; j < n; j++ {
 		if j == PIdx {
 			continue
 		}
-		r2msg1 := r2p2p[j].Content.(*KGRound2Message1)
+		if r2p2p[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 2 P2P message"), TaskName, 3, params.PartyID(), params.Parties().IDs()[j])
+		}
+		r2msg1, ok := r2p2p[j].Content.(*KGRound2Message1)
+		if !ok || !r2msg1.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 2 P2P message"), TaskName, 3, params.PartyID(), params.Parties().IDs()[j])
+		}
 		xi = new(big.Int).Add(xi, r2msg1.Share)
 	}
 	save.Xi = new(big.Int).Mod(xi, params.EC().Params().N)
@@ -178,7 +198,13 @@ func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, er
 
 		// Verify commitment.
 		r1msg := r1MsgContent(state, j)
-		r2msg2 := r2bcast[j].Content.(*KGRound2Message2)
+		if r2bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 2 broadcast message"), TaskName, 3, params.PartyID(), Pj)
+		}
+		r2msg2, okBC := r2bcast[j].Content.(*KGRound2Message2)
+		if !okBC {
+			return nil, tss.NewError(errors.New("invalid round 2 broadcast message type"), TaskName, 3, params.PartyID(), Pj)
+		}
 		cmtDeCmt := cmts.HashCommitDecommit{C: r1msg.Commitment, D: r2msg2.DeCommitment}
 		ok, flatPolyGs := cmtDeCmt.DeCommit()
 		if !ok || flatPolyGs == nil {
@@ -202,7 +228,8 @@ func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, er
 		}
 
 		// Receiver binding check.
-		r2msg1 := r2p2p[j].Content.(*KGRound2Message1)
+		// r2p2p[j] was already nil-checked and type-asserted in the xi computation loop above.
+		r2msg1, _ := r2p2p[j].Content.(*KGRound2Message1)
 		if !bytes.Equal(r2msg1.ReceiverID, params.PartyID().Key) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 3, params.PartyID(), Pj)
 		}
@@ -266,5 +293,7 @@ func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, er
 // the state; for others, from the passed-in r1Msgs via Round1.
 // This helper keeps Round3 clean.
 func r1MsgContent(state *KeygenState, j int) *KGRound1Message {
-	return state.temp.kgRound1Messages[j].Content.(*KGRound1Message)
+	// Messages were already validated in Round2; discard is defense-in-depth.
+	r1msg, _ := state.temp.kgRound1Messages[j].Content.(*KGRound1Message)
+	return r1msg
 }

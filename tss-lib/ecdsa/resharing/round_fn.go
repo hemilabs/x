@@ -173,6 +173,10 @@ func ReshareRound1(
 // Only new committee members produce output.
 func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOutput, error) {
 	params, save, temp := state.params, state.save, state.temp
+	oldPC := len(params.OldParties().IDs())
+	if len(r1Msgs) != oldPC {
+		return nil, fmt.Errorf("expected %d round 1 messages, got %d", oldPC, len(r1Msgs))
+	}
 	tss.MergeMsgs(temp.dgRound1Messages, r1Msgs)
 	out := &ReshareRoundOutput{}
 
@@ -184,13 +188,25 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 	i := newIndex(params)
 
 	// Validate SSID consistency across old committee
-	r1msg0 := r1Msgs[0].Content.(*DGRound1Message)
+	if r1Msgs[0] == nil {
+		return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 2, Pi, params.OldParties().IDs()[0])
+	}
+	r1msg0, ok := r1Msgs[0].Content.(*DGRound1Message)
+	if !ok || !r1msg0.ValidateBasic() {
+		return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, Pi, r1Msgs[0].From)
+	}
 	SSID := r1msg0.SSID
 	for j := range params.OldParties().IDs() {
 		if j == 0 {
 			continue
 		}
-		r1msg := r1Msgs[j].Content.(*DGRound1Message)
+		if r1Msgs[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 2, Pi, params.OldParties().IDs()[j])
+		}
+		r1msg, ok := r1Msgs[j].Content.(*DGRound1Message)
+		if !ok || !r1msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, Pi, r1Msgs[j].From)
+		}
 		SSIDj := r1msg.SSID
 		if !bytes.Equal(SSID, SSIDj) {
 			return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi, params.OldParties().IDs()[j])
@@ -200,7 +216,8 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 
 	// Save ECDSAPub from old committee
 	for j := range params.OldParties().IDs() {
-		r1msg := r1Msgs[j].Content.(*DGRound1Message)
+		// r1Msgs[j] was already validated above; comma-ok is defense-in-depth.
+		r1msg, _ := r1Msgs[j].Content.(*DGRound1Message)
 		candidate := r1msg.ECDSAPub
 		if candidate == nil {
 			return nil, fmt.Errorf("round 2: ecdsa pub nil from party %d", j)
@@ -274,6 +291,10 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 // r2AckMsgs are DGRound2Message2 broadcasts from new committee.
 func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
 	params, temp := state.params, state.temp
+	newPC := len(params.NewParties().IDs())
+	if len(r2AckMsgs) != newPC {
+		return nil, fmt.Errorf("expected %d round 2 ack messages, got %d", newPC, len(r2AckMsgs))
+	}
 	tss.MergeMsgs(temp.dgRound2Message2s, r2AckMsgs)
 	out := &ReshareRoundOutput{}
 
@@ -313,14 +334,27 @@ func ReshareRound4(
 	r3P2P, r3Bcast []*tss.Message,
 ) (*ReshareRoundOutput, error) {
 	params, save, temp := state.params, state.save, state.temp
+	newPC := len(params.NewParties().IDs())
+	if len(r2NewMsgs) != newPC {
+		return nil, fmt.Errorf("expected %d round 2 new-committee messages, got %d", newPC, len(r2NewMsgs))
+	}
 	tss.MergeMsgs(temp.dgRound2Message1s, r2NewMsgs)
-	tss.MergeMsgs(temp.dgRound3Message1s, r3P2P)
-	tss.MergeMsgs(temp.dgRound3Message2s, r3Bcast)
 	out := &ReshareRoundOutput{}
 
 	if !params.IsNewCommittee() {
 		return out, nil
 	}
+
+	// Only new committee processes r3 messages.
+	oldPC := len(params.OldParties().IDs())
+	if len(r3P2P) != oldPC {
+		return nil, fmt.Errorf("expected %d round 3 P2P messages, got %d", oldPC, len(r3P2P))
+	}
+	if len(r3Bcast) != oldPC {
+		return nil, fmt.Errorf("expected %d round 3 broadcast messages, got %d", oldPC, len(r3Bcast))
+	}
+	tss.MergeMsgs(temp.dgRound3Message1s, r3P2P)
+	tss.MergeMsgs(temp.dgRound3Message2s, r3Bcast)
 
 	dlnVerifier := keygen.NewDlnProofVerifier(params.Concurrency())
 	Pi := params.PartyID()
@@ -337,7 +371,13 @@ func ReshareRound4(
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
 	for j, msg := range r2NewMsgs {
-		r2msg1 := msg.Content.(*DGRound2Message1)
+		if msg == nil {
+			return nil, tss.NewError(errors.New("missing round 2 new-committee message"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+		}
+		r2msg1, ok := msg.Content.(*DGRound2Message1)
+		if !ok || !r2msg1.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 2 new-committee message"), TaskName, 4, Pi, msg.From)
+		}
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
 			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
 		if H1j.Cmp(H2j) == 0 {
@@ -461,7 +501,8 @@ func ReshareRound4(
 		if j == i {
 			continue
 		}
-		r2msg1 := msg.Content.(*DGRound2Message1)
+		// msg was already validated in the parameter-validation loop above.
+		r2msg1, _ := msg.Content.(*DGRound2Message1)
 		save.NTildej[j] = r2msg1.NTilde
 		save.H1j[j] = r2msg1.H1
 		save.H2j[j] = r2msg1.H2
@@ -472,8 +513,20 @@ func ReshareRound4(
 	newXi := big.NewInt(0)
 	vjc := make([][]*crypto.ECPoint, len(params.OldParties().IDs()))
 	for j := 0; j < len(vjc); j++ {
-		r1msg := temp.dgRound1Messages[j].Content.(*DGRound1Message)
-		r3msg2 := r3Bcast[j].Content.(*DGRound3Message2)
+		if temp.dgRound1Messages[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 1 message (stored)"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		r1msg, ok1 := temp.dgRound1Messages[j].Content.(*DGRound1Message)
+		if !ok1 {
+			return nil, tss.NewError(errors.New("invalid round 1 message type (stored)"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		if r3Bcast[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 3 broadcast message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		r3msg2, ok2 := r3Bcast[j].Content.(*DGRound3Message2)
+		if !ok2 || !r3msg2.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 3 broadcast message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
 		vCj, vDj := r1msg.VCommitment, r3msg2.VDeCommitment
 		cmtDeCmt := commitments.HashCommitDecommit{C: vCj, D: vDj}
 		ok, flatVs := cmtDeCmt.DeCommit()
@@ -486,7 +539,13 @@ func ReshareRound4(
 		}
 		vjc[j] = vj
 
-		r3msg1 := r3P2P[j].Content.(*DGRound3Message1)
+		if r3P2P[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 3 P2P message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		r3msg1, ok3 := r3P2P[j].Content.(*DGRound3Message1)
+		if !ok3 || !r3msg1.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 3 P2P message"), TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
 		myKey := Pi.KeyInt().Bytes()
 		if !bytes.Equal(r3msg1.ReceiverID, myKey) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 4, Pi, params.OldParties().IDs()[j])
@@ -591,7 +650,10 @@ func ReshareRound5(
 	r4P2P, r4Bcast []*tss.Message,
 ) (*ReshareRoundOutput, error) {
 	params, save, temp, input := state.params, state.save, state.temp, state.input
-	tss.MergeMsgs(temp.dgRound4Message1s, r4P2P)
+	newPC := len(params.NewParties().IDs())
+	if len(r4Bcast) != newPC {
+		return nil, fmt.Errorf("expected %d round 4 broadcast messages, got %d", newPC, len(r4Bcast))
+	}
 	tss.MergeMsgs(temp.dgRound4Message2s, r4Bcast)
 	out := &ReshareRoundOutput{}
 
@@ -599,6 +661,11 @@ func ReshareRound5(
 	i := newIndex(params)
 
 	if params.IsNewCommittee() {
+		if len(r4P2P) != newPC {
+			return nil, fmt.Errorf("expected %d round 4 P2P messages, got %d", newPC, len(r4P2P))
+		}
+		tss.MergeMsgs(temp.dgRound4Message1s, r4P2P)
+
 		ContextI := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(i)))
 		save.BigXj = temp.newBigXjs
 		save.ShareID = Pi.KeyInt()
@@ -609,14 +676,26 @@ func ReshareRound5(
 			if j == i {
 				continue
 			}
-			r2msg1 := msg.Content.(*DGRound2Message1)
+			if msg == nil {
+				return nil, tss.NewError(errors.New("missing round 2 message (stored)"), TaskName, 5, Pi, params.NewParties().IDs()[j])
+			}
+			r2msg1, ok := msg.Content.(*DGRound2Message1)
+			if !ok {
+				return nil, tss.NewError(errors.New("invalid round 2 message type (stored)"), TaskName, 5, Pi, params.NewParties().IDs()[j])
+			}
 			save.PaillierPKs[j] = r2msg1.PaillierPK
 		}
 		for j, msg := range r4P2P {
 			if j == i {
 				continue
 			}
-			r4msg1 := msg.Content.(*DGRound4Message1)
+			if msg == nil {
+				return nil, tss.NewError(errors.New("missing round 4 P2P message"), TaskName, 5, Pi, params.NewParties().IDs()[j])
+			}
+			r4msg1, ok := msg.Content.(*DGRound4Message1)
+			if !ok || !r4msg1.ValidateBasic() {
+				return nil, tss.NewError(errors.New("invalid round 4 P2P message"), TaskName, 5, Pi, msg.From)
+			}
 			receiverId := r4msg1.ReceiverID
 			if !bytes.Equal(receiverId, Pi.Key) {
 				return nil, tss.NewError(errors.New("DGRound4Message1 receiverId mismatch"),

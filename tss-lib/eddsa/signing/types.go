@@ -8,6 +8,7 @@ package signing
 import (
 	"math/big"
 
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	"github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
@@ -24,7 +25,7 @@ type localTempData struct {
 	// round 1
 	wi       *big.Int
 	ri       *big.Int
-	pointRi  interface{} // *crypto.ECPoint
+	pointRi  *crypto.ECPoint
 	deCommit []*big.Int
 	cjs      []*big.Int
 

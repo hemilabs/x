@@ -166,6 +166,10 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	save := state.save
 	temp := state.temp
 
+	if len(r1Msgs) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 1 messages, got %d", params.PartyCount(), len(r1Msgs))
+	}
+
 	// Populate temp message store so validation code reads from it.
 	tss.MergeMsgs(temp.kgRound1Messages, r1Msgs)
 
@@ -181,7 +185,13 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	dlnProof2FailCulprits := make([]*tss.PartyID, len(r1Msgs))
 	wg := new(sync.WaitGroup)
 	for j, msg := range r1Msgs {
-		r1msg := msg.Content.(*KGRound1Message)
+		if msg == nil {
+			return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+		}
+		r1msg, ok := msg.Content.(*KGRound1Message)
+		if !ok || !r1msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(), msg.From)
+		}
 		H1j, H2j, NTildej, paillierPKj := r1msg.H1,
 			r1msg.H2,
 			r1msg.NTilde,
@@ -282,7 +292,8 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 		if j == i {
 			continue
 		}
-		r1msg := msg.Content.(*KGRound1Message)
+		// msg was already validated in the loop above; comma-ok is defense-in-depth.
+		r1msg, _ := msg.Content.(*KGRound1Message)
 		save.PaillierPKs[j] = r1msg.PaillierPK
 		save.NTildej[j] = r1msg.NTilde
 		save.H1j[j] = r1msg.H1
@@ -343,6 +354,14 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 	temp := state.temp
 	Ps := params.Parties().IDs()
 	PIdx := params.PartyID().Index
+	n := params.PartyCount()
+
+	if len(r2p2p) != n {
+		return nil, fmt.Errorf("expected %d round 2 P2P messages, got %d", n, len(r2p2p))
+	}
+	if len(r2bcast) != n {
+		return nil, fmt.Errorf("expected %d round 2 broadcast messages, got %d", n, len(r2bcast))
+	}
 
 	// Store own messages
 	tss.MergeMsgs(temp.kgRound2Message1s, r2p2p)
@@ -354,7 +373,13 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 		if j == PIdx {
 			continue
 		}
-		r2msg1 := r2p2p[j].Content.(*KGRound2Message1)
+		if r2p2p[j] == nil {
+			return nil, tss.NewError(errors.New("missing round 2 P2P message"), TaskName, 3, params.PartyID(), Ps[j])
+		}
+		r2msg1, ok := r2p2p[j].Content.(*KGRound2Message1)
+		if !ok || !r2msg1.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 2 P2P message"), TaskName, 3, params.PartyID(), Ps[j])
+		}
 		share := r2msg1.Share
 		xi = new(big.Int).Add(xi, share)
 	}
@@ -390,7 +415,17 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 				return
 			}
 			KGCj := temp.KGCs[j]
-			r2msg2 := r2bcast[j].Content.(*KGRound2Message2)
+			if r2bcast[j] == nil {
+				vssResults[j] = vssOut{errors.New("missing round 2 broadcast message"), nil}
+				gcancel()
+				return
+			}
+			r2msg2, ok := r2bcast[j].Content.(*KGRound2Message2)
+			if !ok || !r2msg2.ValidateBasic() {
+				vssResults[j] = vssOut{errors.New("invalid round 2 broadcast message"), nil}
+				gcancel()
+				return
+			}
 			KGDj := r2msg2.DeCommitment
 			cmtDeCmt := cmts.HashCommitDecommit{C: KGCj, D: KGDj}
 			ok, flatPolyGs := cmtDeCmt.DeCommit()
@@ -423,7 +458,14 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 			if gctx.Err() != nil {
 				return
 			}
-			r2msg1 := r2p2p[j].Content.(*KGRound2Message1)
+			// r2p2p[j] was already nil-checked and type-asserted in the sequential xi loop above.
+			// Comma-ok here is defense-in-depth for goroutine safety.
+			r2msg1, ok := r2p2p[j].Content.(*KGRound2Message1)
+			if !ok {
+				vssResults[j] = vssOut{errors.New("invalid round 2 P2P message type"), nil}
+				gcancel()
+				return
+			}
 			myKey := params.PartyID().KeyInt().Bytes()
 			if !bytes.Equal(r2msg1.ReceiverID, myKey) {
 				vssResults[j] = vssOut{errors.New("receiverId mismatch"), nil}
@@ -563,14 +605,18 @@ func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*Ro
 	params := state.params
 	save := state.save
 
+	if len(r3Msgs) != params.PartyCount() {
+		return nil, fmt.Errorf("expected %d round 3 messages, got %d", params.PartyCount(), len(r3Msgs))
+	}
+
 	i := params.PartyID().Index
 	Ps := params.Parties().IDs()
 	PIDs := Ps.Keys()
 	ecdsaPub := save.ECDSAPub
 
 	// Concurrent Paillier proof verification
-	ok := make([]bool, len(Ps))
-	ok[i] = true // self
+	okArr := make([]bool, len(Ps))
+	okArr[i] = true // self
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
 	wg := sync.WaitGroup{}
@@ -578,8 +624,14 @@ func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*Ro
 		if j == i {
 			continue
 		}
+		if msg == nil {
+			return nil, tss.NewError(errors.New("missing round 3 message"), TaskName, 4, params.PartyID(), Ps[j])
+		}
+		r3msg, okType := msg.Content.(*KGRound3Message)
+		if !okType || !r3msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 3 message"), TaskName, 4, params.PartyID(), msg.From)
+		}
 		wg.Add(1)
-		r3msg := msg.Content.(*KGRound3Message)
 		go func(prf paillier.Proof, j int) {
 			defer wg.Done()
 			if gctx.Err() != nil {
@@ -592,7 +644,7 @@ func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*Ro
 				gcancel()
 				return
 			}
-			ok[j] = verified
+			okArr[j] = verified
 			if !verified {
 				gcancel()
 			}
@@ -603,7 +655,7 @@ func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*Ro
 		return nil, err
 	}
 	culprits := make([]*tss.PartyID, 0, len(Ps))
-	for j, v := range ok {
+	for j, v := range okArr {
 		if !v {
 			culprits = append(culprits, Ps[j])
 		}

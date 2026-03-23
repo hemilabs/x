@@ -127,8 +127,8 @@ func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, e
 		if msg == nil {
 			return nil, tss.NewError(errors.New("missing round 1 message"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
 		}
-		r1msg := msg.Content.(*SignRound1Message)
-		if !r1msg.ValidateBasic() {
+		r1msg, ok := msg.Content.(*SignRound1Message)
+		if !ok || !r1msg.ValidateBasic() {
 			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		temp.cjs[j] = r1msg.Commitment
@@ -136,7 +136,7 @@ func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, e
 
 	// Schnorr proof for ri.
 	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(i)))
-	pointRi := temp.pointRi.(*crypto.ECPoint)
+	pointRi := temp.pointRi
 	pir, err := schnorr.NewZKProof(ContextI, temp.ri, pointRi, params.Rand())
 	if err != nil {
 		return nil, fmt.Errorf("round 2 schnorr proof: %w", err)
@@ -174,11 +174,14 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 			return nil, tss.NewError(errors.New("missing round 2 message"), TaskName, 3, params.PartyID(), Pj)
 		}
 		ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
-		r2msg := r2Msgs[j].Content.(*SignRound2Message)
+		r2msg, ok := r2Msgs[j].Content.(*SignRound2Message)
+		if !ok {
+			return nil, tss.NewError(errors.New("invalid round 2 message type"), TaskName, 3, params.PartyID(), Pj)
+		}
 
 		cmtDeCmt := commitments.HashCommitDecommit{C: temp.cjs[j], D: r2msg.DeCommitment}
-		ok, coordinates := cmtDeCmt.DeCommit()
-		if !ok || len(coordinates) != 2 {
+		okDC, coordinates := cmtDeCmt.DeCommit()
+		if !okDC || len(coordinates) != 2 {
 			return nil, tss.NewError(errors.New("de-commitment verify failed"), TaskName, 3, params.PartyID(), Pj)
 		}
 
@@ -264,7 +267,10 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 		if r3Msgs[j] == nil {
 			return nil, tss.NewError(errors.New("missing round 3 message"), TaskName, 4, params.PartyID(), params.Parties().IDs()[j])
 		}
-		r3msg := r3Msgs[j].Content.(*SignRound3Message)
+		r3msg, ok := r3Msgs[j].Content.(*SignRound3Message)
+		if !ok || !r3msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 3 message"), TaskName, 4, params.PartyID(), params.Parties().IDs()[j])
+		}
 		sj := r3msg.S
 		if sj.Sign() < 0 || sj.Cmp(N) >= 0 {
 			return nil, tss.NewError(
