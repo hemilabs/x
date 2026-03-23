@@ -6,6 +6,7 @@ package resharing
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -773,8 +774,8 @@ func newIndex2(pid *tss.PartyID, pids tss.SortedPartyIDs) int {
 // requireCulprit unwraps a *tss.Error and asserts the culprit has the expected index.
 func requireCulprit(t *testing.T, err error, wantIdx int) {
 	t.Helper()
-	tssErr, ok := err.(*tss.Error)
-	if !ok {
+	tssErr := &tss.Error{}
+	if ok := errors.As(err, &tssErr); !ok {
 		t.Fatalf("expected *tss.Error, got %T", err)
 	}
 	culprits := tssErr.Culprits()

@@ -1,8 +1,6 @@
-test.log
-*.swp
 bin/
 .gocache/
 pkg/
 coverage.out
-tss-ecdsa-demo
-tss-eddsa-demo
+test.log
+*.swp

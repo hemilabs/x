@@ -1,4 +1,3 @@
-# Copyright © 2019 Binance
 # Copyright (c) 2026 Hemi Labs, Inc.
 # Use of this source code is governed by the MIT License,
 # which can be found in the LICENSE file.
@@ -16,7 +15,11 @@ GOLICENSER_VERSION="v0.3.1"
 # renovate: datasource=github-releases depName=mvdan/gofumpt versioning=semver
 GOFUMPT_VERSION="v0.9.2"
 
-.PHONY: all clean deps go-deps build lint lint-deps tidy race test vulncheck vulncheck-deps
+cmds = \
+	tss-ecdsa-demo	\
+	tss-eddsa-demo	\
+
+.PHONY: all clean deps go-deps $(cmds) build lint lint-deps tidy race test vulncheck vulncheck-deps
 
 all: tidy build lint test
 
@@ -30,15 +33,11 @@ go-deps:
 	go mod tidy
 	go mod verify
 
+$(cmds):
+	go build -trimpath -ldflags "$(GO_LDFLAGS)" -o $(GOBIN)/$@ ./cmd/$@
+
 build:
 	go build ./...
-
-define LICENSE_HEADER
-Copyright (c) {{.year}} {{.author}}
-Use of this source code is governed by the MIT License,
-which can be found in the LICENSE file.
-endef
-export LICENSE_HEADER
 
 lint:
 	$(shell go env GOPATH)/bin/golangci-lint fmt ./...
@@ -47,7 +46,6 @@ lint:
 lint-deps:
 	@echo "Installing with $(shell go env GOVERSION)"
 	GOBIN=$(shell go env GOPATH)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	GOBIN=$(shell go env GOPATH)/bin go install github.com/joshuasing/golicenser/cmd/golicenser@$(GOLICENSER_VERSION)
 	GOBIN=$(shell go env GOPATH)/bin go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
 
 tidy:

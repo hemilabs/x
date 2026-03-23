@@ -7,9 +7,10 @@ package common
 
 import (
 	"crypto"
-	_ "crypto/sha512"
 	"encoding/binary"
 	"math/big"
+
+	_ "crypto/sha512"
 )
 
 const (

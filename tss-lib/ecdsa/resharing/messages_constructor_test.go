@@ -27,7 +27,7 @@ func TestNewDGRound1MessageFields(t *testing.T) {
 	to := pIDs[1:]
 
 	ecdsaPub := crypto.ScalarBaseMult(tss.S256(), big.NewInt(42))
-	vct := cmt.HashCommitment(big.NewInt(777))
+	vct := big.NewInt(777)
 	ssid := []byte("test-ssid-round1")
 
 	msg := NewDGRound1Message(to, from, ecdsaPub, vct, ssid)
