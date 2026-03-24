@@ -115,7 +115,7 @@ func NewProofFromBytes(bzs [][]byte) (*ProofMod, error) {
 	}
 	bis := make([]*big.Int, len(bzs))
 	for i := range bis {
-		bis[i] = new(big.Int).SetBytes(bzs[i])
+		bis[i] = new(big.Int).SetBytes(bzs[i]) //nolint:gosec // i bounded by len(bzs)
 	}
 
 	X := [Iterations]*big.Int{}

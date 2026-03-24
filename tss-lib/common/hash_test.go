@@ -534,7 +534,7 @@ func TestContextIEncodingDistinguishesAllParties(t *testing.T) {
 
 	seen := make(map[string]int)
 	for i := 0; i < 5; i++ {
-		contextI := AppendBigIntToBytesSlice(ssid, new(big.Int).SetUint64(uint64(i)))
+		contextI := AppendBigIntToBytesSlice(ssid, new(big.Int).SetInt64(int64(i)))
 		h := hex.EncodeToString(contextI)
 		if prev, exists := seen[h]; exists {
 			t.Fatalf("party %d has same ContextI as party %d: %s", i, prev, h)

@@ -196,12 +196,12 @@ func UnFlattenECPoints(curve elliptic.Curve, in []*big.Int, noCurveCheck ...bool
 	unFlat := make([]*ECPoint, len(in)/2)
 	for i, j := 0, 0; i < len(in); i, j = i+2, j+1 {
 		if len(noCurveCheck) == 0 || !noCurveCheck[0] {
-			unFlat[j], err = NewECPoint(curve, in[i], in[i+1])
+			unFlat[j], err = NewECPoint(curve, in[i], in[i+1]) //nolint:gosec // i+1 safe: len(in) is even, i increments by 2
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			unFlat[j] = NewECPointNoCurveCheck(curve, in[i], in[i+1])
+			unFlat[j] = NewECPointNoCurveCheck(curve, in[i], in[i+1]) //nolint:gosec // i+1 safe: len(in) is even, i increments by 2
 		}
 	}
 	for _, point := range unFlat {
@@ -226,12 +226,12 @@ func (p *ECPoint) GobEncode() ([]byte, error) {
 		return nil, err
 	}
 
-	err = binary.Write(buf, binary.LittleEndian, uint32(len(x)))
+	err = binary.Write(buf, binary.LittleEndian, uint32(len(x))) //nolint:gosec // big.Int coord bytes
 	if err != nil {
 		return nil, err
 	}
 	buf.Write(x)
-	err = binary.Write(buf, binary.LittleEndian, uint32(len(y)))
+	err = binary.Write(buf, binary.LittleEndian, uint32(len(y))) //nolint:gosec // big.Int coord bytes
 	if err != nil {
 		return nil, err
 	}

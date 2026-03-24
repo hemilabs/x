@@ -79,7 +79,7 @@ func AppendBigIntToBytesSlice(commonBytes []byte, appended *big.Int) []byte {
 		bz = appended.Bytes()
 	}
 	var lenBuf [4]byte
-	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(bz)))
+	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(bz))) //nolint:gosec // big.Int bytes < 1KB
 	resultBytes := make([]byte, len(commonBytes), len(commonBytes)+4+len(bz))
 	copy(resultBytes, commonBytes)
 	resultBytes = append(resultBytes, lenBuf[:]...)

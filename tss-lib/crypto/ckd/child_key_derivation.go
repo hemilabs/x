@@ -19,7 +19,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcutil/base58"
-	"golang.org/x/crypto/ripemd160" //nolint:staticcheck // BIP-32 requires RIPEMD-160
+	"golang.org/x/crypto/ripemd160" //nolint:staticcheck,gosec // BIP-32 requires RIPEMD-160
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
@@ -153,7 +153,7 @@ func calcHash(buf []byte, hasher hash.Hash) []byte {
 }
 
 func hash160(buf []byte) []byte {
-	return calcHash(calcHash(buf, sha256.New()), ripemd160.New())
+	return calcHash(calcHash(buf, sha256.New()), ripemd160.New()) //nolint:gosec // BIP-32 requires RIPEMD-160
 }
 
 func isOdd(a *big.Int) bool {

@@ -67,7 +67,7 @@ func TestGobDecodeOversizedY(t *testing.T) {
 	pt := ScalarBaseMult(ec, big.NewInt(1))
 	xBytes, _ := pt.X().GobEncode()
 	buf := &bytes.Buffer{}
-	_ = binary.Write(buf, binary.LittleEndian, uint32(len(xBytes)))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(len(xBytes))) //nolint:gosec // test data
 	buf.Write(xBytes)
 	_ = binary.Write(buf, binary.LittleEndian, uint32(2048))
 	p := new(ECPoint)
@@ -80,9 +80,9 @@ func TestGobDecodeOffCurvePoint(t *testing.T) {
 	xBytes, _ := big.NewInt(999).GobEncode()
 	yBytes, _ := big.NewInt(999).GobEncode()
 	buf := &bytes.Buffer{}
-	_ = binary.Write(buf, binary.LittleEndian, uint32(len(xBytes)))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(len(xBytes))) //nolint:gosec // test data
 	buf.Write(xBytes)
-	_ = binary.Write(buf, binary.LittleEndian, uint32(len(yBytes)))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(len(yBytes))) //nolint:gosec // test data
 	buf.Write(yBytes)
 	p := new(ECPoint)
 	if err := p.GobDecode(buf.Bytes()); err == nil {

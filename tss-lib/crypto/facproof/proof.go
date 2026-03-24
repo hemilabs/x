@@ -103,7 +103,7 @@ func NewProofFromBytes(bzs [][]byte) (*ProofFac, error) {
 	// [FORK] V uses sign-magnitude encoding: first byte is 0x00 (positive) or 0x01 (negative).
 	// Upstream uses SetBytes which cannot represent negative V, silently truncating
 	// to |V| and causing verification failures for ~50% of honest proofs.
-	vBz := bzs[10]
+	vBz := bzs[10] //nolint:gosec // len(bzs) >= 11 checked above
 	if len(vBz) < 1 {
 		return nil, fmt.Errorf("v field too short for sign-magnitude decoding")
 	}
@@ -119,16 +119,16 @@ func NewProofFromBytes(bzs [][]byte) (*ProofFac, error) {
 		vAbs.Neg(vAbs)
 	}
 	return &ProofFac{
-		P:     new(big.Int).SetBytes(bzs[0]),
-		Q:     new(big.Int).SetBytes(bzs[1]),
-		A:     new(big.Int).SetBytes(bzs[2]),
-		B:     new(big.Int).SetBytes(bzs[3]),
-		T:     new(big.Int).SetBytes(bzs[4]),
-		Sigma: new(big.Int).SetBytes(bzs[5]),
-		Z1:    new(big.Int).SetBytes(bzs[6]),
-		Z2:    new(big.Int).SetBytes(bzs[7]),
-		W1:    new(big.Int).SetBytes(bzs[8]),
-		W2:    new(big.Int).SetBytes(bzs[9]),
+		P:     new(big.Int).SetBytes(bzs[0]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Q:     new(big.Int).SetBytes(bzs[1]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		A:     new(big.Int).SetBytes(bzs[2]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		B:     new(big.Int).SetBytes(bzs[3]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		T:     new(big.Int).SetBytes(bzs[4]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Sigma: new(big.Int).SetBytes(bzs[5]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Z1:    new(big.Int).SetBytes(bzs[6]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Z2:    new(big.Int).SetBytes(bzs[7]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		W1:    new(big.Int).SetBytes(bzs[8]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		W2:    new(big.Int).SetBytes(bzs[9]), //nolint:gosec // guarded by NonEmptyMultiBytes
 		V:     vAbs,
 	}, nil
 }

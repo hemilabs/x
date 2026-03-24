@@ -120,7 +120,7 @@ func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, e
 	}
 
 	// Schnorr proof for ri.
-	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(i)))
+	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(i)))
 	pointRi := temp.pointRi.(*crypto.ECPoint)
 	pir, err := schnorr.NewZKProof(ContextI, temp.ri, pointRi, params.Rand())
 	if err != nil {

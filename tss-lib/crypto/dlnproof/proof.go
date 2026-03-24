@@ -46,7 +46,7 @@ func NewDLNProof(Session []byte, h1, h2, x, p, q, N *big.Int, rand io.Reader) *P
 	cIBI := new(big.Int)
 	for i := range t {
 		cI := c.Bit(i)
-		cIBI = cIBI.SetInt64(int64(cI))
+		cIBI = cIBI.SetUint64(uint64(cI))
 		t[i] = modPQ.Add(a[i], modPQ.Mul(cIBI, x))
 	}
 	return &Proof{alpha, t}
@@ -106,7 +106,7 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	cIBI := new(big.Int)
 	for i := 0; i < Iterations; i++ {
 		cI := c.Bit(i)
-		cIBI = cIBI.SetInt64(int64(cI))
+		cIBI = cIBI.SetUint64(uint64(cI))
 		h1ExpTi := modN.Exp(h1, p.T[i])
 		h2ExpCi := modN.Exp(h2, cIBI)
 		alphaIMulH2ExpCi := modN.Mul(p.Alpha[i], h2ExpCi)

@@ -35,7 +35,7 @@ func UpdatePublicKeyAndAdjustBigXj(keyDerivationDelta *big.Int, keys []keygen.Lo
 		// Suppose X_j has shamir shares X_j0,     X_j1,     ..., X_jn
 		// So X_j + D has shamir shares  X_j0 + D, X_j1 + D, ..., X_jn + D
 		for j := range keys[k].BigXj {
-			keys[k].BigXj[j], err = keys[k].BigXj[j].Add(gDelta)
+			keys[k].BigXj[j], err = keys[k].BigXj[j].Add(gDelta) //nolint:gosec // k bounded by range keys
 			if err != nil {
 				common.Logger.Errorf("error in delta operation")
 				return err

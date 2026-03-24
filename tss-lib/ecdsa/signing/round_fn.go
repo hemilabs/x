@@ -146,7 +146,7 @@ func SignRound1(
 
 	// MtA init for each peer
 	out := &SignRoundOutput{}
-	ContextI := common.AppendBigIntToBytesSlice(ssid, new(big.Int).SetUint64(uint64(i)))
+	ContextI := common.AppendBigIntToBytesSlice(ssid, new(big.Int).SetInt64(int64(i)))
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
@@ -197,7 +197,7 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 	defer gcancel()
 	wg := sync.WaitGroup{}
 	wg.Add((len(params.Parties().IDs()) - 1) * 2)
-	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(i)))
+	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(i)))
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
@@ -218,7 +218,7 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 			if gctx.Err() != nil {
 				return
 			}
-			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(j)))
+			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(j)))
 			beta, c1ji, _, pi1ji, err := mta.BobMid(
 				AliceContextJ, ContextI, params.EC(), key.PaillierPKs[j],
 				rangeProofAliceJ, temp.gamma, r1msg.C,
@@ -249,7 +249,7 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 			if gctx.Err() != nil {
 				return
 			}
-			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(j)))
+			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(j)))
 			v, c2ji, _, pi2ji, err := mta.BobMidWC(
 				AliceContextJ, ContextI, params.EC(), key.PaillierPKs[j],
 				rangeProofAliceJ, temp.w, r1msg.C,
@@ -319,7 +319,7 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 		if j == i {
 			continue
 		}
-		ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(j)))
+		ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(j)))
 		go func(j int, Pj *tss.PartyID) {
 			defer wg.Done()
 			if gctx.Err() != nil {
@@ -421,7 +421,7 @@ func SignRound4(state *SigningState, r3bcast []*tss.Message) (*SignRoundOutput, 
 		return nil, errors.New("theta is zero")
 	}
 
-	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(i)))
+	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(i)))
 	piGamma, err := schnorr.NewZKProof(ContextI, temp.gamma, temp.pointGamma, params.Rand())
 	if err != nil {
 		return nil, errorspkg.Wrapf(err, "NewZKProof(gamma, bigGamma)")
@@ -527,7 +527,7 @@ func SignRound5(state *SigningState, r4bcast []*tss.Message) (*SignRoundOutput, 
 func SignRound6(state *SigningState) (*SignRoundOutput, error) {
 	params, temp := state.params, state.temp
 	i := params.PartyID().Index
-	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(i)))
+	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(i)))
 
 	piAi, err := schnorr.NewZKProof(ContextI, temp.roi, temp.bigAi, params.Rand())
 	if err != nil {

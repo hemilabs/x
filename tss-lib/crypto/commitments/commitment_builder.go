@@ -68,7 +68,7 @@ func ParseSecrets(secrets []*big.Int) ([][]*big.Int, error) {
 			return nil, errors.New("ParseSecrets: `el` overflow")
 		}
 		if isLenEl {
-			nextPartLen = secrets[el].Int64()
+			nextPartLen = secrets[el].Int64() //nolint:gosec // el < inLen checked by loop
 			if nextPartLen < 0 || MaxPartSize < nextPartLen {
 				return nil, fmt.Errorf("ParseSecrets: invalid commitment part size: part %d, size %d", len(parts), nextPartLen)
 			}

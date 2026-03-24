@@ -124,7 +124,7 @@ func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 	}
 
 	// Schnorr proof.
-	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetUint64(uint64(i)))
+	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(i)))
 	pii, err := schnorr.NewZKProof(ContextI, temp.ui, temp.vs[0], params.Rand())
 	if err != nil {
 		return nil, fmt.Errorf("round 2 schnorr proof: %w", err)
