@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
@@ -36,14 +35,7 @@ func setupRound1ForNegativeTests(t *testing.T) *round1Fixture {
 	const n = 3
 	const threshold = 1 // 2-of-3
 
-	preParams := make([]LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := loadTestPreParams(t, n)
 
 	pIDs := tss.GenerateTestPartyIDs(n)
 	peerCtx := tss.NewPeerContext(pIDs)

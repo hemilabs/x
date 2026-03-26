@@ -10,10 +10,10 @@ import (
 	"crypto/sha256"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 	"github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
+	"github.com/hemilabs/x/tss-lib/v3/testutil"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
@@ -24,14 +24,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	const threshold = 1 // 2-of-3
 
 	// ---- Keygen ----
-	preParamsOld := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParamsOld[i] = *pp
-	}
+	preParamsOld := testutil.LoadPreParams(t, n)
 	oldPIDs := tss.GenerateTestPartyIDs(n)
 	oldCtx := tss.NewPeerContext(oldPIDs)
 
@@ -96,14 +89,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	newPIDs := tss.GenerateTestPartyIDs(n) // fresh random keys, indices 0..n-1
 	newCtx := tss.NewPeerContext(newPIDs)
 
-	preParamsNew := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams(new)[%d]: %v", i, err)
-		}
-		preParamsNew[i] = *pp
-	}
+	preParamsNew := testutil.LoadPreParamsFrom(t, n, n)
 
 	// Create states for old + new parties.
 	oldStates := make([]*ReshareState, n)
@@ -397,14 +383,7 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 	const threshold = 1
 
 	// Keygen (same as main test)
-	preParamsOld := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParamsOld[i] = *pp
-	}
+	preParamsOld := testutil.LoadPreParams(t, n)
 	oldPIDs := tss.GenerateTestPartyIDs(n)
 	oldCtx := tss.NewPeerContext(oldPIDs)
 	kgStates := make([]*keygen.KeygenState, n)
@@ -454,14 +433,7 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 	// Reshare with no-proof flags
 	newPIDs := tss.GenerateTestPartyIDs(n)
 	newCtx := tss.NewPeerContext(newPIDs)
-	preParamsNew := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams(new)[%d]: %v", i, err)
-		}
-		preParamsNew[i] = *pp
-	}
+	preParamsNew := testutil.LoadPreParamsFrom(t, n, n)
 
 	oldStates := make([]*ReshareState, n)
 	newStates := make([]*ReshareState, n)

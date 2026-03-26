@@ -9,7 +9,6 @@ import (
 	"errors"
 	"math/big"
 	"testing"
-	"time"
 
 	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
@@ -17,6 +16,7 @@ import (
 	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
 	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/testutil"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
@@ -79,14 +79,7 @@ type ReshareFixture struct {
 func doKeygen(t *testing.T, n, threshold int) ([]keygen.LocalPartySaveData, tss.SortedPartyIDs, *tss.PeerContext) {
 	t.Helper()
 
-	preParams := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("doKeygen: GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := testutil.LoadPreParams(t, n)
 
 	pIDs := tss.GenerateTestPartyIDs(n)
 	peerCtx := tss.NewPeerContext(pIDs)
@@ -169,14 +162,7 @@ func setupReshareRound1(t *testing.T) *ReshareFixture {
 	newPIDs := tss.GenerateTestPartyIDs(n)
 	newCtx := tss.NewPeerContext(newPIDs)
 
-	preParamsNew := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("setupReshareRound1: GeneratePreParams(new)[%d]: %v", i, err)
-		}
-		preParamsNew[i] = *pp
-	}
+	preParamsNew := testutil.LoadPreParamsFrom(t, n, n)
 
 	oldStates := make([]*ReshareState, n)
 	newStates := make([]*ReshareState, n)
@@ -650,14 +636,7 @@ func setupThroughRound3WithModProof(t *testing.T) *ReshareFixture {
 	newPIDs := tss.GenerateTestPartyIDs(n)
 	newCtx := tss.NewPeerContext(newPIDs)
 
-	preParamsNew := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams(new)[%d]: %v", i, err)
-		}
-		preParamsNew[i] = *pp
-	}
+	preParamsNew := testutil.LoadPreParamsFrom(t, n, n)
 
 	oldStates := make([]*ReshareState, n)
 	newStates := make([]*ReshareState, n)

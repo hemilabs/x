@@ -10,20 +10,19 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	. "github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/testutil"
 )
 
 var Session = []byte("session")
 
 func TestMod(test *testing.T) {
-	preParams, err := keygen.GeneratePreParams(time.Minute*10, 8)
-	assert.NoError(test, err)
+	pps := testutil.LoadPreParams(test, 1)
+	preParams := &pps[0]
 
 	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
 
@@ -106,8 +105,8 @@ func mustSetString(s string) *big.Int {
 
 func TestModProofRejectsSmallN(test *testing.T) {
 	// Generate valid 2048-bit parameters and a valid proof.
-	preParams, err := keygen.GeneratePreParams(time.Minute*10, 8)
-	assert.NoError(test, err)
+	pps := testutil.LoadPreParams(test, 1)
+	preParams := &pps[0]
 
 	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
 

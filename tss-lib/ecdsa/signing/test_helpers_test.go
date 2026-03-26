@@ -10,13 +10,13 @@ import (
 	"errors"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/mta"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
 	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/testutil"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
@@ -51,14 +51,7 @@ func doKeygen(t *testing.T) []keygen.LocalPartySaveData {
 	t.Helper()
 	const n = testN
 
-	preParams := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("doKeygen: GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := testutil.LoadPreParams(t, n)
 
 	pIDs := tss.GenerateTestPartyIDs(n)
 	peerCtx := tss.NewPeerContext(pIDs)

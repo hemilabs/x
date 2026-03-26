@@ -10,9 +10,9 @@ import (
 	"crypto/sha256"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss-lib/v3/testutil"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
@@ -23,14 +23,7 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 	const threshold = 1 // 2-of-3
 
 	// -- Keygen first --
-	preParams := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := testutil.LoadPreParams(t, n)
 	pIDs := tss.GenerateTestPartyIDs(n)
 	peerCtx := tss.NewPeerContext(pIDs)
 
@@ -244,14 +237,7 @@ func TestRoundFnSignSubset(t *testing.T) {
 	const threshold = 1 // 2-of-5
 
 	// -- Keygen with 5 parties --
-	preParams := make([]keygen.LocalPreParams, nKeygen)
-	for i := 0; i < nKeygen; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := testutil.LoadPreParams(t, nKeygen)
 	pIDs := tss.GenerateTestPartyIDs(nKeygen)
 	peerCtx := tss.NewPeerContext(pIDs)
 
@@ -464,14 +450,7 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 	const n = 3
 	const threshold = 1
 
-	preParams := make([]keygen.LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := testutil.LoadPreParams(t, n)
 	pIDs := tss.GenerateTestPartyIDs(n)
 	peerCtx := tss.NewPeerContext(pIDs)
 

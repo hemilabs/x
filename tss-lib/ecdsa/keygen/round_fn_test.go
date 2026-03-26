@@ -8,7 +8,6 @@ import (
 	"context"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
@@ -21,15 +20,7 @@ func TestRoundFnKeygenThreeParties(t *testing.T) {
 	const n = 3
 	const threshold = 1 // 2-of-3
 
-	// Generate pre-params for each party (slow — Paillier primes).
-	preParams := make([]LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := loadTestPreParams(t, n)
 
 	// Generate sorted party IDs.
 	pIDs := tss.GenerateTestPartyIDs(n)
@@ -189,14 +180,7 @@ func TestRoundFnKeygenNoProofFlags(t *testing.T) {
 	const n = 3
 	const threshold = 1
 
-	preParams := make([]LocalPreParams, n)
-	for i := 0; i < n; i++ {
-		pp, err := GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := loadTestPreParams(t, n)
 	pIDs := tss.GenerateTestPartyIDs(n)
 	peerCtx := tss.NewPeerContext(pIDs)
 

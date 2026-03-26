@@ -99,10 +99,8 @@ func TestRound1RejectsStalePreParams(t *testing.T) {
 	// Generate valid pre-params, then corrupt them so that Validate()
 	// passes but ValidateWithProof() fails.  The easiest way: zero out
 	// the Alpha field (needed by ValidateWithProof's H2 = H1^Alpha check).
-	pp, err := GeneratePreParams(5 * time.Minute)
-	if err != nil {
-		t.Fatalf("GeneratePreParams: %v", err)
-	}
+	pps := loadTestPreParams(t, 1)
+	pp := &pps[0]
 
 	// Confirm it's initially valid.
 	if !pp.Validate() || !pp.ValidateWithProof() {
@@ -120,7 +118,7 @@ func TestRound1RejectsStalePreParams(t *testing.T) {
 		t.Fatal("stale preParams should fail ValidateWithProof()")
 	}
 
-	_, _, err = Round1(context.Background(), params, stale)
+	_, _, err := Round1(context.Background(), params, stale)
 	if err == nil {
 		t.Fatal("expected error for stale preParams, got nil")
 	}
@@ -164,10 +162,8 @@ func TestRound1ExportsCorrectSSIDNonce(t *testing.T) {
 	}
 
 	// Generate shared pre-params and party IDs (reuse across both runs).
-	pp, err := GeneratePreParams(5 * time.Minute)
-	if err != nil {
-		t.Fatalf("GeneratePreParams: %v", err)
-	}
+	pps := loadTestPreParams(t, 1)
+	pp := &pps[0]
 
 	pIDs := tss.GenerateTestPartyIDs(testN)
 	peerCtx := tss.NewPeerContext(pIDs)
@@ -219,10 +215,8 @@ func TestRound1WithCeremonyID(t *testing.T) {
 	}
 
 	// Generate shared pre-params and party IDs.
-	pp, err := GeneratePreParams(5 * time.Minute)
-	if err != nil {
-		t.Fatalf("GeneratePreParams: %v", err)
-	}
+	pps := loadTestPreParams(t, 1)
+	pp := &pps[0]
 
 	pIDs := tss.GenerateTestPartyIDs(testN)
 	peerCtx := tss.NewPeerContext(pIDs)
@@ -282,14 +276,7 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 		t.Skip("skipping slow test in short mode")
 	}
 
-	preParams := make([]LocalPreParams, testN)
-	for i := 0; i < testN; i++ {
-		pp, err := GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := loadTestPreParams(t, testN)
 
 	pIDs := tss.GenerateTestPartyIDs(testN)
 	peerCtx := tss.NewPeerContext(pIDs)

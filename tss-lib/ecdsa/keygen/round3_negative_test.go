@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
@@ -36,14 +35,7 @@ type round3TestFixture struct {
 func setupRound3Fixture(t *testing.T) *round3TestFixture {
 	t.Helper()
 
-	preParams := make([]LocalPreParams, negN)
-	for i := 0; i < negN; i++ {
-		pp, err := GeneratePreParams(5 * time.Minute)
-		if err != nil {
-			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
-		}
-		preParams[i] = *pp
-	}
+	preParams := loadTestPreParams(t, negN)
 
 	pIDs := tss.GenerateTestPartyIDs(negN)
 	peerCtx := tss.NewPeerContext(pIDs)
