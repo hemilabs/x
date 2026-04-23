@@ -89,11 +89,7 @@ func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySav
 //
 // key is the existing key share.  preParams is for the new committee
 // (may be zero-value if this party is old-only).
-func ReshareRound1(
-	params *tss.ReSharingParameters,
-	key keygen.LocalPartySaveData,
-	preParams keygen.LocalPreParams,
-) (*ReshareState, *ReshareRoundOutput, error) {
+func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveData, preParams keygen.LocalPreParams) (*ReshareState, *ReshareRoundOutput, error) {
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
 	input := key
@@ -307,12 +303,7 @@ func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRound
 // r2NewMsgs are DGRound2Message1 broadcasts from new committee.
 // r3P2P[j] is old party j's DGRound3Message1 (P2P share).
 // r3Bcast[j] is old party j's DGRound3Message2 (decommitment).
-func ReshareRound4(
-	ctx context.Context,
-	state *ReshareState,
-	r2NewMsgs []*tss.Message,
-	r3P2P, r3Bcast []*tss.Message,
-) (*ReshareRoundOutput, error) {
+func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Message, r3P2P, r3Bcast []*tss.Message) (*ReshareRoundOutput, error) {
 	params, save, temp := state.params, state.save, state.temp
 	tss.MergeMsgs(temp.dgRound2Message1s, r2NewMsgs)
 	tss.MergeMsgs(temp.dgRound3Message1s, r3P2P)
@@ -589,10 +580,7 @@ func ReshareRound4(
 //
 // r4P2P[j] is new party j's DGRound4Message1 (P2P FacProof).
 // r4Bcast[j] is new party j's DGRound4Message2 (ACK broadcast).
-func ReshareRound5(
-	state *ReshareState,
-	r4P2P, r4Bcast []*tss.Message,
-) (*ReshareRoundOutput, error) {
+func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*ReshareRoundOutput, error) {
 	params, save, temp, input := state.params, state.save, state.temp, state.input
 	tss.MergeMsgs(temp.dgRound4Message1s, r4P2P)
 	tss.MergeMsgs(temp.dgRound4Message2s, r4Bcast)

@@ -161,13 +161,7 @@ func run() error {
 // Round 4: verify Paillier/mod/fac proofs, save
 // -------------------------------------------------------------------
 
-func ecdsaKeygen(
-	ctx context.Context,
-	n, threshold int,
-	pIDs tss.SortedPartyIDs,
-	peerCtx *tss.PeerContext,
-	preParams []keygen.LocalPreParams,
-) ([]keygen.LocalPartySaveData, error) {
+func ecdsaKeygen(ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext, preParams []keygen.LocalPreParams) ([]keygen.LocalPartySaveData, error) {
 	// -- Round 1 --
 	states := make([]*keygen.KeygenState, n)
 	r1 := make([]*tss.Message, n)
@@ -244,14 +238,7 @@ func ecdsaKeygen(
 // Finalize: sum partial sigs, verify ECDSA signature
 // -------------------------------------------------------------------
 
-func ecdsaSign(
-	ctx context.Context,
-	n, threshold int,
-	pIDs tss.SortedPartyIDs,
-	peerCtx *tss.PeerContext,
-	saves []keygen.LocalPartySaveData,
-	m *big.Int,
-) (*signing.SignatureData, error) {
+func ecdsaSign(ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext, saves []keygen.LocalPartySaveData, m *big.Int) (*signing.SignatureData, error) {
 	// -- Round 1: P2P + broadcast --
 	states := make([]*signing.SigningState, n)
 	r1p2p := make([][]*tss.Message, n)
@@ -330,12 +317,7 @@ func ecdsaSign(
 	return out.Signature, nil
 }
 
-func bcastRound(
-	n int,
-	states []*signing.SigningState,
-	fn func(int) (*signing.SignRoundOutput, error),
-	name string,
-) []*tss.Message {
+func bcastRound(n int, states []*signing.SigningState, fn func(int) (*signing.SignRoundOutput, error), name string) []*tss.Message {
 	msgs := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := fn(i)
@@ -358,14 +340,7 @@ func bcastRound(
 // Round 5: save new key material, zero old Xi
 // -------------------------------------------------------------------
 
-func ecdsaReshare(
-	ctx context.Context,
-	oldPIDs, newPIDs tss.SortedPartyIDs,
-	oldCtx, newCtx *tss.PeerContext,
-	oldSaves []keygen.LocalPartySaveData,
-	oldPP, newPP []keygen.LocalPreParams,
-	oldT, newT int,
-) ([]keygen.LocalPartySaveData, error) {
+func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldPP, newPP []keygen.LocalPreParams, oldT, newT int) ([]keygen.LocalPartySaveData, error) {
 	oldN := len(oldPIDs)
 	newN := len(newPIDs)
 
@@ -515,14 +490,13 @@ func ecdsaReshare(
 	return newSaves, nil
 }
 
-func verifyECDSA(
-	pub interface {
-		X() *big.Int
-		Y() *big.Int
-	},
-	msg []byte,
-	sig *signing.SignatureData,
-) error {
+// ecPoint is a point on an elliptic curve with X and Y coordinates.
+type ecPoint interface {
+	X() *big.Int
+	Y() *big.Int
+}
+
+func verifyECDSA(pub ecPoint, msg []byte, sig *signing.SignatureData) error {
 	pk := &ecdsa.PublicKey{Curve: tss.S256(), X: pub.X(), Y: pub.Y()}
 	r := new(big.Int).SetBytes(sig.R)
 	s := new(big.Int).SetBytes(sig.S)

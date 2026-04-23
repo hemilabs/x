@@ -13,13 +13,7 @@ import (
 )
 
 // runEdDSAKeygen runs a full 3-party keygen, returning states, round messages.
-func runEdDSAKeygen(t *testing.T) (
-	states []*KeygenState,
-	r1 []*tss.Message,
-	r2p2p [][]*tss.Message,
-	r2bcast []*tss.Message,
-	pIDs tss.SortedPartyIDs,
-) {
+func runEdDSAKeygen(t *testing.T) (states []*KeygenState, r1 []*tss.Message, r2p2p [][]*tss.Message, r2bcast []*tss.Message, pIDs tss.SortedPartyIDs) {
 	t.Helper()
 	const n = 3
 	const threshold = 1

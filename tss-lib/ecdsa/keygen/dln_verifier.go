@@ -30,12 +30,7 @@ func NewDlnProofVerifier(concurrency int) *DlnProofVerifier {
 
 // VerifyDLNProof verifies a DLN proof with bounded concurrency.
 // The proof may be nil (SNARK mode), in which case onDone(false).
-func (dpv *DlnProofVerifier) VerifyDLNProof(
-	proof *dlnproof.Proof,
-	Session []byte,
-	h1, h2, n *big.Int,
-	onDone func(bool),
-) {
+func (dpv *DlnProofVerifier) VerifyDLNProof(proof *dlnproof.Proof, Session []byte, h1, h2, n *big.Int, onDone func(bool)) {
 	dpv.semaphore <- struct{}{}
 	go func() {
 		defer func() { <-dpv.semaphore }()

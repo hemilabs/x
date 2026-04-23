@@ -119,11 +119,13 @@ func TestECDSAKeygenSignReshare(t *testing.T) {
 
 // --- helpers ---
 
-func verifyECDSA(t *testing.T, pub interface {
+// ecPoint is a point on an elliptic curve with X and Y coordinates.
+type ecPoint interface {
 	X() *big.Int
 	Y() *big.Int
-}, msgHash []byte, sig *signing.SignatureData,
-) {
+}
+
+func verifyECDSA(t *testing.T, pub ecPoint, msgHash []byte, sig *signing.SignatureData) {
 	t.Helper()
 	pk := &ecdsa.PublicKey{Curve: tss.S256(), X: pub.X(), Y: pub.Y()}
 	r := new(big.Int).SetBytes(sig.R)
@@ -133,12 +135,7 @@ func verifyECDSA(t *testing.T, pub interface {
 	}
 }
 
-func ecdsaKeygen(
-	t *testing.T, ctx context.Context,
-	n, threshold int,
-	pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext,
-	preParams []keygen.LocalPreParams,
-) []keygen.LocalPartySaveData {
+func ecdsaKeygen(t *testing.T, ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext, preParams []keygen.LocalPreParams) []keygen.LocalPartySaveData {
 	t.Helper()
 
 	states := make([]*keygen.KeygenState, n)
@@ -202,12 +199,7 @@ func ecdsaKeygen(
 	return saves
 }
 
-func ecdsaSign(
-	t *testing.T, ctx context.Context,
-	n, threshold int,
-	pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext,
-	saves []keygen.LocalPartySaveData, m *big.Int,
-) *signing.SignatureData {
+func ecdsaSign(t *testing.T, ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext, saves []keygen.LocalPartySaveData, m *big.Int) *signing.SignatureData {
 	t.Helper()
 
 	states := make([]*signing.SigningState, n)
@@ -302,14 +294,7 @@ func bcastRound(t *testing.T, n int, states []*signing.SigningState, fn func(int
 	return msgs
 }
 
-func ecdsaReshare(
-	t *testing.T, ctx context.Context,
-	oldPIDs, newPIDs tss.SortedPartyIDs,
-	oldCtx, newCtx *tss.PeerContext,
-	oldSaves []keygen.LocalPartySaveData,
-	oldPreParams, newPreParams []keygen.LocalPreParams,
-	oldT, newT int,
-) []keygen.LocalPartySaveData {
+func ecdsaReshare(t *testing.T, ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldPreParams, newPreParams []keygen.LocalPreParams, oldT, newT int) []keygen.LocalPartySaveData {
 	t.Helper()
 
 	oldN := len(oldPIDs)

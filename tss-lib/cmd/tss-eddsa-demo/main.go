@@ -149,11 +149,7 @@ func run() error {
 // Round 3: each party verifies proofs and shares, computes public key
 // -------------------------------------------------------------------
 
-func eddsaKeygen(
-	n, threshold int,
-	pIDs tss.SortedPartyIDs,
-	ctx *tss.PeerContext,
-) ([]keygen.LocalPartySaveData, error) {
+func eddsaKeygen(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext) ([]keygen.LocalPartySaveData, error) {
 	// -- Round 1 --
 	states := make([]*keygen.KeygenState, n)
 	r1 := make([]*tss.Message, n)
@@ -219,13 +215,7 @@ func eddsaKeygen(
 // Finalize: sum partial sigs, verify EdDSA signature
 // -------------------------------------------------------------------
 
-func eddsaSign(
-	n, threshold int,
-	pIDs tss.SortedPartyIDs,
-	ctx *tss.PeerContext,
-	saves []keygen.LocalPartySaveData,
-	m *big.Int,
-) (*signing.SignatureData, error) {
+func eddsaSign(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, saves []keygen.LocalPartySaveData, m *big.Int) (*signing.SignatureData, error) {
 	// -- Round 1 --
 	states := make([]*signing.SigningState, n)
 	r1 := make([]*tss.Message, n)
@@ -278,12 +268,7 @@ func eddsaSign(
 // Round 5: new committee saves new key material, old zeros Xi
 // -------------------------------------------------------------------
 
-func eddsaReshare(
-	oldPIDs, newPIDs tss.SortedPartyIDs,
-	oldCtx, newCtx *tss.PeerContext,
-	oldSaves []keygen.LocalPartySaveData,
-	oldT, newT int,
-) ([]keygen.LocalPartySaveData, error) {
+func eddsaReshare(oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldT, newT int) ([]keygen.LocalPartySaveData, error) {
 	oldN := len(oldPIDs)
 	newN := len(newPIDs)
 
@@ -400,14 +385,13 @@ func eddsaReshare(
 	return newSaves, nil
 }
 
-func verifyEdDSA(
-	pub interface {
-		X() *big.Int
-		Y() *big.Int
-	},
-	msg []byte,
-	sig *signing.SignatureData,
-) error {
+// ecPoint is a point on an elliptic curve with X and Y coordinates.
+type ecPoint interface {
+	X() *big.Int
+	Y() *big.Int
+}
+
+func verifyEdDSA(pub ecPoint, msg []byte, sig *signing.SignatureData) error {
 	pk := edwards.PublicKey{Curve: tss.Edwards(), X: pub.X(), Y: pub.Y()}
 	r := new(big.Int).SetBytes(sig.R)
 	s := new(big.Int).SetBytes(sig.S)

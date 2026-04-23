@@ -56,13 +56,7 @@ func (m *KGRound1Message) ValidateBasic() bool {
 }
 
 // NewKGRound1Message constructs a round 1 broadcast message.
-func NewKGRound1Message(
-	from *tss.PartyID,
-	ct cmt.HashCommitment,
-	paillierPK *paillier.PublicKey,
-	nTildeI, h1I, h2I *big.Int,
-	dlnProof1, dlnProof2 *dlnproof.Proof,
-) *tss.Message {
+func NewKGRound1Message(from *tss.PartyID, ct cmt.HashCommitment, paillierPK *paillier.PublicKey, nTildeI, h1I, h2I *big.Int, dlnProof1, dlnProof2 *dlnproof.Proof) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -95,11 +89,7 @@ func (m *KGRound2Message1) ValidateBasic() bool {
 }
 
 // NewKGRound2Message1 constructs a round 2 P2P message.
-func NewKGRound2Message1(
-	to, from *tss.PartyID,
-	share *vss.Share,
-	proof *facproof.ProofFac,
-) *tss.Message {
+func NewKGRound2Message1(to, from *tss.PartyID, share *vss.Share, proof *facproof.ProofFac) *tss.Message {
 	return &tss.Message{
 		From: from,
 		To:   []*tss.PartyID{to},
@@ -125,11 +115,7 @@ func (m *KGRound2Message2) ValidateBasic() bool {
 }
 
 // NewKGRound2Message2 constructs a round 2 broadcast message.
-func NewKGRound2Message2(
-	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
-	proof *modproof.ProofMod,
-) *tss.Message {
+func NewKGRound2Message2(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *modproof.ProofMod) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -161,10 +147,7 @@ func (m *KGRound3Message) ValidateBasic() bool {
 }
 
 // NewKGRound3Message constructs a round 3 broadcast message.
-func NewKGRound3Message(
-	from *tss.PartyID,
-	proof paillier.Proof,
-) *tss.Message {
+func NewKGRound3Message(from *tss.PartyID, proof paillier.Proof) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,

@@ -28,11 +28,7 @@ func (m *SignRound1Message1) ValidateBasic() bool {
 }
 
 // NewSignRound1Message1 constructs a *tss.Message with the given content.
-func NewSignRound1Message1(
-	to, from *tss.PartyID,
-	c *big.Int,
-	proof *mta.RangeProofAlice,
-) *tss.Message {
+func NewSignRound1Message1(to, from *tss.PartyID, c *big.Int, proof *mta.RangeProofAlice) *tss.Message {
 	return &tss.Message{
 		From: from,
 		To:   []*tss.PartyID{to},
@@ -55,10 +51,7 @@ func (m *SignRound1Message2) ValidateBasic() bool {
 }
 
 // NewSignRound1Message2 constructs a *tss.Message with the given content.
-func NewSignRound1Message2(
-	from *tss.PartyID,
-	commitment cmt.HashCommitment,
-) *tss.Message {
+func NewSignRound1Message2(from *tss.PartyID, commitment cmt.HashCommitment) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -87,13 +80,7 @@ func (m *SignRound2Message) ValidateBasic() bool {
 }
 
 // NewSignRound2Message constructs a *tss.Message with the given content.
-func NewSignRound2Message(
-	to, from *tss.PartyID,
-	c1Ji *big.Int,
-	pi1Ji *mta.ProofBob,
-	c2Ji *big.Int,
-	pi2Ji *mta.ProofBobWC,
-) *tss.Message {
+func NewSignRound2Message(to, from *tss.PartyID, c1Ji *big.Int, pi1Ji *mta.ProofBob, c2Ji *big.Int, pi2Ji *mta.ProofBobWC) *tss.Message {
 	return &tss.Message{
 		From: from,
 		To:   []*tss.PartyID{to},
@@ -118,10 +105,7 @@ func (m *SignRound3Message) ValidateBasic() bool {
 }
 
 // NewSignRound3Message constructs a *tss.Message with the given content.
-func NewSignRound3Message(
-	from *tss.PartyID,
-	theta *big.Int,
-) *tss.Message {
+func NewSignRound3Message(from *tss.PartyID, theta *big.Int) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -141,11 +125,7 @@ func (m *SignRound4Message) ValidateBasic() bool {
 }
 
 // NewSignRound4Message constructs a *tss.Message with the given content.
-func NewSignRound4Message(
-	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
-	proof *schnorr.ZKProof,
-) *tss.Message {
+func NewSignRound4Message(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *schnorr.ZKProof) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -167,10 +147,7 @@ func (m *SignRound5Message) ValidateBasic() bool {
 }
 
 // NewSignRound5Message constructs a *tss.Message with the given content.
-func NewSignRound5Message(
-	from *tss.PartyID,
-	commitment cmt.HashCommitment,
-) *tss.Message {
+func NewSignRound5Message(from *tss.PartyID, commitment cmt.HashCommitment) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -194,12 +171,7 @@ func (m *SignRound6Message) ValidateBasic() bool {
 }
 
 // NewSignRound6Message constructs a *tss.Message with the given content.
-func NewSignRound6Message(
-	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
-	proof *schnorr.ZKProof,
-	vProof *schnorr.ZKVProof,
-) *tss.Message {
+func NewSignRound6Message(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *schnorr.ZKProof, vProof *schnorr.ZKVProof) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -222,10 +194,7 @@ func (m *SignRound7Message) ValidateBasic() bool {
 }
 
 // NewSignRound7Message constructs a *tss.Message with the given content.
-func NewSignRound7Message(
-	from *tss.PartyID,
-	commitment cmt.HashCommitment,
-) *tss.Message {
+func NewSignRound7Message(from *tss.PartyID, commitment cmt.HashCommitment) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -246,10 +215,7 @@ func (m *SignRound8Message) ValidateBasic() bool {
 }
 
 // NewSignRound8Message constructs a *tss.Message with the given content.
-func NewSignRound8Message(
-	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
-) *tss.Message {
+func NewSignRound8Message(from *tss.PartyID, deCommitment cmt.HashDeCommitment) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
@@ -270,10 +236,7 @@ func (m *SignRound9Message) ValidateBasic() bool {
 }
 
 // NewSignRound9Message constructs a *tss.Message with the given content.
-func NewSignRound9Message(
-	from *tss.PartyID,
-	si *big.Int,
-) *tss.Message {
+func NewSignRound9Message(from *tss.PartyID, si *big.Int) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,

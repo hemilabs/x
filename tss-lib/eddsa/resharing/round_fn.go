@@ -67,10 +67,7 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 // and broadcasts a commitment.
 //
 // New committee parties call this too but get a no-op (nil messages).
-func ReshareRound1(
-	params *tss.ReSharingParameters,
-	input *keygen.LocalPartySaveData,
-) (*ReshareState, *ReshareRoundOutput, error) {
+func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
 
@@ -209,12 +206,7 @@ func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRound
 // BigXj, and sends an ACK to both committees.
 //
 // Old committee parties call this too but get a no-op.
-func ReshareRound4(
-	state *ReshareState,
-	r1Msgs []*tss.Message,
-	r3p2p []*tss.Message,
-	r3bcast []*tss.Message,
-) (*ReshareRoundOutput, error) {
+func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Message, r3bcast []*tss.Message) (*ReshareRoundOutput, error) {
 	params := state.params
 
 	if !params.IsNewCommittee() {
@@ -330,10 +322,7 @@ func ReshareRound4(
 
 // ReshareRound5 finalizes the resharing.  New committee parties save
 // their new key material.  Old committee parties zero their old Xi.
-func ReshareRound5(
-	state *ReshareState,
-	r4AckMsgs []*tss.Message,
-) (*ReshareRoundOutput, error) {
+func ReshareRound5(state *ReshareState, r4AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
 	if state.params.IsNewCommittee() {
 		state.save.BigXj = state.temp.newBigXjs
 		state.save.ShareID = state.params.PartyID().KeyInt()

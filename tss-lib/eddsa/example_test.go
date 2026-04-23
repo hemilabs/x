@@ -114,11 +114,13 @@ func TestEdDSAKeygenSignReshare(t *testing.T) {
 
 // --- helpers ---
 
-func verifyEdDSA(t *testing.T, pub interface {
+// ecPoint is a point on an elliptic curve with X and Y coordinates.
+type ecPoint interface {
 	X() *big.Int
 	Y() *big.Int
-}, msg []byte, sig *signing.SignatureData,
-) {
+}
+
+func verifyEdDSA(t *testing.T, pub ecPoint, msg []byte, sig *signing.SignatureData) {
 	t.Helper()
 	pk := edwards.PublicKey{Curve: tss.Edwards(), X: pub.X(), Y: pub.Y()}
 	r := new(big.Int).SetBytes(sig.R)
@@ -212,13 +214,7 @@ func eddsaSign(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss
 	return out.Signature
 }
 
-func eddsaReshare(
-	t *testing.T,
-	oldPIDs, newPIDs tss.SortedPartyIDs,
-	oldCtx, newCtx *tss.PeerContext,
-	oldSaves []keygen.LocalPartySaveData,
-	oldT, newT int,
-) []keygen.LocalPartySaveData {
+func eddsaReshare(t *testing.T, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldT, newT int) []keygen.LocalPartySaveData {
 	t.Helper()
 
 	oldN := len(oldPIDs)

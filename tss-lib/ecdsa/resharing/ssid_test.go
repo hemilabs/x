@@ -17,13 +17,7 @@ import (
 // buildTestResharingFixture creates deterministic ReSharingParameters and
 // matching keygen save data for SSID and index tests.  The returned
 // objects are minimal but structurally valid for getReshareSSID.
-func buildTestResharingFixture(t *testing.T) (
-	params *tss.ReSharingParameters,
-	input *keygen.LocalPartySaveData,
-	temp *localTempData,
-	oldPIDs tss.SortedPartyIDs,
-	newPIDs tss.SortedPartyIDs,
-) {
+func buildTestResharingFixture(t *testing.T) (params *tss.ReSharingParameters, input *keygen.LocalPartySaveData, temp *localTempData, oldPIDs tss.SortedPartyIDs, newPIDs tss.SortedPartyIDs) {
 	t.Helper()
 	ec := tss.S256()
 

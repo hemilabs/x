@@ -203,14 +203,7 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 //     Miller-Rabin and Baillie-PSW for `p`.
 //     If `q` and `p` are found to be prime, return them as a result. If not, go
 //     back to the point 1.
-func runGenPrimeRoutine(
-	ctx context.Context,
-	primeCh chan<- *GermainSafePrime,
-	errCh chan<- error,
-	waitGroup *sync.WaitGroup,
-	rand io.Reader,
-	pBitLen int,
-) {
+func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, errCh chan<- error, waitGroup *sync.WaitGroup, rand io.Reader, pBitLen int) {
 	qBitLen := pBitLen - 1
 	b := uint(qBitLen % 8) //nolint:gosec // result is 0-7
 	if b == 0 {

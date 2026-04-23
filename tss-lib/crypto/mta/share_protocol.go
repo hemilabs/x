@@ -18,13 +18,7 @@ import (
 
 // [FORK] Session parameter added for SSID domain separation (prevents cross-ceremony replay).
 // Upstream has no Session parameter; hashes are not ceremony-bound.
-func AliceInit(
-	Session []byte,
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	a, NTildeB, h1B, h2B *big.Int,
-	rand io.Reader,
-) (cA *big.Int, pf *RangeProofAlice, err error) {
+func AliceInit(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, a, NTildeB, h1B, h2B *big.Int, rand io.Reader) (cA *big.Int, pf *RangeProofAlice, err error) {
 	// [FORK] Upstream does not validate parameters. Nil pkA or NTilde causes
 	// nil-pointer panics deep in proof construction.
 	if ec == nil || pkA == nil || a == nil || NTildeB == nil || h1B == nil || h2B == nil || rand == nil {
@@ -42,15 +36,7 @@ func AliceInit(
 // domain separation: Alice's range proof is verified under her session tag, Bob's proof is
 // constructed under his. Upstream's AliceInit/ProveRangeAlice has no session parameter at all
 // (range proof hash is entirely untagged); only Bob's side has a Session parameter.
-func BobMid(
-	AliceSession []byte, // Session context Alice used for her range proof (SSID || Alice_index)
-	BobSession []byte, // Session context Bob uses for his proof (SSID || Bob_index)
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *RangeProofAlice,
-	b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int,
-	rand io.Reader,
-) (beta, cB, betaPrm *big.Int, piB *ProofBob, err error) {
+func BobMid(AliceSession []byte, BobSession []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *RangeProofAlice, b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int, rand io.Reader) (beta, cB, betaPrm *big.Int, piB *ProofBob, err error) {
 	// [FORK] Nil parameter guard — upstream does not validate, leading to nil-pointer panics.
 	if ec == nil || pkA == nil || pf == nil || b == nil || cA == nil || rand == nil {
 		err = errors.New("BobMid received nil argument")
@@ -83,16 +69,7 @@ func BobMid(
 }
 
 // [FORK] Same per-party session split as BobMid above, plus nil parameter guards.
-func BobMidWC(
-	AliceSession []byte, // Session context Alice used for her range proof (SSID || Alice_index)
-	BobSession []byte, // Session context Bob uses for his proof (SSID || Bob_index)
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *RangeProofAlice,
-	b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int,
-	B *crypto.ECPoint,
-	rand io.Reader,
-) (beta, cB, betaPrm *big.Int, piB *ProofBobWC, err error) {
+func BobMidWC(AliceSession []byte, BobSession []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *RangeProofAlice, b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int, B *crypto.ECPoint, rand io.Reader) (beta, cB, betaPrm *big.Int, piB *ProofBobWC, err error) {
 	// [FORK] Nil parameter guard — upstream does not validate.
 	if ec == nil || pkA == nil || pf == nil || b == nil || cA == nil || B == nil || rand == nil {
 		err = errors.New("BobMidWC received nil argument")
@@ -124,14 +101,7 @@ func BobMidWC(
 	return
 }
 
-func AliceEnd(
-	Session []byte,
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *ProofBob,
-	h1A, h2A, cA, cB, NTildeA *big.Int,
-	sk *paillier.PrivateKey,
-) (*big.Int, error) {
+func AliceEnd(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *ProofBob, h1A, h2A, cA, cB, NTildeA *big.Int, sk *paillier.PrivateKey) (*big.Int, error) {
 	if !pf.Verify(Session, ec, pkA, NTildeA, h1A, h2A, cA, cB) {
 		return nil, errors.New("ProofBob.Verify() returned false")
 	}
@@ -143,15 +113,7 @@ func AliceEnd(
 	return new(big.Int).Mod(alphaPrm, q), nil
 }
 
-func AliceEndWC(
-	Session []byte,
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *ProofBobWC,
-	B *crypto.ECPoint,
-	cA, cB, NTildeA, h1A, h2A *big.Int,
-	sk *paillier.PrivateKey,
-) (*big.Int, error) {
+func AliceEndWC(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *ProofBobWC, B *crypto.ECPoint, cA, cB, NTildeA, h1A, h2A *big.Int, sk *paillier.PrivateKey) (*big.Int, error) {
 	if !pf.Verify(Session, ec, pkA, NTildeA, h1A, h2A, cA, cB, B) {
 		return nil, errors.New("ProofBobWC.Verify() returned false")
 	}

@@ -17,11 +17,7 @@ import (
 // buildSigningSSIDFixture creates minimal but structurally valid inputs
 // for getSigningSSID.  Party keys are deterministic so tests are
 // reproducible.
-func buildSigningSSIDFixture(t *testing.T, n, threshold int) (
-	params *tss.Parameters,
-	key *keygen.LocalPartySaveData,
-	temp *localTempData,
-) {
+func buildSigningSSIDFixture(t *testing.T, n, threshold int) (params *tss.Parameters, key *keygen.LocalPartySaveData, temp *localTempData) {
 	t.Helper()
 	ec := tss.S256()
 

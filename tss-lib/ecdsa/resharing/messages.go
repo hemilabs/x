@@ -33,13 +33,7 @@ func (m *DGRound1Message) ValidateBasic() bool {
 }
 
 // NewDGRound1Message constructs a *tss.Message with the given content.
-func NewDGRound1Message(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-	ecdsaPub *crypto.ECPoint,
-	vct cmt.HashCommitment,
-	ssid []byte,
-) *tss.Message {
+func NewDGRound1Message(to []*tss.PartyID, from *tss.PartyID, ecdsaPub *crypto.ECPoint, vct cmt.HashCommitment, ssid []byte) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		To:          to,
@@ -73,14 +67,7 @@ func (m *DGRound2Message1) ValidateBasic() bool {
 }
 
 // NewDGRound2Message1 constructs a *tss.Message with the given content.
-func NewDGRound2Message1(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-	paillierPK *paillier.PublicKey,
-	modProof *modproof.ProofMod,
-	NTildei, H1i, H2i *big.Int,
-	dlnProof1, dlnProof2 *dlnproof.Proof,
-) *tss.Message {
+func NewDGRound2Message1(to []*tss.PartyID, from *tss.PartyID, paillierPK *paillier.PublicKey, modProof *modproof.ProofMod, NTildei, H1i, H2i *big.Int, dlnProof1, dlnProof2 *dlnproof.Proof) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		To:          to,
@@ -104,10 +91,7 @@ type DGRound2Message2 struct{}
 func (m *DGRound2Message2) ValidateBasic() bool { return m != nil }
 
 // NewDGRound2Message2 constructs a *tss.Message with the given content.
-func NewDGRound2Message2(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-) *tss.Message {
+func NewDGRound2Message2(to []*tss.PartyID, from *tss.PartyID) *tss.Message {
 	return &tss.Message{
 		From:             from,
 		To:               to,
@@ -130,11 +114,7 @@ func (m *DGRound3Message1) ValidateBasic() bool {
 }
 
 // NewDGRound3Message1 constructs a *tss.Message with the given content.
-func NewDGRound3Message1(
-	to *tss.PartyID,
-	from *tss.PartyID,
-	share *vss.Share,
-) *tss.Message {
+func NewDGRound3Message1(to *tss.PartyID, from *tss.PartyID, share *vss.Share) *tss.Message {
 	return &tss.Message{
 		From: from,
 		To:   []*tss.PartyID{to},
@@ -156,11 +136,7 @@ func (m *DGRound3Message2) ValidateBasic() bool {
 }
 
 // NewDGRound3Message2 constructs a *tss.Message with the given content.
-func NewDGRound3Message2(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-	vdct cmt.HashDeCommitment,
-) *tss.Message {
+func NewDGRound3Message2(to []*tss.PartyID, from *tss.PartyID, vdct cmt.HashDeCommitment) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		To:          to,
@@ -183,11 +159,7 @@ func (m *DGRound4Message1) ValidateBasic() bool {
 }
 
 // NewDGRound4Message1 constructs a *tss.Message with the given content.
-func NewDGRound4Message1(
-	to *tss.PartyID,
-	from *tss.PartyID,
-	proof *facproof.ProofFac,
-) *tss.Message {
+func NewDGRound4Message1(to *tss.PartyID, from *tss.PartyID, proof *facproof.ProofFac) *tss.Message {
 	return &tss.Message{
 		From: from,
 		To:   []*tss.PartyID{to},
@@ -205,10 +177,7 @@ type DGRound4Message2 struct{}
 func (m *DGRound4Message2) ValidateBasic() bool { return m != nil }
 
 // NewDGRound4Message2 constructs a *tss.Message with the given content.
-func NewDGRound4Message2(
-	to []*tss.PartyID,
-	from *tss.PartyID,
-) *tss.Message {
+func NewDGRound4Message2(to []*tss.PartyID, from *tss.PartyID) *tss.Message {
 	return &tss.Message{
 		From:                    from,
 		To:                      to,
