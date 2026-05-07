@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
@@ -28,14 +27,20 @@ func TestZKProofRejectsTEqualToQ(t *testing.T) {
 	X := crypto.ScalarBaseMult(tss.S256(), x)
 
 	pf, err := schnorr.NewZKProof(forkSession, x, X, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Sanity: honest proof verifies.
-	assert.True(t, pf.Verify(forkSession, X), "honest proof must verify")
+	if !pf.Verify(forkSession, X) {
+		t.Fatal("honest proof must verify")
+	}
 
 	// Tamper: set T = q (out of range [0, q)).
 	pf.T = new(big.Int).Set(q)
-	assert.False(t, pf.Verify(forkSession, X), "proof with T == q must be rejected")
+	if pf.Verify(forkSession, X) {
+		t.Fatal("proof with T == q must be rejected")
+	}
 }
 
 // TestZKProofRejectsTGreaterThanQ verifies that ZKProof.Verify rejects a proof
@@ -47,11 +52,15 @@ func TestZKProofRejectsTGreaterThanQ(t *testing.T) {
 	X := crypto.ScalarBaseMult(tss.S256(), x)
 
 	pf, err := schnorr.NewZKProof(forkSession, x, X, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Tamper: set T = T + q (congruent mod q, but out of range).
 	pf.T = new(big.Int).Add(pf.T, q)
-	assert.False(t, pf.Verify(forkSession, X), "proof with T >= q must be rejected")
+	if pf.Verify(forkSession, X) {
+		t.Fatal("proof with T >= q must be rejected")
+	}
 }
 
 // TestZKProofRejectsNegativeT verifies that ZKProof.Verify rejects a proof
@@ -62,11 +71,15 @@ func TestZKProofRejectsNegativeT(t *testing.T) {
 	X := crypto.ScalarBaseMult(tss.S256(), x)
 
 	pf, err := schnorr.NewZKProof(forkSession, x, X, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Tamper: set T = -1.
 	pf.T = big.NewInt(-1)
-	assert.False(t, pf.Verify(forkSession, X), "proof with negative T must be rejected")
+	if pf.Verify(forkSession, X) {
+		t.Fatal("proof with negative T must be rejected")
+	}
 }
 
 // TestZKVProofRejectsTOutOfRange verifies that ZKVProof.Verify rejects a proof
@@ -81,17 +94,25 @@ func TestZKVProofRejectsTOutOfRange(t *testing.T) {
 	Rs := R.ScalarMult(s)
 	lG := crypto.ScalarBaseMult(tss.S256(), l)
 	V, err := Rs.Add(lG)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	pf, err := schnorr.NewZKVProof(forkSession, V, R, s, l, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Sanity: honest proof verifies.
-	assert.True(t, pf.Verify(forkSession, V, R), "honest ZKVProof must verify")
+	if !pf.Verify(forkSession, V, R) {
+		t.Fatal("honest ZKVProof must verify")
+	}
 
 	// Tamper: set T = q.
 	pf.T = new(big.Int).Set(q)
-	assert.False(t, pf.Verify(forkSession, V, R), "ZKVProof with T == q must be rejected")
+	if pf.Verify(forkSession, V, R) {
+		t.Fatal("ZKVProof with T == q must be rejected")
+	}
 }
 
 // TestZKVProofRejectsUOutOfRange verifies that ZKVProof.Verify rejects a proof
@@ -106,17 +127,25 @@ func TestZKVProofRejectsUOutOfRange(t *testing.T) {
 	Rs := R.ScalarMult(s)
 	lG := crypto.ScalarBaseMult(tss.S256(), l)
 	V, err := Rs.Add(lG)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	pf, err := schnorr.NewZKVProof(forkSession, V, R, s, l, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Sanity: honest proof verifies.
-	assert.True(t, pf.Verify(forkSession, V, R), "honest ZKVProof must verify")
+	if !pf.Verify(forkSession, V, R) {
+		t.Fatal("honest ZKVProof must verify")
+	}
 
 	// Tamper: set U = q.
 	pf.U = new(big.Int).Set(q)
-	assert.False(t, pf.Verify(forkSession, V, R), "ZKVProof with U == q must be rejected")
+	if pf.Verify(forkSession, V, R) {
+		t.Fatal("ZKVProof with U == q must be rejected")
+	}
 }
 
 // TestZKProofRejectsWrongSession verifies that a ZKProof generated with one
@@ -130,13 +159,19 @@ func TestZKProofRejectsWrongSession(t *testing.T) {
 	X := crypto.ScalarBaseMult(tss.S256(), x)
 
 	pf, err := schnorr.NewZKProof(sessionA, x, X, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Sanity: proof verifies with the correct session.
-	assert.True(t, pf.Verify(sessionA, X), "proof must verify with correct session")
+	if !pf.Verify(sessionA, X) {
+		t.Fatal("proof must verify with correct session")
+	}
 
 	// Cross-session: proof must not verify with a different session.
-	assert.False(t, pf.Verify(sessionB, X), "proof must be rejected with wrong session")
+	if pf.Verify(sessionB, X) {
+		t.Fatal("proof must be rejected with wrong session")
+	}
 }
 
 // TestZKVProofRejectsWrongSession verifies that a ZKVProof generated with one
@@ -154,14 +189,22 @@ func TestZKVProofRejectsWrongSession(t *testing.T) {
 	Rs := R.ScalarMult(s)
 	lG := crypto.ScalarBaseMult(tss.S256(), l)
 	V, err := Rs.Add(lG)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	pf, err := schnorr.NewZKVProof(sessionA, V, R, s, l, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Sanity: proof verifies with the correct session.
-	assert.True(t, pf.Verify(sessionA, V, R), "ZKVProof must verify with correct session")
+	if !pf.Verify(sessionA, V, R) {
+		t.Fatal("ZKVProof must verify with correct session")
+	}
 
 	// Cross-session: proof must not verify with a different session.
-	assert.False(t, pf.Verify(sessionB, V, R), "ZKVProof must be rejected with wrong session")
+	if pf.Verify(sessionB, V, R) {
+		t.Fatal("ZKVProof must be rejected with wrong session")
+	}
 }

@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	. "github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
@@ -27,14 +26,20 @@ func TestMod(test *testing.T) {
 	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
 
 	proof, err := NewProof(Session, N, P, Q, rand.Reader)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	proofBzs := proof.Bytes()
 	proof, err = NewProofFromBytes(proofBzs[:])
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	ok := proof.Verify(Session, N)
-	assert.True(test, ok, "proof must verify")
+	if !ok {
+		test.Fatal("proof must verify")
+	}
 }
 
 var one = big.NewInt(1)
@@ -111,27 +116,41 @@ func TestModProofRejectsSmallN(test *testing.T) {
 	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
 
 	proof, err := NewProof(Session, N, P, Q, rand.Reader)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	// Sanity: the proof must pass with the proper N (>= 2048 bits).
 	ok := proof.Verify(Session, N)
-	assert.True(test, ok, "proof must verify with proper 2048-bit N")
+	if !ok {
+		test.Fatal("proof must verify with proper 2048-bit N")
+	}
 
 	// Build a small N (1024-bit) from two 512-bit primes.
 	smallP, err := rand.Prime(rand.Reader, 512)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 	smallQ, err := rand.Prime(rand.Reader, 512)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 	smallN := new(big.Int).Mul(smallP, smallQ)
-	assert.True(test, smallN.BitLen() < 2048, "smallN must be less than 2048 bits")
+	if !(smallN.BitLen() < 2048) {
+		test.Fatal("smallN must be less than 2048 bits")
+	}
 
 	// The [FORK] BitLen < 2048 check in Verify must reject smallN.
 	ok = proof.Verify(Session, smallN)
-	assert.False(test, ok, "proof must be rejected when N.BitLen() < 2048")
+	if ok {
+		test.Fatal("proof must be rejected when N.BitLen() < 2048")
+	}
 
 	// nil N must also be rejected.
 	ok = proof.Verify(Session, nil)
-	assert.False(test, ok, "proof must be rejected when N is nil")
+	if ok {
+		test.Fatal("proof must be rejected when N is nil")
+	}
 }
 
 func TestAttackMod(test *testing.T) {
@@ -157,7 +176,11 @@ func TestAttackMod(test *testing.T) {
 		N.Mul(N, q)
 	}
 	proof, err := NewHackedProof(Session, N, P, Q)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 	ok := proof.Verify(Session, N)
-	assert.Falsef(test, ok, "false proof should not verify")
+	if ok {
+		test.Fatalf("false proof should not verify")
+	}
 }

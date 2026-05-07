@@ -8,9 +8,9 @@ package facproof_test
 import (
 	"crypto/rand"
 	"math/big"
+	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
@@ -34,22 +34,32 @@ func TestFac(test *testing.T) {
 
 	primes := [2]*big.Int{common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits), common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)}
 	NCap, s, t, err := crypto.GenerateNTildei(rand.Reader, primes)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 	proof, err := NewProof(Session, ec, N0, NCap, s, t, N0p, N0q, rand.Reader)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	ok := proof.Verify(Session, ec, N0, NCap, s, t)
-	assert.True(test, ok, "proof must verify")
+	if !ok {
+		test.Fatal("proof must verify")
+	}
 
 	N0p = common.GetRandomPrimeInt(rand.Reader, 1024)
 	N0q = common.GetRandomPrimeInt(rand.Reader, 1024)
 	N0 = new(big.Int).Mul(N0p, N0q)
 
 	proof, err = NewProof(Session, ec, N0, NCap, s, t, N0p, N0q, rand.Reader)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	ok = proof.Verify(Session, ec, N0, NCap, s, t)
-	assert.True(test, ok, "proof must verify")
+	if !ok {
+		test.Fatal("proof must verify")
+	}
 }
 
 // TestFacProofBytesRoundTrip verifies that Bytes() -> NewProofFromBytes() preserves
@@ -63,31 +73,61 @@ func TestFacProofBytesRoundTrip(test *testing.T) {
 
 	primes := [2]*big.Int{common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits), common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)}
 	NCap, s, t, err := crypto.GenerateNTildei(rand.Reader, primes)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	proof, err := NewProof(Session, ec, N0, NCap, s, t, N0p, N0q, rand.Reader)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	bzs := proof.Bytes()
 	recovered, err := NewProofFromBytes(bzs[:])
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	// All fields must match exactly.
-	assert.Equal(test, proof.P, recovered.P, "P mismatch")
-	assert.Equal(test, proof.Q, recovered.Q, "Q mismatch")
-	assert.Equal(test, proof.A, recovered.A, "A mismatch")
-	assert.Equal(test, proof.B, recovered.B, "B mismatch")
-	assert.Equal(test, proof.T, recovered.T, "T mismatch")
-	assert.Equal(test, proof.Sigma, recovered.Sigma, "Sigma mismatch")
-	assert.Equal(test, proof.Z1, recovered.Z1, "Z1 mismatch")
-	assert.Equal(test, proof.Z2, recovered.Z2, "Z2 mismatch")
-	assert.Equal(test, proof.W1, recovered.W1, "W1 mismatch")
-	assert.Equal(test, proof.W2, recovered.W2, "W2 mismatch")
-	assert.Equal(test, proof.V, recovered.V, "V mismatch")
+	if !reflect.DeepEqual(proof.P, recovered.P) {
+		test.Fatalf("P mismatch")
+	}
+	if !reflect.DeepEqual(proof.Q, recovered.Q) {
+		test.Fatalf("Q mismatch")
+	}
+	if !reflect.DeepEqual(proof.A, recovered.A) {
+		test.Fatalf("A mismatch")
+	}
+	if !reflect.DeepEqual(proof.B, recovered.B) {
+		test.Fatalf("B mismatch")
+	}
+	if !reflect.DeepEqual(proof.T, recovered.T) {
+		test.Fatalf("T mismatch")
+	}
+	if !reflect.DeepEqual(proof.Sigma, recovered.Sigma) {
+		test.Fatalf("Sigma mismatch")
+	}
+	if !reflect.DeepEqual(proof.Z1, recovered.Z1) {
+		test.Fatalf("Z1 mismatch")
+	}
+	if !reflect.DeepEqual(proof.Z2, recovered.Z2) {
+		test.Fatalf("Z2 mismatch")
+	}
+	if !reflect.DeepEqual(proof.W1, recovered.W1) {
+		test.Fatalf("W1 mismatch")
+	}
+	if !reflect.DeepEqual(proof.W2, recovered.W2) {
+		test.Fatalf("W2 mismatch")
+	}
+	if !reflect.DeepEqual(proof.V, recovered.V) {
+		test.Fatalf("V mismatch")
+	}
 
 	// Recovered proof must also verify.
 	ok := recovered.Verify(Session, ec, N0, NCap, s, t)
-	assert.True(test, ok, "recovered proof must verify")
+	if !ok {
+		test.Fatal("recovered proof must verify")
+	}
 }
 
 // TestFacProofVSignMagnitudeNegative verifies that a negative V is preserved
@@ -103,9 +143,15 @@ func TestFacProofVSignMagnitudeNegative(test *testing.T) {
 
 	bzs := proof.Bytes()
 	recovered, err := NewProofFromBytes(bzs[:])
-	assert.NoError(test, err)
-	assert.Equal(test, big.NewInt(-42), recovered.V, "negative V must survive round-trip")
-	assert.Equal(test, -1, recovered.V.Sign(), "V sign must be negative")
+	if err != nil {
+		test.Fatal(err)
+	}
+	if !reflect.DeepEqual(big.NewInt(-42), recovered.V) {
+		test.Fatalf("negative V must survive round-trip")
+	}
+	if -1 != recovered.V.Sign() {
+		test.Fatalf("V sign must be negative")
+	}
 }
 
 // TestFacProofVSignMagnitudePositive verifies that a positive V is preserved.
@@ -120,9 +166,15 @@ func TestFacProofVSignMagnitudePositive(test *testing.T) {
 
 	bzs := proof.Bytes()
 	recovered, err := NewProofFromBytes(bzs[:])
-	assert.NoError(test, err)
-	assert.Equal(test, big.NewInt(42), recovered.V, "positive V must survive round-trip")
-	assert.Equal(test, 1, recovered.V.Sign(), "V sign must be positive")
+	if err != nil {
+		test.Fatal(err)
+	}
+	if !reflect.DeepEqual(big.NewInt(42), recovered.V) {
+		test.Fatalf("positive V must survive round-trip")
+	}
+	if recovered.V.Sign() != 1 {
+		test.Fatalf("V sign must be positive")
+	}
 }
 
 // TestFacProofVSignMagnitudeZero verifies that zero V is preserved.
@@ -137,8 +189,12 @@ func TestFacProofVSignMagnitudeZero(test *testing.T) {
 
 	bzs := proof.Bytes()
 	recovered, err := NewProofFromBytes(bzs[:])
-	assert.NoError(test, err)
-	assert.Equal(test, 0, recovered.V.Sign(), "zero V must survive round-trip")
+	if err != nil {
+		test.Fatal(err)
+	}
+	if recovered.V.Sign() != 0 {
+		test.Fatalf("zero V must survive round-trip")
+	}
 }
 
 // TestFacProofVSignMagnitudeLargeNegative tests a large negative V value.
@@ -157,8 +213,12 @@ func TestFacProofVSignMagnitudeLargeNegative(test *testing.T) {
 
 	bzs := proof.Bytes()
 	recovered, err := NewProofFromBytes(bzs[:])
-	assert.NoError(test, err)
-	assert.Equal(test, 0, largeNeg.Cmp(recovered.V), "large negative V must survive round-trip")
+	if err != nil {
+		test.Fatal(err)
+	}
+	if largeNeg.Cmp(recovered.V) != 0 {
+		test.Fatalf("large negative V must survive round-trip")
+	}
 }
 
 // TestFacProofFromBytesTruncated verifies that truncated input produces an error.
@@ -169,7 +229,9 @@ func TestFacProofFromBytesTruncated(test *testing.T) {
 		truncated[i] = []byte{0x01}
 	}
 	_, err := NewProofFromBytes(truncated)
-	assert.Error(test, err, "truncated input should error")
+	if err == nil {
+		test.Fatal("truncated input should error")
+	}
 }
 
 // TestFacProofFromBytesEmptyV verifies that empty V field produces an error.
@@ -181,7 +243,9 @@ func TestFacProofFromBytesEmptyV(test *testing.T) {
 	// V field (index 10) is empty.
 	parts[10] = []byte{}
 	_, err := NewProofFromBytes(parts)
-	assert.Error(test, err, "empty V should error")
+	if err == nil {
+		test.Fatal("empty V should error")
+	}
 }
 
 // TestFacProofFromBytesInvalidSignByte verifies that non-canonical sign bytes are rejected.
@@ -194,7 +258,9 @@ func TestFacProofFromBytesInvalidSignByte(test *testing.T) {
 		// V field with invalid sign byte prefix.
 		parts[10] = []byte{badSign, 0x2A} // sign=badSign, magnitude=42
 		_, err := NewProofFromBytes(parts)
-		assert.Error(test, err, "sign byte 0x%02x should be rejected", badSign)
+		if err == nil {
+			test.Fatal("sign byte 0x%02x should be rejected", badSign)
+		}
 	}
 }
 
@@ -207,7 +273,9 @@ func TestFacProofFromBytesNegativeZero(test *testing.T) {
 	// V field: sign=negative(0x01), magnitude=empty (zero).
 	parts[10] = []byte{0x01}
 	_, err := NewProofFromBytes(parts)
-	assert.Error(test, err, "negative zero V should be rejected")
+	if err == nil {
+		test.Fatal("negative zero V should be rejected")
+	}
 }
 
 // TestFacProofFromBytesExtraParts verifies that too many parts are rejected.
@@ -217,7 +285,9 @@ func TestFacProofFromBytesExtraParts(test *testing.T) {
 		parts[i] = []byte{0x01}
 	}
 	_, err := NewProofFromBytes(parts)
-	assert.Error(test, err, "extra parts should be rejected")
+	if err == nil {
+		test.Fatal("extra parts should be rejected")
+	}
 }
 
 // TestFacProofVerifyNegativeVNoPanic verifies that Verify does not panic
@@ -230,7 +300,9 @@ func TestFacProofVerifyNegativeVNoPanic(test *testing.T) {
 		common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits),
 	}
 	NCap, s, t, err := crypto.GenerateNTildei(rand.Reader, primes)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	// Construct a proof with negative V and verify it doesn't panic.
 	// The proof won't pass verification (since it's hand-crafted), but
@@ -244,9 +316,14 @@ func TestFacProofVerifyNegativeVNoPanic(test *testing.T) {
 	}
 	// Must not panic -- this was the critical bug (big.Int.Exp panics
 	// with negative exponent + non-nil modulus in Go 1.13+).
-	assert.NotPanics(test, func() {
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+			test.Fatalf("unexpected panic: %v", r)
+		}
+		}()
 		proof.Verify(Session, ec, big.NewInt(100), NCap, s, t)
-	}, "Verify must not panic with negative V")
+	}()
 }
 
 // TestFacProofVerifyNegativeVRealProof generates real proofs until one has
@@ -259,7 +336,9 @@ func TestFacProofVerifyNegativeVRealProof(test *testing.T) {
 		common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits),
 	}
 	NCap, s, t, err := crypto.GenerateNTildei(rand.Reader, primes)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	// Generate proofs until we find one with negative V, up to 100 attempts.
 	foundNegative := false
@@ -269,7 +348,9 @@ func TestFacProofVerifyNegativeVRealProof(test *testing.T) {
 		N0 := new(big.Int).Mul(N0p, N0q)
 
 		proof, err := NewProof(Session, ec, N0, NCap, s, t, N0p, N0q, rand.Reader)
-		assert.NoError(test, err)
+		if err != nil {
+			test.Fatal(err)
+		}
 
 		if proof.V.Sign() < 0 {
 			foundNegative = true
@@ -277,16 +358,24 @@ func TestFacProofVerifyNegativeVRealProof(test *testing.T) {
 
 			// Must verify directly.
 			ok := proof.Verify(Session, ec, N0, NCap, s, t)
-			assert.True(test, ok, "proof with negative V must verify")
+			if !ok {
+				test.Fatal("proof with negative V must verify")
+			}
 
 			// Must survive round-trip.
 			bzs := proof.Bytes()
 			recovered, err := NewProofFromBytes(bzs[:])
-			assert.NoError(test, err)
-			assert.Equal(test, proof.V.Sign(), recovered.V.Sign())
+			if err != nil {
+				test.Fatal(err)
+			}
+			if !reflect.DeepEqual(proof.V.Sign(), recovered.V.Sign()) {
+				test.Fatalf("got %v, want %v", recovered.V.Sign(), proof.V.Sign())
+			}
 
 			ok = recovered.Verify(Session, ec, N0, NCap, s, t)
-			assert.True(test, ok, "recovered proof with negative V must verify")
+			if !ok {
+				test.Fatal("recovered proof with negative V must verify")
+			}
 			break
 		}
 	}
@@ -334,7 +423,9 @@ func TestFacProofMultipleRoundTripsVerify(test *testing.T) {
 		common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits),
 	}
 	NCap, s, t, err := crypto.GenerateNTildei(rand.Reader, primes)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	for i := 0; i < 10; i++ {
 		N0p := common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)
@@ -342,21 +433,27 @@ func TestFacProofMultipleRoundTripsVerify(test *testing.T) {
 		N0 := new(big.Int).Mul(N0p, N0q)
 
 		proof, err := NewProof(Session, ec, N0, NCap, s, t, N0p, N0q, rand.Reader)
-		assert.NoError(test, err, "iteration %d: NewProof failed", i)
+		if err != nil {
+			test.Fatalf("iteration %d: NewProof failed: %v", i, err)
+		}
 
 		// Serialize and deserialize.
 		bzs := proof.Bytes()
 		recovered, err := NewProofFromBytes(bzs[:])
-		assert.NoError(test, err, "iteration %d: NewProofFromBytes failed", i)
+		if err != nil {
+			test.Fatalf("iteration %d: NewProofFromBytes failed: %v", i, err)
+		}
 
 		// V sign must be preserved.
-		assert.Equal(test, proof.V.Sign(), recovered.V.Sign(),
-			"iteration %d: V sign changed after round-trip (original=%s, recovered=%s)",
-			i, proof.V, recovered.V)
+		if !reflect.DeepEqual(proof.V.Sign(), recovered.V.Sign()) {
+			test.Fatalf("iteration %d: V sign changed after round-trip (original=%s, recovered=%s)", i, proof.V, recovered.V)
+		}
 
 		// Recovered proof must verify.
 		ok := recovered.Verify(Session, ec, N0, NCap, s, t)
-		assert.True(test, ok, "iteration %d: recovered proof failed verification", i)
+		if !ok {
+			test.Fatalf("iteration %d: recovered proof failed verification", i)
+		}
 	}
 }
 
@@ -375,18 +472,21 @@ func TestFacProofBytesVSignGoldenVector(test *testing.T) {
 
 	// V = 42: sign byte 0x00 (positive) + magnitude 0x2a
 	bzs42 := makeProof(big.NewInt(42)).Bytes()
-	assert.Equal(test, []byte{0x00, 0x2a}, bzs42[10],
-		"V=42 should encode as [0x00, 0x2a]")
+	if !reflect.DeepEqual([]byte{0x00, 0x2a}, bzs42[10]) {
+		test.Fatalf("V=42 should encode as [0x00, 0x2a]")
+	}
 
 	// V = -42: sign byte 0x01 (negative) + magnitude 0x2a
 	bzsNeg42 := makeProof(big.NewInt(-42)).Bytes()
-	assert.Equal(test, []byte{0x01, 0x2a}, bzsNeg42[10],
-		"V=-42 should encode as [0x01, 0x2a]")
+	if !reflect.DeepEqual([]byte{0x01, 0x2a}, bzsNeg42[10]) {
+		test.Fatalf("V=-42 should encode as [0x01, 0x2a]")
+	}
 
 	// V = 0: sign byte 0x00 (positive) + empty magnitude
 	bzs0 := makeProof(big.NewInt(0)).Bytes()
-	assert.Equal(test, []byte{0x00}, bzs0[10],
-		"V=0 should encode as [0x00]")
+	if !reflect.DeepEqual([]byte{0x00}, bzs0[10]) {
+		test.Fatalf("V=0 should encode as [0x00]")
+	}
 }
 
 // TestFacProofFromBytesOldFormatNoSignByte verifies that the old format (raw
@@ -402,13 +502,17 @@ func TestFacProofFromBytesOldFormatNoSignByte(test *testing.T) {
 	// which is invalid (not 0x00 or 0x01).
 	parts[10] = []byte{0x2a}
 	_, err := NewProofFromBytes(parts)
-	assert.Error(test, err, "old-format V (no sign byte) should be rejected")
+	if err == nil {
+		test.Fatal("old-format V (no sign byte) should be rejected")
+	}
 }
 
 // TestFacProofFromBytesNilInput verifies that nil input returns an error.
 func TestFacProofFromBytesNilInput(test *testing.T) {
 	_, err := NewProofFromBytes(nil)
-	assert.Error(test, err, "nil input should return error")
+	if err == nil {
+		test.Fatal("nil input should return error")
+	}
 }
 
 // TestFacProofFromBytesWrongPartCount verifies that providing fewer than
@@ -419,7 +523,9 @@ func TestFacProofFromBytesWrongPartCount(test *testing.T) {
 		parts[i] = []byte{0x01}
 	}
 	_, err := NewProofFromBytes(parts)
-	assert.Error(test, err, "10 parts instead of 11 should return error")
+	if err == nil {
+		test.Fatal("10 parts instead of 11 should return error")
+	}
 }
 
 // TestFacProofValidateBasicNilFields verifies that ValidateBasic returns false
@@ -459,8 +565,9 @@ func TestFacProofValidateBasicNilFields(test *testing.T) {
 		case 10:
 			proof.V = nil
 		}
-		assert.False(test, proof.ValidateBasic(),
-			"ValidateBasic should return false when %s is nil", name)
+		if proof.ValidateBasic() {
+			test.Fatalf("ValidateBasic should return false when %s is nil", name)
+		}
 	}
 }
 
@@ -474,7 +581,9 @@ func TestFacProofValidateBasicAllNonNil(test *testing.T) {
 		W1: big.NewInt(9), W2: big.NewInt(10),
 		V: big.NewInt(11),
 	}
-	assert.True(test, proof.ValidateBasic(), "ValidateBasic should return true for all non-nil fields")
+	if !proof.ValidateBasic() {
+		test.Fatal("ValidateBasic should return true for all non-nil fields")
+	}
 }
 
 // TestFacProofVerifyNonInvertibleT verifies that Verify returns false (not panic)
@@ -496,8 +605,15 @@ func TestFacProofVerifyNonInvertibleT(test *testing.T) {
 	}
 
 	// Must not panic — should return false because t is not invertible mod NCap.
-	assert.NotPanics(test, func() {
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+			test.Fatalf("unexpected panic: %v", r)
+		}
+		}()
 		result := proof.Verify(Session, ec, big.NewInt(100), NCap, s, t_)
-		assert.False(test, result, "Verify should return false for non-invertible t")
-	})
+		if result {
+		test.Fatal("Verify should return false for non-invertible t")
+		}
+	}()
 }

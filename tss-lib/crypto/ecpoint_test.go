@@ -14,7 +14,6 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/stretchr/testify/assert"
 
 	. "github.com/hemilabs/x/tss-lib/v3/crypto"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
@@ -128,22 +127,38 @@ func TestS256EcpointJsonSerialization(t *testing.T) {
 	tss.RegisterCurve("secp256k1", ec)
 
 	pubKeyBytes, err := hex.DecodeString("03935336acb03b2b801d8f8ac5e92c56c4f6e93319901fdfffba9d340a874e2879")
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	pbk, err := btcec.ParsePubKey(pubKeyBytes)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	point, err := NewECPoint(ec, pbk.X(), pbk.Y())
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bz, err := json.Marshal(point)
-	assert.NoError(t, err)
-	assert.True(t, len(bz) > 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !(len(bz) > 0) {
+		t.Fatal("expected true")
+	}
 
 	var umpoint ECPoint
 	err = json.Unmarshal(bz, &umpoint)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assert.True(t, point.Equals(&umpoint))
-	assert.True(t, reflect.TypeOf(point.Curve()) == reflect.TypeOf(umpoint.Curve()))
+	if !point.Equals(&umpoint) {
+		t.Fatal("expected true")
+	}
+	if reflect.TypeOf(point.Curve()) != reflect.TypeOf(umpoint.Curve()) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestEdwardsEcpointJsonSerialization(t *testing.T) {
@@ -151,20 +166,36 @@ func TestEdwardsEcpointJsonSerialization(t *testing.T) {
 	tss.RegisterCurve("ed25519", ec)
 
 	pubKeyBytes, err := hex.DecodeString("ae1e5bf5f3d6bf58b5c222088671fcbe78b437e28fae944c793897b26091f249")
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	pbk, err := edwards.ParsePubKey(pubKeyBytes)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	point, err := NewECPoint(ec, pbk.X, pbk.Y)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bz, err := json.Marshal(point)
-	assert.NoError(t, err)
-	assert.True(t, len(bz) > 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !(len(bz) > 0) {
+		t.Fatal("expected true")
+	}
 
 	var umpoint ECPoint
 	err = json.Unmarshal(bz, &umpoint)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assert.True(t, point.Equals(&umpoint))
-	assert.True(t, reflect.TypeOf(point.Curve()) == reflect.TypeOf(umpoint.Curve()))
+	if !point.Equals(&umpoint) {
+		t.Fatal("expected true")
+	}
+	if reflect.TypeOf(point.Curve()) != reflect.TypeOf(umpoint.Curve()) {
+		t.Fatal("expected true")
+	}
 }

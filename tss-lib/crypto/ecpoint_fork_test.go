@@ -7,9 +7,9 @@ package crypto_test
 import (
 	"encoding/binary"
 	"math/big"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
@@ -17,39 +17,65 @@ import (
 
 func TestIsIdentityWeierstrass(t *testing.T) {
 	p := crypto.NewECPointNoCurveCheck(tss.S256(), big.NewInt(0), big.NewInt(0))
-	assert.True(t, p.IsIdentity(), "Weierstrass identity (0,0) should be detected")
+	if !p.IsIdentity() {
+		t.Fatal("Weierstrass identity (0,0) should be detected")
+	}
 }
 
 func TestIsIdentityEdwards(t *testing.T) {
 	p := crypto.NewECPointNoCurveCheck(tss.Edwards(), big.NewInt(0), big.NewInt(1))
-	assert.True(t, p.IsIdentity(), "Edwards identity (0,1) should be detected")
+	if !p.IsIdentity() {
+		t.Fatal("Edwards identity (0,1) should be detected")
+	}
 }
 
 func TestIsIdentityNonIdentity(t *testing.T) {
 	p := crypto.ScalarBaseMult(tss.S256(), big.NewInt(42))
-	assert.False(t, p.IsIdentity(), "a valid on-curve point should not be identity")
+	if p.IsIdentity() {
+		t.Fatal("a valid on-curve point should not be identity")
+	}
 }
 
 func TestIsIdentityNilPoint(t *testing.T) {
 	var p *crypto.ECPoint
-	assert.True(t, p.IsIdentity(), "nil ECPoint should be treated as identity")
+	if !p.IsIdentity() {
+		t.Fatal("nil ECPoint should be treated as identity")
+	}
 }
 
 func TestScalarMultByGroupOrder(t *testing.T) {
 	q := tss.S256().Params().N
 	g := crypto.ScalarBaseMult(tss.S256(), big.NewInt(1))
-	assert.Panics(t, func() { g.ScalarMult(q) }, "G * q should panic (identity point)")
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("G * q should panic (identity point)")
+		}
+		}()
+		g.ScalarMult(q)
+	}()
 }
 
 func TestScalarBaseMultByZero(t *testing.T) {
-	assert.Panics(t, func() { crypto.ScalarBaseMult(tss.S256(), big.NewInt(0)) }, "ScalarBaseMult(0) should panic (identity point)")
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("ScalarBaseMult(0) should panic (identity point)")
+		}
+		}()
+		crypto.ScalarBaseMult(tss.S256(), big.NewInt(0))
+	}()
 }
 
 func TestAddNilP1(t *testing.T) {
 	p := crypto.ScalarBaseMult(tss.S256(), big.NewInt(7))
 	_, err := p.Add(nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "p1 is nil")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "p1 is nil") {
+		t.Fatalf("expected %q to contain %q", err.Error(), "p1 is nil")
+	}
 }
 
 func TestGobDecodeRejectsOversizedCoord(t *testing.T) {
@@ -70,7 +96,9 @@ func TestGobDecodeRejectsOversizedCoord(t *testing.T) {
 
 	p := &crypto.ECPoint{}
 	err := p.GobDecode(buf)
-	assert.Error(t, err, "GobDecode should reject oversized coordinate")
+	if err == nil {
+		t.Fatal("GobDecode should reject oversized coordinate")
+	}
 }
 
 func TestGobDecodeAcceptsExactBoundaryCoord(t *testing.T) {
@@ -94,7 +122,9 @@ func TestGobDecodeAcceptsExactBoundaryCoord(t *testing.T) {
 	err := p.GobDecode(buf)
 	// It may fail (invalid big.Int encoding, not on curve, etc.) but must NOT be the size check.
 	if err != nil {
-		assert.NotContains(t, err.Error(), "exceeds maximum", "1024-byte coordinate must not be rejected by the size check")
+		if strings.Contains(err.Error(), "exceeds maximum") {
+			t.Fatal("1024-byte coordinate must not be rejected by the size check")
+		}
 	}
 }
 
@@ -102,11 +132,17 @@ func TestGobDecodeRoundTrip(t *testing.T) {
 	original := crypto.ScalarBaseMult(tss.S256(), big.NewInt(42))
 
 	encoded, err := original.GobEncode()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	decoded := &crypto.ECPoint{}
 	err = decoded.GobDecode(encoded)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assert.True(t, original.Equals(decoded), "round-tripped point should equal original")
+	if !original.Equals(decoded) {
+		t.Fatal("round-tripped point should equal original")
+	}
 }

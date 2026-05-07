@@ -12,11 +12,10 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
@@ -47,7 +46,9 @@ func generateDLNTestParams(t *testing.T) *dlnTestParams {
 	}
 
 	sgps, err := common.GetRandomSafePrimesConcurrent(ctx, 1024, 2, concurrency, rand.Reader)
-	require.NoError(t, err, "safe prime generation failed")
+	if err != nil {
+		t.Fatalf("safe prime generation failed"+": %v", err)
+	}
 
 	p := sgps[0].Prime()
 	q := sgps[1].Prime()
@@ -65,7 +66,9 @@ func generateDLNTestParams(t *testing.T) *dlnTestParams {
 	alpha := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
 	alphaModPQ := new(big.Int).Mod(alpha, pMulQ)
 	beta := modPQ.ModInverse(alphaModPQ)
-	require.NotNil(t, beta, "alpha modular inverse failed")
+	if beta == nil {
+		t.Fatal("alpha modular inverse failed")
+	}
 
 	h2 := modN.Exp(h1, alpha)
 
@@ -84,9 +87,14 @@ func generateDLNTestParams(t *testing.T) *dlnTestParams {
 // TestNewDlnProofVerifierZeroConcurrencyPanics verifies that constructing a
 // DlnProofVerifier with concurrency=0 panics, as documented.
 func TestNewDlnProofVerifierZeroConcurrencyPanics(t *testing.T) {
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("concurrency=0 must panic")
+		}
+		}()
 		NewDlnProofVerifier(0)
-	}, "concurrency=0 must panic")
+	}()
 }
 
 // TestNewDlnProofVerifierValidConcurrency verifies that concurrency values
@@ -94,7 +102,9 @@ func TestNewDlnProofVerifierZeroConcurrencyPanics(t *testing.T) {
 func TestNewDlnProofVerifierValidConcurrency(t *testing.T) {
 	for _, c := range []int{1, 2, 4, 128} {
 		dpv := NewDlnProofVerifier(c)
-		assert.NotNil(t, dpv, "concurrency=%d should create valid verifier", c)
+		if dpv == nil {
+			t.Fatalf("concurrency=%d should create valid verifier", c)
+		}
 	}
 }
 
@@ -107,7 +117,9 @@ func TestVerifyDLNProofSuccess(t *testing.T) {
 		params.Alpha, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	dpv := NewDlnProofVerifier(1)
 	var result atomic.Bool
@@ -118,7 +130,9 @@ func TestVerifyDLNProofSuccess(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	assert.True(t, result.Load(), "valid proof must pass verification")
+	if !result.Load() {
+		t.Fatal("valid proof must pass verification")
+	}
 }
 
 // TestVerifyDLNProofIncorrectH1 creates a valid proof then verifies with a
@@ -130,7 +144,9 @@ func TestVerifyDLNProofIncorrectH1(t *testing.T) {
 		params.Alpha, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	// Tamper: H1 + 2 (still odd, still in range, but wrong)
 	badH1 := new(big.Int).Add(params.H1, big.NewInt(2))
@@ -145,7 +161,9 @@ func TestVerifyDLNProofIncorrectH1(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	assert.False(t, result.Load(), "tampered H1 must cause verification failure")
+	if result.Load() {
+		t.Fatal("tampered H1 must cause verification failure")
+	}
 }
 
 // TestVerifyDLNProofIncorrectH2 creates a valid proof then verifies with a
@@ -157,7 +175,9 @@ func TestVerifyDLNProofIncorrectH2(t *testing.T) {
 		params.Alpha, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	// Tamper: H2 + 2
 	badH2 := new(big.Int).Add(params.H2, big.NewInt(2))
@@ -172,7 +192,9 @@ func TestVerifyDLNProofIncorrectH2(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	assert.False(t, result.Load(), "tampered H2 must cause verification failure")
+	if result.Load() {
+		t.Fatal("tampered H2 must cause verification failure")
+	}
 }
 
 // TestVerifyDLNProofWrongSession creates a proof with one session ID and
@@ -185,7 +207,9 @@ func TestVerifyDLNProofWrongSession(t *testing.T) {
 		params.Alpha, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	wrongSession := []byte("wrong-session-id")
 
@@ -199,7 +223,9 @@ func TestVerifyDLNProofWrongSession(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	assert.False(t, result.Load(), "wrong session must cause verification failure")
+	if result.Load() {
+		t.Fatal("wrong session must cause verification failure")
+	}
 }
 
 // TestVerifyDLNProofNilProof passes a nil proof pointer and verifies that
@@ -215,7 +241,9 @@ func TestVerifyDLNProofNilProof(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	assert.False(t, result.Load(), "nil proof must call onDone(false)")
+	if result.Load() {
+		t.Fatal("nil proof must call onDone(false)")
+	}
 }
 
 // TestVerifyDLNProofNilProofCallbackInvoked ensures that with a nil proof the
@@ -229,13 +257,17 @@ func TestVerifyDLNProofNilProofCallbackInvoked(t *testing.T) {
 	wg.Add(iterations)
 	for i := 0; i < iterations; i++ {
 		dpv.VerifyDLNProof(nil, []byte("s"), big.NewInt(3), big.NewInt(5), big.NewInt(15), func(ok bool) {
-			assert.False(t, ok)
+			if ok {
+				t.Fatal("expected false")
+			}
 			count.Add(1)
 			wg.Done()
 		})
 	}
 	wg.Wait()
-	assert.Equal(t, int32(iterations), count.Load(), "callback must be invoked exactly once per call")
+	if !reflect.DeepEqual(int32(iterations), count.Load()) {
+		t.Fatalf("callback must be invoked exactly once per call")
+	}
 }
 
 // TestVerifyDLNProofConcurrencyBound launches more verifications than the
@@ -249,7 +281,9 @@ func TestVerifyDLNProofConcurrencyBound(t *testing.T) {
 		params.Alpha, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	const concurrency = 2
 	const numVerifications = 20
@@ -272,10 +306,12 @@ func TestVerifyDLNProofConcurrencyBound(t *testing.T) {
 	}
 
 	wg.Wait()
-	assert.Equal(t, int32(numVerifications), successCount.Load(),
-		"all %d verifications must succeed", numVerifications)
-	assert.Equal(t, int32(0), failCount.Load(),
-		"no verifications should fail")
+	if !reflect.DeepEqual(int32(numVerifications), successCount.Load()) {
+		t.Fatalf("all %d verifications must succeed", numVerifications)
+	}
+	if !reflect.DeepEqual(int32(0), failCount.Load()) {
+		t.Fatalf("no verifications should fail")
+	}
 }
 
 // TestVerifyDLNProofConcurrencyBoundMixed launches a mix of valid and nil
@@ -288,7 +324,9 @@ func TestVerifyDLNProofConcurrencyBoundMixed(t *testing.T) {
 		params.Alpha, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	const concurrency = 3
 	const numValid = 10
@@ -318,8 +356,12 @@ func TestVerifyDLNProofConcurrencyBoundMixed(t *testing.T) {
 	}
 
 	wg.Wait()
-	assert.Equal(t, int32(numValid), successCount.Load(), "valid proofs must succeed")
-	assert.Equal(t, int32(numNil), failCount.Load(), "nil proofs must fail")
+	if !reflect.DeepEqual(int32(numValid), successCount.Load()) {
+		t.Fatalf("valid proofs must succeed")
+	}
+	if !reflect.DeepEqual(int32(numNil), failCount.Load()) {
+		t.Fatalf("nil proofs must fail")
+	}
 }
 
 // TestVerifyDLNProofSemaphoreReleasedOnNilProof verifies that the semaphore
@@ -367,7 +409,9 @@ func TestVerifyDLNProofSwappedH1H2(t *testing.T) {
 		params.Alpha, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	dpv := NewDlnProofVerifier(1)
 	var result atomic.Bool
@@ -380,7 +424,9 @@ func TestVerifyDLNProofSwappedH1H2(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	assert.False(t, result.Load(), "swapped H1/H2 must cause verification failure")
+	if result.Load() {
+		t.Fatal("swapped H1/H2 must cause verification failure")
+	}
 }
 
 // TestVerifyDLNProofBothProofDirections mirrors the Round 1 pattern where
@@ -401,8 +447,12 @@ func TestVerifyDLNProofBothProofDirections(t *testing.T) {
 		params.Beta, params.P, params.Q, params.N,
 		rand.Reader,
 	)
-	require.NotNil(t, proof1)
-	require.NotNil(t, proof2)
+	if proof1 == nil {
+		t.Fatal("expected non-nil")
+	}
+	if proof2 == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	dpv := NewDlnProofVerifier(2)
 
@@ -418,6 +468,10 @@ func TestVerifyDLNProofBothProofDirections(t *testing.T) {
 		wg.Done()
 	})
 	wg.Wait()
-	assert.True(t, result1.Load(), "proof1 (H1->H2, Alpha) must verify")
-	assert.True(t, result2.Load(), "proof2 (H2->H1, Beta) must verify")
+	if !result1.Load() {
+		t.Fatal("proof1 (H1->H2, Alpha) must verify")
+	}
+	if !result2.Load() {
+		t.Fatal("proof2 (H2->H1, Beta) must verify")
+	}
 }

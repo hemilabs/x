@@ -10,21 +10,25 @@ import (
 	"errors"
 	"io"
 	"sync/atomic"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestGeneratePreParamsMultipleConcurrencyArgsPanics verifies that passing more
 // than one optionalConcurrency argument triggers a panic, as documented by the
 // function contract.
 func TestGeneratePreParamsMultipleConcurrencyArgsPanics(t *testing.T) {
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("expected panic when multiple concurrency args are provided")
+		}
+		}()
 		ctx := context.Background()
 		_, _ = GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 2, 4)
-	}, "expected panic when multiple concurrency args are provided")
+	}()
 }
 
 // TestGeneratePreParamsContextAlreadyCancelled verifies that passing an
@@ -37,9 +41,15 @@ func TestGeneratePreParamsContextAlreadyCancelled(t *testing.T) {
 	preParams, err := GeneratePreParamsWithContext(ctx, 1)
 	elapsed := time.Since(start)
 
-	assert.Nil(t, preParams, "preParams should be nil with cancelled context")
-	assert.Error(t, err, "should return an error with cancelled context")
-	assert.Less(t, elapsed, 2*time.Second, "should return quickly, not block on prime generation")
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("should return an error with cancelled context")
+	}
+	if elapsed >= 2*time.Second {
+		t.Fatal("should return quickly, not block on prime generation")
+	}
 }
 
 // TestGeneratePreParamsContextAlreadyCancelledAndRandom exercises the
@@ -52,9 +62,15 @@ func TestGeneratePreParamsContextAlreadyCancelledAndRandom(t *testing.T) {
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 1)
 	elapsed := time.Since(start)
 
-	assert.Nil(t, preParams)
-	assert.Error(t, err)
-	assert.Less(t, elapsed, 2*time.Second)
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if elapsed >= 2*time.Second {
+		t.Fatalf("expected %v < %v", elapsed, 2*time.Second)
+	}
 }
 
 // TestGeneratePreParamsZeroConcurrency verifies that passing concurrency=0
@@ -67,8 +83,12 @@ func TestGeneratePreParamsZeroConcurrency(t *testing.T) {
 	// Should not panic even with concurrency=0; the function clamps to 1.
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 0)
 	// Will timeout (5ms is too short for real primes), but should not panic.
-	assert.Nil(t, preParams)
-	assert.Error(t, err)
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 // TestGeneratePreParamsNegativeConcurrency verifies that a negative
@@ -78,8 +98,12 @@ func TestGeneratePreParamsNegativeConcurrency(t *testing.T) {
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, -3)
-	assert.Nil(t, preParams)
-	assert.Error(t, err)
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 // failingReader is an io.Reader that always returns an error.
@@ -97,8 +121,12 @@ func TestGeneratePreParamsFailingRandReader(t *testing.T) {
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, &failingReader{}, 1)
-	assert.Nil(t, preParams, "preParams should be nil when rand reader fails")
-	assert.Error(t, err, "should return an error when rand reader fails")
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("should return an error when rand reader fails")
+	}
 }
 
 // countingReader wraps an io.Reader and counts how many bytes are read.
@@ -130,7 +158,9 @@ func TestGeneratePreParamsCustomRandIsUsed(t *testing.T) {
 	// the custom reader was used.
 	_, _ = GeneratePreParamsWithContextAndRandom(ctx, cr, 1)
 
-	assert.Greater(t, cr.bytesRead.Load(), int64(0), "custom rand reader should have been read from")
+	if cr.bytesRead.Load() <= int64(0) {
+		t.Fatal("custom rand reader should have been read from")
+	}
 }
 
 // TestGeneratePreParamsResultValidates generates real pre-params (slow!) and
@@ -145,40 +175,77 @@ func TestGeneratePreParamsResultValidates(t *testing.T) {
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 1)
-	require.NoError(t, err, "GeneratePreParams should succeed with sufficient timeout")
-	require.NotNil(t, preParams)
+	if err != nil {
+		t.Fatalf("GeneratePreParams should succeed with sufficient timeout"+": %v", err)
+	}
+	if preParams == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	// Structural validation (nil checks)
-	assert.True(t, preParams.Validate(), "Validate() should return true")
+	if !preParams.Validate() {
+		t.Fatal("Validate() should return true")
+	}
 
 	// Full algebraic validation (NTilde = (2P+1)(2Q+1), H2 = H1^Alpha mod NTilde)
-	assert.True(t, preParams.ValidateWithProof(), "ValidateWithProof() should return true")
+	if !preParams.ValidateWithProof() {
+		t.Fatal("ValidateWithProof() should return true")
+	}
 
 	// Verify all fields are populated
-	assert.NotNil(t, preParams.PaillierSK)
-	assert.NotNil(t, preParams.PaillierSK.N)
-	assert.NotNil(t, preParams.PaillierSK.LambdaN)
-	assert.NotNil(t, preParams.NTildei)
-	assert.NotNil(t, preParams.H1i)
-	assert.NotNil(t, preParams.H2i)
-	assert.NotNil(t, preParams.Alpha)
-	assert.NotNil(t, preParams.Beta)
-	assert.NotNil(t, preParams.P)
-	assert.NotNil(t, preParams.Q)
+	if preParams.PaillierSK == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.PaillierSK.N == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.PaillierSK.LambdaN == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.NTildei == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.H1i == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.H2i == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.Alpha == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.Beta == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.P == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.Q == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	// P != Q (defense-in-depth — astronomically unlikely but tested)
-	assert.NotEqual(t, 0, preParams.P.Cmp(preParams.Q), "P and Q should be distinct")
+	if preParams.P.Cmp(preParams.Q) == 0 {
+		t.Fatalf("P and Q should be distinct")
+	}
 
 	// Bit lengths: P, Q should be ~1024-bit safe primes (their "prime" halves)
-	assert.GreaterOrEqual(t, preParams.P.BitLen(), 1000, "P bit length should be ~1024")
-	assert.GreaterOrEqual(t, preParams.Q.BitLen(), 1000, "Q bit length should be ~1024")
+	if preParams.P.BitLen() < 1000 {
+		t.Fatal("P bit length should be ~1024")
+	}
+	if preParams.Q.BitLen() < 1000 {
+		t.Fatal("Q bit length should be ~1024")
+	}
 
 	// NTilde bit length should be ~2048
-	assert.GreaterOrEqual(t, preParams.NTildei.BitLen(), 2000, "NTilde should be ~2048 bits")
+	if preParams.NTildei.BitLen() < 2000 {
+		t.Fatal("NTilde should be ~2048 bits")
+	}
 
 	// Paillier modulus should be 2048 bits
-	assert.Equal(t, paillierModulusLen, preParams.PaillierSK.N.BitLen(),
-		"Paillier modulus should be exactly 2048 bits")
+	if !reflect.DeepEqual(paillierModulusLen, preParams.PaillierSK.N.BitLen()) {
+		t.Fatalf("Paillier modulus should be exactly 2048 bits")
+	}
 }
 
 // TestGeneratePreParamsTimeoutWrapper verifies that the timeout-based wrapper
@@ -189,9 +256,15 @@ func TestGeneratePreParamsTimeoutWrapper(t *testing.T) {
 	preParams, err := GeneratePreParams(1*time.Millisecond, 1)
 	elapsed := time.Since(start)
 
-	assert.Nil(t, preParams)
-	assert.Error(t, err)
-	assert.Less(t, elapsed, 5*time.Second, "should respect the timeout")
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if elapsed >= 5*time.Second {
+		t.Fatal("should respect the timeout")
+	}
 }
 
 // TestGeneratePreParamsWithContextCallsWithContextAndRandom verifies that
@@ -205,8 +278,16 @@ func TestGeneratePreParamsWithContextCallsWithContextAndRandom(t *testing.T) {
 	pp1, err1 := GeneratePreParamsWithContext(ctx, 1)
 	pp2, err2 := GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 1)
 
-	assert.Nil(t, pp1)
-	assert.Nil(t, pp2)
-	assert.Error(t, err1)
-	assert.Error(t, err2)
+	if pp1 != nil {
+		t.Fatalf("expected nil, got %v", pp1)
+	}
+	if pp2 != nil {
+		t.Fatalf("expected nil, got %v", pp2)
+	}
+	if err1 == nil {
+		t.Fatal("expected error")
+	}
+	if err2 == nil {
+		t.Fatal("expected error")
+	}
 }

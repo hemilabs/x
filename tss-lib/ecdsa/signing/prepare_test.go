@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
@@ -34,7 +33,9 @@ func TestPrepareForSigningNoXiMutation(t *testing.T) {
 	_, _ = PrepareForSigning(ec, 0, 3, xi, ks, bigXs)
 
 	// xi should NOT have been mutated
-	assert.Equal(t, 0, xi.Cmp(xiCopy), "xi must not be mutated by PrepareForSigning")
+	if xi.Cmp(xiCopy) != 0 {
+		t.Fatalf("xi must not be mutated by PrepareForSigning")
+	}
 	_ = q // suppress unused warning if needed
 }
 
@@ -49,7 +50,12 @@ func TestPrepareForSigningCollidingKeysPanics(t *testing.T) {
 		bigXs[j] = crypto.ScalarBaseMult(ec, big.NewInt(int64(j+10)))
 	}
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("colliding keys should panic")
+		}
+		}()
 		PrepareForSigning(ec, 0, 3, xi, ks, bigXs)
-	}, "colliding keys should panic")
+	}()
 }

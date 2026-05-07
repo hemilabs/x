@@ -11,10 +11,11 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
@@ -34,7 +35,9 @@ func generateFacProofFixture(t *testing.T) (*ProofFac, *big.Int, *big.Int, *big.
 
 	// Generate Paillier keypair for N0.
 	sk, _, err := paillier.GenerateKeyPair(ctx, rand.Reader, 2048)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	N0 := sk.N
 	N0p := sk.P
 	N0q := sk.Q
@@ -45,23 +48,33 @@ func generateFacProofFixture(t *testing.T) (*ProofFac, *big.Int, *big.Int, *big.
 		common.GetRandomPrimeInt(rand.Reader, 1024),
 	}
 	NCap, s, tt, err := crypto.GenerateNTildei(rand.Reader, primes)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	proof, err := NewProof(forkSession, ec, N0, NCap, s, tt, N0p, N0q, rand.Reader)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return proof, N0, NCap, s, tt
 }
 
 func TestFacProofForkVerifyHappyPath(t *testing.T) {
 	proof, N0, NCap, s, tt := generateFacProofFixture(t)
-	assert.True(t, proof.Verify(forkSession, tss.EC(), N0, NCap, s, tt))
+	if !(proof.Verify(forkSession, tss.EC(), N0, NCap, s, tt)) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestFacProofForkRejectsWrongSession(t *testing.T) {
 	proof, N0, NCap, s, tt := generateFacProofFixture(t)
-	assert.True(t, proof.Verify(forkSession, tss.EC(), N0, NCap, s, tt))
-	assert.False(t, proof.Verify([]byte("wrong-session"), tss.EC(), N0, NCap, s, tt))
+	if !(proof.Verify(forkSession, tss.EC(), N0, NCap, s, tt)) {
+		t.Fatal("expected true")
+	}
+	if proof.Verify([]byte("wrong-session"), tss.EC(), N0, NCap, s, tt) {
+		t.Fatal("expected false")
+	}
 }
 
 func TestFacProofForkVSignMagnitudeRoundTrip(t *testing.T) {
@@ -71,30 +84,46 @@ func TestFacProofForkVSignMagnitudeRoundTrip(t *testing.T) {
 	// Serialize and deserialize.
 	bzs := proof.Bytes()
 	recovered, err := NewProofFromBytes(bzs[:])
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// All fields should match.
-	assert.Equal(t, 0, proof.P.Cmp(recovered.P), "P mismatch")
-	assert.Equal(t, 0, proof.Q.Cmp(recovered.Q), "Q mismatch")
-	assert.Equal(t, 0, proof.V.Cmp(recovered.V), "V mismatch (sign-magnitude)")
-	assert.Equal(t, proof.V.Sign(), recovered.V.Sign(), "V sign mismatch")
+	if proof.P.Cmp(recovered.P) != 0 {
+		t.Fatalf("P mismatch")
+	}
+	if proof.Q.Cmp(recovered.Q) != 0 {
+		t.Fatalf("Q mismatch")
+	}
+	if proof.V.Cmp(recovered.V) != 0 {
+		t.Fatalf("V mismatch (sign-magnitude)")
+	}
+	if !reflect.DeepEqual(proof.V.Sign(), recovered.V.Sign()) {
+		t.Fatalf("V sign mismatch")
+	}
 
 	// Recovered proof should still verify.
-	assert.True(t, recovered.Verify(forkSession, tss.EC(), N0, NCap, s, tt))
+	if !(recovered.Verify(forkSession, tss.EC(), N0, NCap, s, tt)) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestFacProofForkRejectsSmallN0(t *testing.T) {
 	// [FORK] N0.BitLen() < 2048 should be rejected.
 	proof, _, NCap, s, tt := generateFacProofFixture(t)
 	smallN0 := common.GetRandomPrimeInt(rand.Reader, 512)
-	assert.False(t, proof.Verify(forkSession, tss.EC(), smallN0, NCap, s, tt))
+	if proof.Verify(forkSession, tss.EC(), smallN0, NCap, s, tt) {
+		t.Fatal("expected false")
+	}
 }
 
 func TestFacProofForkRejectsSmallNCap(t *testing.T) {
 	// [FORK] NCap.BitLen() < 2048 should be rejected.
 	proof, N0, _, s, tt := generateFacProofFixture(t)
 	smallNCap := common.GetRandomPrimeInt(rand.Reader, 512)
-	assert.False(t, proof.Verify(forkSession, tss.EC(), N0, smallNCap, s, tt))
+	if proof.Verify(forkSession, tss.EC(), N0, smallNCap, s, tt) {
+		t.Fatal("expected false")
+	}
 }
 
 func TestFacProofForkFromBytesRejectsInvalidVSign(t *testing.T) {
@@ -109,8 +138,12 @@ func TestFacProofForkFromBytesRejectsInvalidVSign(t *testing.T) {
 	bzs[10] = tampered
 
 	_, err := NewProofFromBytes(bzs[:])
-	assert.Error(t, err, "invalid V sign byte should error")
-	assert.Contains(t, err.Error(), "sign byte")
+	if err == nil {
+		t.Fatal("invalid V sign byte should error")
+	}
+	if !strings.Contains(err.Error(), "sign byte") {
+		t.Fatalf("expected %q to contain %q", err.Error(), "sign byte")
+	}
 }
 
 func TestFacProofForkFromBytesRejectsNegativeZero(t *testing.T) {
@@ -121,27 +154,37 @@ func TestFacProofForkFromBytesRejectsNegativeZero(t *testing.T) {
 	bzs[10] = []byte{0x01}
 
 	_, err := NewProofFromBytes(bzs[:])
-	assert.Error(t, err, "negative zero V should error")
+	if err == nil {
+		t.Fatal("negative zero V should error")
+	}
 }
 
 func TestFacProofForkRejectsNilProof(t *testing.T) {
 	var proof *ProofFac
-	assert.False(t, proof.Verify(forkSession, tss.EC(), big.NewInt(1), big.NewInt(1), big.NewInt(1), big.NewInt(1)))
+	if proof.Verify(forkSession, tss.EC(), big.NewInt(1), big.NewInt(1), big.NewInt(1), big.NewInt(1)) {
+		t.Fatal("expected false")
+	}
 }
 
 func TestFacProofForkRejectsNilN0(t *testing.T) {
 	proof, _, NCap, s, tt := generateFacProofFixture(t)
-	assert.False(t, proof.Verify(forkSession, tss.EC(), nil, NCap, s, tt), "nil N0 should be rejected")
+	if proof.Verify(forkSession, tss.EC(), nil, NCap, s, tt) {
+		t.Fatal("nil N0 should be rejected")
+	}
 }
 
 func TestFacProofForkRejectsNilNCap(t *testing.T) {
 	proof, N0, _, s, tt := generateFacProofFixture(t)
-	assert.False(t, proof.Verify(forkSession, tss.EC(), N0, nil, s, tt), "nil NCap should be rejected")
+	if proof.Verify(forkSession, tss.EC(), N0, nil, s, tt) {
+		t.Fatal("nil NCap should be rejected")
+	}
 }
 
 func TestFacProofForkRejectsNilEC(t *testing.T) {
 	proof, N0, NCap, s, tt := generateFacProofFixture(t)
-	assert.False(t, proof.Verify(forkSession, nil, N0, NCap, s, tt), "nil EC should be rejected")
+	if proof.Verify(forkSession, nil, N0, NCap, s, tt) {
+		t.Fatal("nil EC should be rejected")
+	}
 }
 
 func TestFacProofForkNilSession(t *testing.T) {
@@ -150,7 +193,9 @@ func TestFacProofForkNilSession(t *testing.T) {
 	defer cancel()
 
 	sk, _, err := paillier.GenerateKeyPair(ctx, rand.Reader, 2048)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	N0 := sk.N
 
 	primes := [2]*big.Int{
@@ -158,23 +203,35 @@ func TestFacProofForkNilSession(t *testing.T) {
 		common.GetRandomPrimeInt(rand.Reader, 1024),
 	}
 	NCap, s, tt, err := crypto.GenerateNTildei(rand.Reader, primes)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// A nil session should produce a valid proof that verifies with nil session
 	// but fails with a different session.
 	proof, err := NewProof(nil, ec, N0, NCap, s, tt, sk.P, sk.Q, rand.Reader)
-	assert.NoError(t, err)
-	assert.True(t, proof.Verify(nil, ec, N0, NCap, s, tt), "nil session proof should verify with nil session")
-	assert.False(t, proof.Verify(forkSession, ec, N0, NCap, s, tt), "nil session proof should not verify with non-nil session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proof.Verify(nil, ec, N0, NCap, s, tt) {
+		t.Fatal("nil session proof should verify with nil session")
+	}
+	if proof.Verify(forkSession, ec, N0, NCap, s, tt) {
+		t.Fatal("nil session proof should not verify with non-nil session")
+	}
 }
 
 func TestFacProofForkRejectsZeroN0(t *testing.T) {
 	proof, _, NCap, s, tt := generateFacProofFixture(t)
-	assert.False(t, proof.Verify(forkSession, tss.EC(), big.NewInt(0), NCap, s, tt), "zero N0 should be rejected")
+	if proof.Verify(forkSession, tss.EC(), big.NewInt(0), NCap, s, tt) {
+		t.Fatal("zero N0 should be rejected")
+	}
 }
 
 func TestFacProofForkRejectsNegativeN0(t *testing.T) {
 	proof, N0, NCap, s, tt := generateFacProofFixture(t)
 	negN0 := new(big.Int).Neg(N0)
-	assert.False(t, proof.Verify(forkSession, tss.EC(), negN0, NCap, s, tt), "negative N0 should be rejected")
+	if proof.Verify(forkSession, tss.EC(), negN0, NCap, s, tt) {
+		t.Fatal("negative N0 should be rejected")
+	}
 }

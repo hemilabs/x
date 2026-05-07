@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 )
@@ -22,27 +21,43 @@ const (
 
 func TestGetRandomInt(t *testing.T) {
 	rnd := common.MustGetRandomInt(rand.Reader, randomIntBitLen)
-	assert.NotZero(t, rnd, "rand int should not be zero")
+	if rnd == nil {
+		t.Fatal("rand int should not be zero")
+	}
 }
 
 func TestGetRandomPositiveInt(t *testing.T) {
 	rnd := common.MustGetRandomInt(rand.Reader, randomIntBitLen)
 	rndPos := common.GetRandomPositiveInt(rand.Reader, rnd)
-	assert.NotZero(t, rndPos, "rand int should not be zero")
-	assert.True(t, rndPos.Cmp(big.NewInt(0)) == 1, "rand int should be positive")
+	if rndPos == nil {
+		t.Fatal("rand int should not be zero")
+	}
+	if rndPos.Cmp(big.NewInt(0)) != 1 {
+		t.Fatal("rand int should be positive")
+	}
 }
 
 func TestGetRandomPositiveRelativelyPrimeInt(t *testing.T) {
 	rnd := common.MustGetRandomInt(rand.Reader, randomIntBitLen)
 	rndPosRP := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, rnd)
-	assert.NotZero(t, rndPosRP, "rand int should not be zero")
-	assert.True(t, common.IsNumberInMultiplicativeGroup(rnd, rndPosRP))
-	assert.True(t, rndPosRP.Cmp(big.NewInt(0)) == 1, "rand int should be positive")
+	if rndPosRP == nil {
+		t.Fatal("rand int should not be zero")
+	}
+	if !common.IsNumberInMultiplicativeGroup(rnd, rndPosRP) {
+		t.Fatal("expected true")
+	}
+	if rndPosRP.Cmp(big.NewInt(0)) != 1 {
+		t.Fatal("rand int should be positive")
+	}
 	// TODO test for relative primeness
 }
 
 func TestGetRandomPrimeInt(t *testing.T) {
 	prime := common.GetRandomPrimeInt(rand.Reader, randomIntBitLen)
-	assert.NotZero(t, prime, "rand prime should not be zero")
-	assert.True(t, prime.ProbablyPrime(50), "rand prime should be prime")
+	if prime == nil {
+		t.Fatal("rand prime should not be zero")
+	}
+	if !prime.ProbablyPrime(50) {
+		t.Fatal("rand prime should be prime")
+	}
 }

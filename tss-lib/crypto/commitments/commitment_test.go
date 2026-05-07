@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 
 	. "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
 )
@@ -23,7 +22,9 @@ func TestCreateVerify(t *testing.T) {
 	commitment := NewHashCommitment(rand.Reader, zero, one)
 	pass := commitment.Verify()
 
-	assert.True(t, pass, "must pass")
+	if !pass {
+		t.Fatal("must pass")
+	}
 }
 
 func TestDeCommit(t *testing.T) {
@@ -33,7 +34,11 @@ func TestDeCommit(t *testing.T) {
 	commitment := NewHashCommitment(rand.Reader, zero, one)
 	pass, secrets := commitment.DeCommit()
 
-	assert.True(t, pass, "must pass")
+	if !pass {
+		t.Fatal("must pass")
+	}
 
-	assert.NotZero(t, len(secrets), "len(secrets) must be non-zero")
+	if len(secrets) == 0 {
+		t.Fatal("len(secrets) must be non-zero")
+	}
 }

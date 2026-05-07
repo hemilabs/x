@@ -6,9 +6,9 @@ package tss
 
 import (
 	"math/big"
+	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 )
 
 // --- NewParameters panic tests ---
@@ -18,38 +18,62 @@ func TestNewParametersPanicsInvalidThreshold(t *testing.T) {
 	pIDs := GenerateTestPartyIDs(3)
 	ctx := NewPeerContext(pIDs)
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("threshold >= partyCount should panic")
+		}
+		}()
 		NewParameters(S256(), ctx, pIDs[0], 3, 3) // threshold == partyCount
-	}, "threshold >= partyCount should panic")
+	}()
 }
 
 func TestNewParametersPanicsNegativeThreshold(t *testing.T) {
 	pIDs := GenerateTestPartyIDs(3)
 	ctx := NewPeerContext(pIDs)
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("negative threshold should panic")
+		}
+		}()
 		NewParameters(S256(), ctx, pIDs[0], 3, -1)
-	}, "negative threshold should panic")
+	}()
 }
 
 func TestNewParametersPanicsZeroPartyCount(t *testing.T) {
 	pIDs := GenerateTestPartyIDs(3)
 	ctx := NewPeerContext(pIDs)
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("zero partyCount should panic")
+		}
+		}()
 		NewParameters(S256(), ctx, pIDs[0], 0, 0) // partyCount < 1
-	}, "zero partyCount should panic")
+	}()
 }
 
 func TestNewParametersAcceptsValid(t *testing.T) {
 	pIDs := GenerateTestPartyIDs(3)
 	ctx := NewPeerContext(pIDs)
 
-	assert.NotPanics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+			t.Fatalf("unexpected panic: %v", r)
+		}
+		}()
 		p := NewParameters(S256(), ctx, pIDs[0], 3, 1)
-		assert.Equal(t, 3, p.PartyCount())
-		assert.Equal(t, 1, p.Threshold())
-	})
+		if p.PartyCount() != 3 {
+			t.Fatalf("got %v, want 3", p.PartyCount())
+			}
+		if p.Threshold() != 1 {
+			t.Fatalf("got %v, want 1", p.Threshold())
+			}
+	}()
 }
 
 // --- NewReSharingParameters panic tests ---
@@ -60,9 +84,14 @@ func TestNewReSharingParametersPanicsZeroNewPartyCount(t *testing.T) {
 	oldCtx := NewPeerContext(oldIDs)
 	newCtx := NewPeerContext(newIDs)
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("zero newPartyCount should panic")
+		}
+		}()
 		NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 0, 1) // newPartyCount=0
-	}, "zero newPartyCount should panic")
+	}()
 }
 
 func TestNewReSharingParametersPanicsInvalidNewThreshold(t *testing.T) {
@@ -71,9 +100,14 @@ func TestNewReSharingParametersPanicsInvalidNewThreshold(t *testing.T) {
 	oldCtx := NewPeerContext(oldIDs)
 	newCtx := NewPeerContext(newIDs)
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("newThreshold >= newPartyCount should panic")
+		}
+		}()
 		NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 3, 3) // newThreshold == newPartyCount
-	}, "newThreshold >= newPartyCount should panic")
+	}()
 }
 
 func TestNewReSharingParametersPanicsNegativeNewThreshold(t *testing.T) {
@@ -82,9 +116,14 @@ func TestNewReSharingParametersPanicsNegativeNewThreshold(t *testing.T) {
 	oldCtx := NewPeerContext(oldIDs)
 	newCtx := NewPeerContext(newIDs)
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("negative newThreshold should panic")
+		}
+		}()
 		NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 3, -1) // newThreshold=-1
-	}, "negative newThreshold should panic")
+	}()
 }
 
 // --- SortPartyIDs panic tests ---
@@ -96,9 +135,14 @@ func TestSortPartyIDsZeroKeyPanics(t *testing.T) {
 		NewPartyID("p3", "P3", big.NewInt(3)),
 	}
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("zero key should panic")
+		}
+		}()
 		SortPartyIDs(ids)
-	}, "zero key should panic")
+	}()
 }
 
 func TestSortPartyIDsDuplicateKeyPanics_Fork(t *testing.T) {
@@ -108,9 +152,14 @@ func TestSortPartyIDsDuplicateKeyPanics_Fork(t *testing.T) {
 		NewPartyID("p3", "P3", big.NewInt(3)),
 	}
 
-	assert.Panics(t, func() {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+			t.Fatal("duplicate key should panic")
+		}
+		}()
 		SortPartyIDs(ids)
-	}, "duplicate key should panic")
+	}()
 }
 
 func TestSortPartyIDsAcceptsValid(t *testing.T) {
@@ -121,11 +170,19 @@ func TestSortPartyIDsAcceptsValid(t *testing.T) {
 	}
 
 	sorted := SortPartyIDs(ids)
-	assert.Equal(t, 3, len(sorted))
+	if len(sorted) != 3 {
+		t.Fatalf("got %v, want %v", len(sorted), 3)
+	}
 	// Should be sorted ascending by key
-	assert.Equal(t, 0, sorted[0].KeyInt().Cmp(big.NewInt(1)))
-	assert.Equal(t, 0, sorted[1].KeyInt().Cmp(big.NewInt(2)))
-	assert.Equal(t, 0, sorted[2].KeyInt().Cmp(big.NewInt(3)))
+	if sorted[0].KeyInt().Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("got %v, want %v", sorted[0].KeyInt().Cmp(big.NewInt(1)), 0)
+	}
+	if sorted[1].KeyInt().Cmp(big.NewInt(2)) != 0 {
+		t.Fatalf("got %v, want %v", sorted[1].KeyInt().Cmp(big.NewInt(2)), 0)
+	}
+	if sorted[2].KeyInt().Cmp(big.NewInt(3)) != 0 {
+		t.Fatalf("got %v, want %v", sorted[2].KeyInt().Cmp(big.NewInt(3)), 0)
+	}
 }
 
 // --- OldAndNewParties aliasing fix test ---
@@ -147,12 +204,15 @@ func TestOldAndNewPartiesNoAliasing(t *testing.T) {
 	combined := params.OldAndNewParties()
 
 	// Verify combined has all 6 parties
-	assert.Equal(t, 6, len(combined))
+	if len(combined) != 6 {
+		t.Fatalf("got %v, want %v", len(combined), 6)
+	}
 
 	// Verify old parties were not corrupted
 	for i, pid := range oldIDs {
-		assert.Equal(t, 0, pid.KeyInt().Cmp(oldBefore[i].KeyInt()),
-			"old party %d key was corrupted by OldAndNewParties", i)
+		if pid.KeyInt().Cmp(oldBefore[i].KeyInt()) != 0 {
+			t.Fatalf("old party %d key was corrupted by OldAndNewParties", i)
+		}
 	}
 }
 
@@ -164,15 +224,21 @@ func TestSSIDNonceUint(t *testing.T) {
 	p := NewParameters(S256(), ctx, pIDs[0], 3, 1)
 
 	// Default nonce should be 0
-	assert.Equal(t, uint(0), p.SSIDNonce())
+	if !reflect.DeepEqual(uint(0), p.SSIDNonce()) {
+		t.Fatalf("got %v, want %v", p.SSIDNonce(), uint(0))
+	}
 
 	// Set and get
 	p.SetSSIDNonce(42)
-	assert.Equal(t, uint(42), p.SSIDNonce())
+	if !reflect.DeepEqual(uint(42), p.SSIDNonce()) {
+		t.Fatalf("got %v, want %v", p.SSIDNonce(), uint(42))
+	}
 
 	// Large value (won't overflow uint)
 	p.SetSSIDNonce(^uint(0)) // max uint
-	assert.Equal(t, ^uint(0), p.SSIDNonce())
+	if !reflect.DeepEqual(^uint(0), p.SSIDNonce()) {
+		t.Fatalf("got %v, want %v", p.SSIDNonce(), ^uint(0))
+	}
 }
 
 // --- PartyID ValidateBasic tests ---
@@ -188,7 +254,9 @@ func TestPartyIDValidateBasicRejectsEmptyKey(t *testing.T) {
 		},
 		Index: 0,
 	}
-	assert.False(t, pid.ValidateBasic(), "empty key should fail ValidateBasic")
+	if pid.ValidateBasic() {
+		t.Fatal("empty key should fail ValidateBasic")
+	}
 }
 
 func TestPartyIDValidateBasicRejectsNilKey(t *testing.T) {
@@ -200,19 +268,25 @@ func TestPartyIDValidateBasicRejectsNilKey(t *testing.T) {
 		},
 		Index: 0,
 	}
-	assert.False(t, pid.ValidateBasic(), "nil key should fail ValidateBasic")
+	if pid.ValidateBasic() {
+		t.Fatal("nil key should fail ValidateBasic")
+	}
 }
 
 func TestPartyIDValidateBasicAcceptsValid(t *testing.T) {
 	pid := NewPartyID("test", "Test", big.NewInt(42))
 	pid.Index = 0
-	assert.True(t, pid.ValidateBasic(), "valid party ID should pass")
+	if !pid.ValidateBasic() {
+		t.Fatal("valid party ID should pass")
+	}
 }
 
 func TestPartyIDValidateBasicRejectsNegativeIndex(t *testing.T) {
 	pid := NewPartyID("test", "Test", big.NewInt(42))
 	pid.Index = -1 // not yet sorted
-	assert.False(t, pid.ValidateBasic(), "negative index should fail ValidateBasic")
+	if pid.ValidateBasic() {
+		t.Fatal("negative index should fail ValidateBasic")
+	}
 }
 
 // --- SortedPartyIDs Less strict ordering ---
@@ -224,6 +298,10 @@ func TestSortedPartyIDsLessIsStrict(t *testing.T) {
 		NewPartyID("b", "B", big.NewInt(5)), // same key
 	}
 	// With strict Less, neither should be "less than" the other
-	assert.False(t, ids.Less(0, 1), "equal keys: Less(0,1) should be false (strict)")
-	assert.False(t, ids.Less(1, 0), "equal keys: Less(1,0) should be false (strict)")
+	if ids.Less(0, 1) {
+		t.Fatal("equal keys: Less(0,1) should be false (strict)")
+	}
+	if ids.Less(1, 0) {
+		t.Fatal("equal keys: Less(1,0) should be false (strict)")
+	}
 }
