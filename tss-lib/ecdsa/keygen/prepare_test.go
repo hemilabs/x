@@ -10,7 +10,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
 )
 
 func TestGeneratePreParamsTimeout(t *testing.T) {
@@ -23,7 +22,7 @@ func TestGeneratePreParamsTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-nil")
 	}
-	if diff := time.Now().Sub(start); diff < 0 || diff > 1*time.Second {
+	if diff := time.Since(start); diff < 0 || diff > 1*time.Second {
 		t.Fatalf("duration %v exceeds %v", diff, 1*time.Second)
 	}
 }
@@ -41,7 +40,7 @@ func TestGeneratePreParamsWithContextTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-nil")
 	}
-	if diff := time.Now().Sub(start); diff < 0 || diff > 1*time.Second {
+	if diff := time.Since(start); diff < 0 || diff > 1*time.Second {
 		t.Fatalf("duration %v exceeds %v", diff, 1*time.Second)
 	}
 }

@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 

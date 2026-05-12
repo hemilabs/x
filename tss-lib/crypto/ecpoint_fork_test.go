@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
@@ -49,8 +48,8 @@ func TestScalarMultByGroupOrder(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("G * q should panic (identity point)")
-		}
+				t.Fatal("G * q should panic (identity point)")
+			}
 		}()
 		g.ScalarMult(q)
 	}()
@@ -60,8 +59,8 @@ func TestScalarBaseMultByZero(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("ScalarBaseMult(0) should panic (identity point)")
-		}
+				t.Fatal("ScalarBaseMult(0) should panic (identity point)")
+			}
 		}()
 		crypto.ScalarBaseMult(tss.S256(), big.NewInt(0))
 	}()

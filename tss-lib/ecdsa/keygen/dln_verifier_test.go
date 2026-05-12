@@ -9,13 +9,12 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"reflect"
 	"runtime"
 	"sync"
 	"sync/atomic"
-	"reflect"
 	"testing"
 	"time"
-
 
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
@@ -90,8 +89,8 @@ func TestNewDlnProofVerifierZeroConcurrencyPanics(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("concurrency=0 must panic")
-		}
+				t.Fatal("concurrency=0 must panic")
+			}
 		}()
 		NewDlnProofVerifier(0)
 	}()

@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"testing"
 
-
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
@@ -53,8 +52,8 @@ func TestPrepareForSigningCollidingKeysPanics(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("colliding keys should panic")
-		}
+				t.Fatal("colliding keys should panic")
+			}
 		}()
 		PrepareForSigning(ec, 0, 3, xi, ks, bigXs)
 	}()

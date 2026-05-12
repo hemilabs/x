@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	. "github.com/hemilabs/x/tss-lib/v3/crypto/paillier"

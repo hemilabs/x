@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
-
 )
 
 // --- NewParameters panic tests ---
@@ -21,8 +20,8 @@ func TestNewParametersPanicsInvalidThreshold(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("threshold >= partyCount should panic")
-		}
+				t.Fatal("threshold >= partyCount should panic")
+			}
 		}()
 		NewParameters(S256(), ctx, pIDs[0], 3, 3) // threshold == partyCount
 	}()
@@ -35,8 +34,8 @@ func TestNewParametersPanicsNegativeThreshold(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("negative threshold should panic")
-		}
+				t.Fatal("negative threshold should panic")
+			}
 		}()
 		NewParameters(S256(), ctx, pIDs[0], 3, -1)
 	}()
@@ -49,8 +48,8 @@ func TestNewParametersPanicsZeroPartyCount(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("zero partyCount should panic")
-		}
+				t.Fatal("zero partyCount should panic")
+			}
 		}()
 		NewParameters(S256(), ctx, pIDs[0], 0, 0) // partyCount < 1
 	}()
@@ -63,16 +62,16 @@ func TestNewParametersAcceptsValid(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-			t.Fatalf("unexpected panic: %v", r)
-		}
+				t.Fatalf("unexpected panic: %v", r)
+			}
 		}()
 		p := NewParameters(S256(), ctx, pIDs[0], 3, 1)
 		if p.PartyCount() != 3 {
 			t.Fatalf("got %v, want 3", p.PartyCount())
-			}
+		}
 		if p.Threshold() != 1 {
 			t.Fatalf("got %v, want 1", p.Threshold())
-			}
+		}
 	}()
 }
 
@@ -87,8 +86,8 @@ func TestNewReSharingParametersPanicsZeroNewPartyCount(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("zero newPartyCount should panic")
-		}
+				t.Fatal("zero newPartyCount should panic")
+			}
 		}()
 		NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 0, 1) // newPartyCount=0
 	}()
@@ -103,8 +102,8 @@ func TestNewReSharingParametersPanicsInvalidNewThreshold(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("newThreshold >= newPartyCount should panic")
-		}
+				t.Fatal("newThreshold >= newPartyCount should panic")
+			}
 		}()
 		NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 3, 3) // newThreshold == newPartyCount
 	}()
@@ -119,8 +118,8 @@ func TestNewReSharingParametersPanicsNegativeNewThreshold(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("negative newThreshold should panic")
-		}
+				t.Fatal("negative newThreshold should panic")
+			}
 		}()
 		NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 3, -1) // newThreshold=-1
 	}()
@@ -138,8 +137,8 @@ func TestSortPartyIDsZeroKeyPanics(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("zero key should panic")
-		}
+				t.Fatal("zero key should panic")
+			}
 		}()
 		SortPartyIDs(ids)
 	}()
@@ -155,8 +154,8 @@ func TestSortPartyIDsDuplicateKeyPanics_Fork(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("duplicate key should panic")
-		}
+				t.Fatal("duplicate key should panic")
+			}
 		}()
 		SortPartyIDs(ids)
 	}()

@@ -9,11 +9,10 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
-	"sync/atomic"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
-
 )
 
 // TestGeneratePreParamsMultipleConcurrencyArgsPanics verifies that passing more
@@ -23,8 +22,8 @@ func TestGeneratePreParamsMultipleConcurrencyArgsPanics(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
-			t.Fatal("expected panic when multiple concurrency args are provided")
-		}
+				t.Fatal("expected panic when multiple concurrency args are provided")
+			}
 		}()
 		ctx := context.Background()
 		_, _ = GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 2, 4)

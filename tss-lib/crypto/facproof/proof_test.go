@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"testing"
 
-
 	"github.com/hemilabs/x/tss-lib/v3/common"
 	"github.com/hemilabs/x/tss-lib/v3/crypto"
 	. "github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
@@ -149,7 +148,7 @@ func TestFacProofVSignMagnitudeNegative(test *testing.T) {
 	if !reflect.DeepEqual(big.NewInt(-42), recovered.V) {
 		test.Fatalf("negative V must survive round-trip")
 	}
-	if -1 != recovered.V.Sign() {
+	if recovered.V.Sign() != -1 {
 		test.Fatalf("V sign must be negative")
 	}
 }
@@ -319,8 +318,8 @@ func TestFacProofVerifyNegativeVNoPanic(test *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-			test.Fatalf("unexpected panic: %v", r)
-		}
+				test.Fatalf("unexpected panic: %v", r)
+			}
 		}()
 		proof.Verify(Session, ec, big.NewInt(100), NCap, s, t)
 	}()
@@ -608,12 +607,12 @@ func TestFacProofVerifyNonInvertibleT(test *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-			test.Fatalf("unexpected panic: %v", r)
-		}
+				test.Fatalf("unexpected panic: %v", r)
+			}
 		}()
 		result := proof.Verify(Session, ec, big.NewInt(100), NCap, s, t_)
 		if result {
-		test.Fatal("Verify should return false for non-invertible t")
+			test.Fatal("Verify should return false for non-invertible t")
 		}
 	}()
 }

@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"testing"
 
-
 	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 

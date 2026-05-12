@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"testing"
 	"time"
-
 )
 
 func Test_getSafePrime(t *testing.T) {

@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
-
 )
 
 // --- SHA512_256i nil guard (hash.go:73) ---

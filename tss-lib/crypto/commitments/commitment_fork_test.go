@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"math/big"
 	"testing"
-
 )
 
 func TestVerifyRejectsEmptyD(t *testing.T) {
