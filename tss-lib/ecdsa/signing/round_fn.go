@@ -186,11 +186,13 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 		}
 	}
 
-	errs := make([]*tss.Error, len(params.Parties().IDs()))
+	n := len(params.Parties().IDs())
+	errsMid := make([]*tss.Error, n)
+	errsMidWC := make([]*tss.Error, n)
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
 	wg := sync.WaitGroup{}
-	wg.Add((len(params.Parties().IDs()) - 1) * 2)
+	wg.Add((n - 1) * 2)
 	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(i)))
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
@@ -205,7 +207,7 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 			r1msg := r1p2p[j].Content.(*SignRound1Message1)
 			rangeProofAliceJ := r1msg.RangeProofAlice
 			if rangeProofAliceJ == nil {
-				errs[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
+				errsMid[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -219,7 +221,7 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				key.NTildej[j], key.H1j[j], key.H2j[j],
 				key.NTildej[i], key.H1j[i], key.H2j[i], params.Rand())
 			if err != nil {
-				errs[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
+				errsMid[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -236,7 +238,7 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 			r1msg := r1p2p[j].Content.(*SignRound1Message1)
 			rangeProofAliceJ := r1msg.RangeProofAlice
 			if rangeProofAliceJ == nil {
-				errs[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
+				errsMidWC[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -251,7 +253,7 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				key.NTildej[i], key.H1j[i], key.H2j[i],
 				temp.bigWs[i], params.Rand())
 			if err != nil {
-				errs[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
+				errsMidWC[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -264,9 +266,12 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, err := range errs {
-		if err != nil {
-			return nil, err
+	for j := range n {
+		if errsMid[j] != nil {
+			return nil, errsMid[j]
+		}
+		if errsMidWC[j] != nil {
+			return nil, errsMidWC[j]
 		}
 	}
 
@@ -304,7 +309,8 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 		}
 	}
 
-	errs := make([]*tss.Error, n)
+	errsAlice := make([]*tss.Error, n)
+	errsAliceWC := make([]*tss.Error, n)
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
 	wg := sync.WaitGroup{}
@@ -322,7 +328,7 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 			r2msg := r2p2p[j].Content.(*SignRound2Message)
 			proofBob := r2msg.ProofBob
 			if proofBob == nil {
-				errs[j] = tss.NewError(errorspkg.New("ProofBob missing"), TaskName, 3, params.PartyID(), Pj)
+				errsAlice[j] = tss.NewError(errorspkg.New("ProofBob missing"), TaskName, 3, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -333,7 +339,7 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 				proofBob, key.H1j[i], key.H2j[i], temp.cis[j],
 				r2msg.C1, key.NTildej[i], key.PaillierSK)
 			if err != nil {
-				errs[j] = tss.NewError(err, TaskName, 3, params.PartyID(), Pj)
+				errsAlice[j] = tss.NewError(err, TaskName, 3, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -347,7 +353,7 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 			r2msg := r2p2p[j].Content.(*SignRound2Message)
 			proofBobWC := r2msg.ProofBobWC
 			if proofBobWC == nil {
-				errs[j] = tss.NewError(errorspkg.New("ProofBobWC missing"), TaskName, 3, params.PartyID(), Pj)
+				errsAliceWC[j] = tss.NewError(errorspkg.New("ProofBobWC missing"), TaskName, 3, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -359,7 +365,7 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 				r2msg.C2, key.NTildej[i],
 				key.H1j[i], key.H2j[i], key.PaillierSK)
 			if err != nil {
-				errs[j] = tss.NewError(err, TaskName, 3, params.PartyID(), Pj)
+				errsAliceWC[j] = tss.NewError(err, TaskName, 3, params.PartyID(), Pj)
 				gcancel()
 				return
 			}
@@ -370,9 +376,12 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, err := range errs {
-		if err != nil {
-			return nil, err
+	for j := range n {
+		if errsAlice[j] != nil {
+			return nil, errsAlice[j]
+		}
+		if errsAliceWC[j] != nil {
+			return nil, errsAliceWC[j]
 		}
 	}
 
