@@ -10,12 +10,10 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	. "github.com/hemilabs/x/tss-lib/v2/crypto/schnorr"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 var Session = []byte("session")
@@ -26,10 +24,18 @@ func TestSchnorrProof(t *testing.T) {
 	uG := crypto.ScalarBaseMult(tss.EC(), u)
 	proof, _ := NewZKProof(Session, u, uG, rand.Reader)
 
-	assert.True(t, proof.Alpha.IsOnCurve())
-	assert.NotZero(t, proof.Alpha.X())
-	assert.NotZero(t, proof.Alpha.Y())
-	assert.NotZero(t, proof.T)
+	if !proof.Alpha.IsOnCurve() {
+		t.Fatal("expected true")
+	}
+	if proof.Alpha.X() == nil {
+		t.Fatal("expected non-zero")
+	}
+	if proof.Alpha.Y() == nil {
+		t.Fatal("expected non-zero")
+	}
+	if proof.T == nil {
+		t.Fatal("expected non-zero")
+	}
 }
 
 func TestSchnorrProofVerify(t *testing.T) {
@@ -40,7 +46,9 @@ func TestSchnorrProofVerify(t *testing.T) {
 	proof, _ := NewZKProof(Session, u, X, rand.Reader)
 	res := proof.Verify(Session, X)
 
-	assert.True(t, res, "verify result must be true")
+	if !res {
+		t.Fatal("verify result must be true")
+	}
 }
 
 func TestSchnorrProofVerifyBadX(t *testing.T) {
@@ -53,7 +61,9 @@ func TestSchnorrProofVerifyBadX(t *testing.T) {
 	proof, _ := NewZKProof(Session, u2, X2, rand.Reader)
 	res := proof.Verify(Session, X)
 
-	assert.False(t, res, "verify result must be false")
+	if res {
+		t.Fatal("verify result must be false")
+	}
 }
 
 func TestSchnorrVProofVerify(t *testing.T) {
@@ -69,7 +79,9 @@ func TestSchnorrVProofVerify(t *testing.T) {
 	proof, _ := NewZKVProof(Session, V, R, s, l, rand.Reader)
 	res := proof.Verify(Session, V, R)
 
-	assert.True(t, res, "verify result must be true")
+	if !res {
+		t.Fatal("verify result must be true")
+	}
 }
 
 func TestSchnorrVProofVerifyBadPartialV(t *testing.T) {
@@ -84,7 +96,9 @@ func TestSchnorrVProofVerifyBadPartialV(t *testing.T) {
 	proof, _ := NewZKVProof(Session, V, R, s, l, rand.Reader)
 	res := proof.Verify(Session, V, R)
 
-	assert.False(t, res, "verify result must be false")
+	if res {
+		t.Fatal("verify result must be false")
+	}
 }
 
 func TestSchnorrVProofVerifyBadS(t *testing.T) {
@@ -101,5 +115,7 @@ func TestSchnorrVProofVerifyBadS(t *testing.T) {
 	proof, _ := NewZKVProof(Session, V, R, s2, l, rand.Reader)
 	res := proof.Verify(Session, V, R)
 
-	assert.False(t, res, "verify result must be false")
+	if res {
+		t.Fatal("verify result must be false")
+	}
 }

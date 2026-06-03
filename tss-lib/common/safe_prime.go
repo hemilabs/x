@@ -152,7 +152,7 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 		)
 	}
 
-	needed := int32(numPrimes)
+	needed := int32(numPrimes) //nolint:gosec // numPrimes is a small count, fits in int32
 	for {
 		select {
 		case result := <-primeCh:
@@ -203,16 +203,9 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 //     Miller-Rabin and Baillie-PSW for `p`.
 //     If `q` and `p` are found to be prime, return them as a result. If not, go
 //     back to the point 1.
-func runGenPrimeRoutine(
-	ctx context.Context,
-	primeCh chan<- *GermainSafePrime,
-	errCh chan<- error,
-	waitGroup *sync.WaitGroup,
-	rand io.Reader,
-	pBitLen int,
-) {
+func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, errCh chan<- error, waitGroup *sync.WaitGroup, rand io.Reader, pBitLen int) {
 	qBitLen := pBitLen - 1
-	b := uint(qBitLen % 8)
+	b := uint(qBitLen % 8) //nolint:gosec // result is 0-7
 	if b == 0 {
 		b = 8
 	}
@@ -239,7 +232,7 @@ func runGenPrimeRoutine(
 
 				// Clear bits in the first byte to make sure the candidate has
 				// a size <= bits.
-				bytes[0] &= uint8(int(1<<b) - 1)
+				bytes[0] &= uint8(int(1<<b) - 1) //nolint:gosec // b is 1-8, result 1-255
 				// Don't let the value be too small, i.e, set the most
 				// significant two bits.
 				// Setting the top two bits, rather than just the top bit,
@@ -315,7 +308,6 @@ func runGenPrimeRoutine(
 				if q.ProbablyPrime(20) &&
 					isPocklingtonCriterionSatisfied(p) &&
 					q.BitLen() == qBitLen {
-
 					if sgp := (&GermainSafePrime{p: p, q: q}); sgp.Validate() {
 						primeCh <- &GermainSafePrime{p: p, q: q}
 					}

@@ -10,15 +10,14 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	. "github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // Using a modulus length of 2048 is recommended in the GG18 spec
@@ -41,21 +40,31 @@ func setUp(t *testing.T) {
 
 	var err error
 	privateKey, publicKey, err = GenerateKeyPair(ctx, rand.Reader, testPaillierKeyLength)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestGenerateKeyPair(t *testing.T) {
 	setUp(t)
-	assert.NotZero(t, publicKey)
-	assert.NotZero(t, privateKey)
+	if publicKey == nil {
+		t.Fatal("expected non-zero")
+	}
+	if privateKey == nil {
+		t.Fatal("expected non-zero")
+	}
 	t.Log(privateKey)
 }
 
 func TestEncrypt(t *testing.T) {
 	setUp(t)
 	cipher, err := publicKey.Encrypt(rand.Reader, big.NewInt(1))
-	assert.NoError(t, err, "must not error")
-	assert.NotZero(t, cipher)
+	if err != nil {
+		t.Fatalf("must not error"+": %v", err)
+	}
+	if cipher == nil {
+		t.Fatal("expected non-zero")
+	}
 	t.Log(cipher)
 }
 
@@ -67,31 +76,44 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.Error(err)
 	}
 	ret, err := privateKey.Decrypt(cypher)
-	assert.NoError(t, err)
-	assert.Equal(t, 0, exp.Cmp(ret),
-		"wrong decryption ", ret, " is not ", exp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp.Cmp(ret) != 0 {
+		t.Fatalf("wrong decryption: got %v, want %v", ret, exp)
+	}
 
 	cypher = new(big.Int).Set(privateKey.N)
 	_, err = privateKey.Decrypt(cypher)
-	assert.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestHomoMul(t *testing.T) {
 	setUp(t)
 	three, err := privateKey.Encrypt(rand.Reader, big.NewInt(3))
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// for HomoMul, the first argument `m` is not ciphered
 	six := big.NewInt(6)
 
 	cm, err := privateKey.HomoMult(six, three)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	multiple, err := privateKey.Decrypt(cm)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// 3 * 6 = 18
 	exp := int64(18)
-	assert.Equal(t, 0, multiple.Cmp(big.NewInt(exp)))
+	if multiple.Cmp(big.NewInt(exp)) != 0 {
+		t.Fatalf("got %v, want %v", multiple.Cmp(big.NewInt(exp)), 0)
+	}
 }
 
 func TestHomoAdd(t *testing.T) {
@@ -106,7 +128,9 @@ func TestHomoAdd(t *testing.T) {
 
 	plain, _ := privateKey.Decrypt(ciphered)
 
-	assert.Equal(t, new(big.Int).Add(num1, num2), plain)
+	if !reflect.DeepEqual(new(big.Int).Add(num1, num2), plain) {
+		t.Fatalf("got %v, want %v", plain, new(big.Int).Add(num1, num2))
+	}
 }
 
 func TestProofVerify(t *testing.T) {
@@ -116,8 +140,12 @@ func TestProofVerify(t *testing.T) {
 	yX, yY := tss.EC().ScalarBaseMult(ui.Bytes())                       // ECDSA public
 	proof := privateKey.Proof(ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
 	res, err := proof.Verify(publicKey.N, ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
-	assert.NoError(t, err)
-	assert.True(t, res, "proof verify result must be true")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res {
+		t.Fatal("proof verify result must be true")
+	}
 }
 
 func TestProofVerifyFail(t *testing.T) {
@@ -129,8 +157,12 @@ func TestProofVerifyFail(t *testing.T) {
 	last := proof[len(proof)-1]
 	last.Sub(last, big.NewInt(1))
 	res, err := proof.Verify(publicKey.N, ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
-	assert.NoError(t, err)
-	assert.False(t, res, "proof verify result must be true")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res {
+		t.Fatal("proof verify result must be true")
+	}
 }
 
 func TestComputeL(t *testing.T) {
@@ -140,7 +172,9 @@ func TestComputeL(t *testing.T) {
 	expected := big.NewInt(6)
 	actual := L(u, n)
 
-	assert.Equal(t, 0, expected.Cmp(actual))
+	if expected.Cmp(actual) != 0 {
+		t.Fatalf("got %v, want %v", expected.Cmp(actual), 0)
+	}
 }
 
 func TestGenerateXs(t *testing.T) {
@@ -150,8 +184,12 @@ func TestGenerateXs(t *testing.T) {
 	N := common.GetRandomPrimeInt(rand.Reader, 2048)
 
 	xs := GenerateXs(13, k, N, crypto.NewECPointNoCurveCheck(tss.EC(), sX, sY))
-	assert.Equal(t, 13, len(xs))
+	if len(xs) != 13 {
+		t.Fatalf("got %v, want %v", len(xs), 13)
+	}
 	for _, xi := range xs {
-		assert.True(t, common.IsNumberInMultiplicativeGroup(N, xi))
+		if !common.IsNumberInMultiplicativeGroup(N, xi) {
+			t.Fatal("expected true")
+		}
 	}
 }

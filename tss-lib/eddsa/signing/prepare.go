@@ -1,8 +1,7 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package signing
 
@@ -11,10 +10,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
-// PrepareForSigning(), Fig. 7
+// PrepareForSigning computes the Lagrange interpolated secret share
+// wi for party i, given the party's secret xi and all party keys ks.
 func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int) (wi *big.Int) {
 	modQ := common.ModInt(ec.Params().N)
 	if len(ks) != pax {
@@ -23,9 +23,7 @@ func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int
 	if len(ks) <= i {
 		panic(fmt.Errorf("PrepareForSigning: len(ks) <= i (%d <= %d)", len(ks), i))
 	}
-
-	// 1-4.
-	wi = xi
+	wi = new(big.Int).Set(xi)
 	for j := 0; j < pax; j++ {
 		if j == i {
 			continue
@@ -35,10 +33,16 @@ func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int
 		if ksj.Cmp(ksi) == 0 {
 			panic(fmt.Errorf("index of two parties are equal"))
 		}
-		// big.Int Div is calculated as: a/b = a * modInv(b,q)
-		coef := modQ.Mul(ks[j], modQ.ModInverse(new(big.Int).Sub(ksj, ksi)))
+		diff := new(big.Int).Sub(ksj, ksi)
+		inv := modQ.ModInverse(diff)
+		if inv == nil {
+			panic(fmt.Errorf("PrepareForSigning: ModInverse(ks[%d]-ks[%d]) is nil; keys may collide mod q", j, i))
+		}
+		coef := modQ.Mul(ks[j], inv)
 		wi = modQ.Mul(wi, coef)
 	}
-
+	if wi.Sign() == 0 {
+		panic(fmt.Errorf("PrepareForSigning: wi is zero after Lagrange interpolation for party %d", i))
+	}
 	return
 }

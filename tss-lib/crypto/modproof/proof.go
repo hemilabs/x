@@ -1,17 +1,17 @@
-// Copyright © 2019-2023 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019-2023 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package modproof
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 const (
@@ -36,6 +36,7 @@ func isQuadraticResidue(X, N *big.Int) bool {
 	return big.Jacobi(X, N) == 1
 }
 
+// NewProof generates a mod proof. Session provides SSID domain separation.
 func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, error) {
 	Phi := new(big.Int).Mul(new(big.Int).Sub(P, one), new(big.Int).Sub(Q, one))
 	// Fig 16.1
@@ -51,6 +52,9 @@ func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, erro
 	// Fig 16.3
 	modN, modPhi := common.ModInt(N), common.ModInt(Phi)
 	invN := new(big.Int).ModInverse(N, Phi)
+	if invN == nil {
+		return nil, errors.New("n not coprime with phi")
+	}
 	X := [Iterations]*big.Int{}
 	// Fix bitLen of A and B
 	A := new(big.Int).Lsh(one, Iterations)
@@ -81,6 +85,24 @@ func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, erro
 				break
 			}
 		}
+		// [FORK] Defense-in-depth: fail fast if no quadratic residue was found.
+		//
+		// This condition is unreachable when P and Q are safe primes because:
+		//   - Safe primes satisfy P ≡ Q ≡ 3 (mod 4), so Jacobi(-1, P) = Jacobi(-1, Q) = -1
+		//     (negation flips both Legendre symbols).
+		//   - W has Jacobi(W, N) = -1, meaning it flips exactly one of the two
+		//     Legendre symbols (QNR mod one prime, QR mod the other).
+		//   - Together, the four candidates {Y, -Y, W·Y, -W·Y} cycle through all four
+		//     quadratic residuosity classes (QR/QR, QR/NR, NR/QR, NR/NR), so exactly
+		//     one candidate is always a QR mod both P and Q.
+		//
+		// If this error fires, it indicates P or Q are not safe primes (not ≡ 3 mod 4),
+		// or N is otherwise malformed. Without this check, NewProof would return a proof
+		// with nil X[i]/Z[i] entries that silently fails verification at a remote party,
+		// obscuring the root cause.
+		if X[i] == nil {
+			return nil, fmt.Errorf("NewProof: no quadratic residue found for Y[%d]; P and Q must be safe primes (≡ 3 mod 4)", i)
+		}
 	}
 
 	pf := &ProofMod{W: W, X: X, A: A, B: B, Z: Z}
@@ -93,7 +115,7 @@ func NewProofFromBytes(bzs [][]byte) (*ProofMod, error) {
 	}
 	bis := make([]*big.Int, len(bzs))
 	for i := range bis {
-		bis[i] = new(big.Int).SetBytes(bzs[i])
+		bis[i] = new(big.Int).SetBytes(bzs[i]) //nolint:gosec // i bounded by len(bzs)
 	}
 
 	X := [Iterations]*big.Int{}
@@ -115,10 +137,15 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 	if pf == nil || !pf.ValidateBasic() {
 		return false
 	}
-	// TODO: add basic properties checker
+	// [FORK] Reject N that is too small to be secure (must be at least 2048 bits).
+	// Upstream does not check N's size.
+	if N == nil || N.BitLen() < 2048 {
+		return false
+	}
 	if isQuadraticResidue(pf.W, N) {
 		return false
 	}
+	// Validate W is in the correct range and coprime with N.
 	if pf.W.Sign() != 1 || pf.W.Cmp(N) != -1 {
 		return false
 	}
@@ -126,6 +153,8 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 	if gcd.Cmp(one) != 0 {
 		return false
 	}
+	// Range checks on proof elements: Z[i] and X[i] must be in (1, N),
+	// and A/B must have the correct bit length.
 	for i := range pf.Z {
 		if pf.Z[i].Sign() != 1 || pf.Z[i].Cmp(N) != -1 {
 			return false
@@ -160,6 +189,11 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 	chs := make(chan bool, Iterations*2)
 	for i := 0; i < Iterations; i++ {
 		go func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					chs <- false
+				}
+			}()
 			left := modN.Exp(pf.Z[i], N)
 			if left.Cmp(Y[i]) != 0 {
 				chs <- false
@@ -169,8 +203,16 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 		}(i)
 
 		go func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					chs <- false
+				}
+			}()
 			a := pf.A.Bit(i)
 			b := pf.B.Bit(i)
+			// Defense-in-depth: Bit() always returns 0 or 1 per Go stdlib (math/big),
+			// so these conditions are unreachable. Retained as a safeguard against
+			// hypothetical stdlib behavior changes.
 			if a != 0 && a != 1 {
 				chs <- false
 				return

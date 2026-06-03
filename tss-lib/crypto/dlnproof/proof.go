@@ -1,8 +1,7 @@
-// Copyright © 2019-2020 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019-2020 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 // Zero-knowledge proof of knowledge of the discrete logarithm over safe prime product
 
@@ -16,8 +15,8 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	cmts "github.com/hemilabs/x/tss-lib/v2/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	cmts "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
 )
 
 const Iterations = 128
@@ -31,7 +30,8 @@ type (
 
 var one = big.NewInt(1)
 
-func NewDLNProof(h1, h2, x, p, q, N *big.Int, rand io.Reader) *Proof {
+// [FORK] Session parameter added for SSID domain separation (prevents cross-ceremony replay).
+func NewDLNProof(Session []byte, h1, h2, x, p, q, N *big.Int, rand io.Reader) *Proof {
 	pMulQ := new(big.Int).Mul(p, q)
 	modN, modPQ := common.ModInt(N), common.ModInt(pMulQ)
 	a := make([]*big.Int, Iterations)
@@ -41,22 +41,27 @@ func NewDLNProof(h1, h2, x, p, q, N *big.Int, rand io.Reader) *Proof {
 		alpha[i] = modN.Exp(h1, a[i])
 	}
 	msg := append([]*big.Int{h1, h2, N}, alpha[:]...)
-	c := common.SHA512_256i(msg...)
+	c := common.SHA512_256i_TAGGED(Session, msg...)
 	t := [Iterations]*big.Int{}
 	cIBI := new(big.Int)
 	for i := range t {
 		cI := c.Bit(i)
-		cIBI = cIBI.SetInt64(int64(cI))
+		cIBI = cIBI.SetUint64(uint64(cI))
 		t[i] = modPQ.Add(a[i], modPQ.Mul(cIBI, x))
 	}
 	return &Proof{alpha, t}
 }
 
-func (p *Proof) Verify(h1, h2, N *big.Int) bool {
+func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	if p == nil {
 		return false
 	}
-	if N.Sign() != 1 {
+	if N == nil || N.Sign() != 1 {
+		return false
+	}
+	// [FORK] Reject undersized moduli — DLN proofs are only sound when N is the
+	// product of two large safe primes (>= 2048-bit modulus). Upstream does not check.
+	if N.BitLen() < 2048 {
 		return false
 	}
 	modN := common.ModInt(N)
@@ -71,27 +76,37 @@ func (p *Proof) Verify(h1, h2, N *big.Int) bool {
 	if h1_.Cmp(h2_) == 0 {
 		return false
 	}
+	// [FORK] Upstream validates proof elements with range checks in separate loops and nil
+	// checks inside the verification loop. We consolidate all validation (nil checks, bit-length
+	// bounds, and range checks) into pre-verification loops to prevent computational DoS via
+	// oversized exponents before modular reduction.
+	maxBits := N.BitLen() + 2
 	for i := range p.T {
+		if p.T[i] == nil || p.T[i].BitLen() > maxBits {
+			return false
+		}
 		a := new(big.Int).Mod(p.T[i], N)
 		if a.Cmp(one) != 1 || a.Cmp(N) != -1 {
 			return false
 		}
 	}
 	for i := range p.Alpha {
+		if p.Alpha[i] == nil || p.Alpha[i].BitLen() > maxBits {
+			return false
+		}
 		a := new(big.Int).Mod(p.Alpha[i], N)
 		if a.Cmp(one) != 1 || a.Cmp(N) != -1 {
 			return false
 		}
 	}
+	// [FORK] Uses SHA512_256i_TAGGED with Session for SSID domain separation.
+	// Upstream uses SHA512_256i without any session tag.
 	msg := append([]*big.Int{h1, h2, N}, p.Alpha[:]...)
-	c := common.SHA512_256i(msg...)
+	c := common.SHA512_256i_TAGGED(Session, msg...)
 	cIBI := new(big.Int)
 	for i := 0; i < Iterations; i++ {
-		if p.Alpha[i] == nil || p.T[i] == nil {
-			return false
-		}
 		cI := c.Bit(i)
-		cIBI = cIBI.SetInt64(int64(cI))
+		cIBI = cIBI.SetUint64(uint64(cI))
 		h1ExpTi := modN.Exp(h1, p.T[i])
 		h2ExpCi := modN.Exp(h2, cIBI)
 		alphaIMulH2ExpCi := modN.Mul(p.Alpha[i], h2ExpCi)

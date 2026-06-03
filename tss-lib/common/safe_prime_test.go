@@ -13,44 +13,58 @@ import (
 	"runtime"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_getSafePrime(t *testing.T) {
 	prime := new(big.Int).SetInt64(5)
 	sPrime := getSafePrime(prime)
-	assert.True(t, sPrime.ProbablyPrime(50))
+	if !sPrime.ProbablyPrime(50) {
+		t.Fatal("expected true")
+	}
 }
 
 func Test_getSafePrime_Bad(t *testing.T) {
 	prime := new(big.Int).SetInt64(12)
 	sPrime := getSafePrime(prime)
-	assert.False(t, sPrime.ProbablyPrime(50))
+	if sPrime.ProbablyPrime(50) {
+		t.Fatal("expected false")
+	}
 }
 
 func Test_Validate(t *testing.T) {
 	prime := new(big.Int).SetInt64(5)
 	sPrime := getSafePrime(prime)
 	sgp := &GermainSafePrime{prime, sPrime}
-	assert.True(t, sgp.Validate())
+	if !sgp.Validate() {
+		t.Fatal("expected true")
+	}
 }
 
 func Test_Validate_Bad(t *testing.T) {
 	prime := new(big.Int).SetInt64(12)
 	sPrime := getSafePrime(prime)
 	sgp := &GermainSafePrime{prime, sPrime}
-	assert.False(t, sgp.Validate())
+	if sgp.Validate() {
+		t.Fatal("expected false")
+	}
 }
 
 func TestGetRandomGermainPrimeConcurrent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	sgps, err := GetRandomSafePrimesConcurrent(ctx, 1024, 2, runtime.NumCPU(), rand.Reader)
-	assert.NoError(t, err)
-	assert.Equal(t, 2, len(sgps))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sgps) != 2 {
+		t.Fatalf("got %v, want %v", len(sgps), 2)
+	}
 	for _, sgp := range sgps {
-		assert.NotNil(t, sgp)
-		assert.True(t, sgp.Validate())
+		if sgp == nil {
+			t.Fatal("expected non-nil")
+		}
+		if !sgp.Validate() {
+			t.Fatal("expected true")
+		}
 	}
 }

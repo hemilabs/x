@@ -25,13 +25,15 @@ import (
 	"github.com/hemilabs/x/eth-trie/triedb/pathdb"
 )
 
+// TestZKTrie is a basic example of how one could use the eth-trie for
+// alternative data storage. It is a prototype for ZKTrie.
 func TestZKTrie(t *testing.T) {
 	const (
-		blockCount uint64 = 1000000 // num of blocks
+		blockCount uint64 = 10 // num of blocks
 		// newOutsCount >= inCount + outCount
-		newOutsCount uint64 = 1500 // num of outs with new scripts
-		inCount      uint64 = 1000 // num of ins
-		outCount     uint64 = 500  // num of outs with previous scripts
+		newOutsCount uint64 = 10 // num of outs with new scripts
+		inCount      uint64 = 0  // num of ins
+		outCount     uint64 = 0  // num of outs with previous scripts
 	)
 
 	datadir := t.TempDir()

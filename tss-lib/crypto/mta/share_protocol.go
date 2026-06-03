@@ -1,8 +1,7 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package mta
 
@@ -12,34 +11,38 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
 )
 
-func AliceInit(
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	a, NTildeB, h1B, h2B *big.Int,
-	rand io.Reader,
-) (cA *big.Int, pf *RangeProofAlice, err error) {
+// [FORK] Session parameter added for SSID domain separation (prevents cross-ceremony replay).
+// Upstream has no Session parameter; hashes are not ceremony-bound.
+func AliceInit(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, a, NTildeB, h1B, h2B *big.Int, rand io.Reader) (cA *big.Int, pf *RangeProofAlice, err error) {
+	// [FORK] Upstream does not validate parameters. Nil pkA or NTilde causes
+	// nil-pointer panics deep in proof construction.
+	if ec == nil || pkA == nil || a == nil || NTildeB == nil || h1B == nil || h2B == nil || rand == nil {
+		return nil, nil, errors.New("AliceInit received nil argument")
+	}
 	cA, rA, err := pkA.EncryptAndReturnRandomness(rand, a)
 	if err != nil {
 		return nil, nil, err
 	}
-	pf, err = ProveRangeAlice(ec, pkA, cA, NTildeB, h1B, h2B, a, rA, rand)
+	pf, err = ProveRangeAlice(Session, ec, pkA, cA, NTildeB, h1B, h2B, a, rA, rand)
 	return cA, pf, err
 }
 
-func BobMid(
-	Session []byte,
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *RangeProofAlice,
-	b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int,
-	rand io.Reader,
-) (beta, cB, betaPrm *big.Int, piB *ProofBob, err error) {
-	if !pf.Verify(ec, pkA, NTildeB, h1B, h2B, cA) {
+// [FORK] Split into two session parameters (AliceSession, BobSession) for per-party SSID
+// domain separation: Alice's range proof is verified under her session tag, Bob's proof is
+// constructed under his. Upstream's AliceInit/ProveRangeAlice has no session parameter at all
+// (range proof hash is entirely untagged); only Bob's side has a Session parameter.
+func BobMid(AliceSession []byte, BobSession []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *RangeProofAlice, b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int, rand io.Reader) (beta, cB, betaPrm *big.Int, piB *ProofBob, err error) {
+	// [FORK] Nil parameter guard — upstream does not validate, leading to nil-pointer panics.
+	if ec == nil || pkA == nil || pf == nil || b == nil || cA == nil || rand == nil {
+		err = errors.New("BobMid received nil argument")
+		return
+	}
+	if !pf.Verify(AliceSession, ec, pkA, NTildeB, h1B, h2B, cA) {
 		err = errors.New("RangeProofAlice.Verify() returned false")
 		return
 	}
@@ -61,20 +64,18 @@ func BobMid(
 		return
 	}
 	beta = common.ModInt(q).Sub(zero, betaPrm)
-	piB, err = ProveBob(Session, ec, pkA, NTildeA, h1A, h2A, cA, cB, b, betaPrm, cRand, rand)
+	piB, err = ProveBob(BobSession, ec, pkA, NTildeA, h1A, h2A, cA, cB, b, betaPrm, cRand, rand)
 	return
 }
 
-func BobMidWC(
-	Session []byte,
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *RangeProofAlice,
-	b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int,
-	B *crypto.ECPoint,
-	rand io.Reader,
-) (beta, cB, betaPrm *big.Int, piB *ProofBobWC, err error) {
-	if !pf.Verify(ec, pkA, NTildeB, h1B, h2B, cA) {
+// [FORK] Same per-party session split as BobMid above, plus nil parameter guards.
+func BobMidWC(AliceSession []byte, BobSession []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *RangeProofAlice, b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int, B *crypto.ECPoint, rand io.Reader) (beta, cB, betaPrm *big.Int, piB *ProofBobWC, err error) {
+	// [FORK] Nil parameter guard — upstream does not validate.
+	if ec == nil || pkA == nil || pf == nil || b == nil || cA == nil || B == nil || rand == nil {
+		err = errors.New("BobMidWC received nil argument")
+		return
+	}
+	if !pf.Verify(AliceSession, ec, pkA, NTildeB, h1B, h2B, cA) {
 		err = errors.New("RangeProofAlice.Verify() returned false")
 		return
 	}
@@ -96,18 +97,11 @@ func BobMidWC(
 		return
 	}
 	beta = common.ModInt(q).Sub(zero, betaPrm)
-	piB, err = ProveBobWC(Session, ec, pkA, NTildeA, h1A, h2A, cA, cB, b, betaPrm, cRand, B, rand)
+	piB, err = ProveBobWC(BobSession, ec, pkA, NTildeA, h1A, h2A, cA, cB, b, betaPrm, cRand, B, rand)
 	return
 }
 
-func AliceEnd(
-	Session []byte,
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *ProofBob,
-	h1A, h2A, cA, cB, NTildeA *big.Int,
-	sk *paillier.PrivateKey,
-) (*big.Int, error) {
+func AliceEnd(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *ProofBob, h1A, h2A, cA, cB, NTildeA *big.Int, sk *paillier.PrivateKey) (*big.Int, error) {
 	if !pf.Verify(Session, ec, pkA, NTildeA, h1A, h2A, cA, cB) {
 		return nil, errors.New("ProofBob.Verify() returned false")
 	}
@@ -119,15 +113,7 @@ func AliceEnd(
 	return new(big.Int).Mod(alphaPrm, q), nil
 }
 
-func AliceEndWC(
-	Session []byte,
-	ec elliptic.Curve,
-	pkA *paillier.PublicKey,
-	pf *ProofBobWC,
-	B *crypto.ECPoint,
-	cA, cB, NTildeA, h1A, h2A *big.Int,
-	sk *paillier.PrivateKey,
-) (*big.Int, error) {
+func AliceEndWC(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *ProofBobWC, B *crypto.ECPoint, cA, cB, NTildeA, h1A, h2A *big.Int, sk *paillier.PrivateKey) (*big.Int, error) {
 	if !pf.Verify(Session, ec, pkA, NTildeA, h1A, h2A, cA, cB, B) {
 		return nil, errors.New("ProofBobWC.Verify() returned false")
 	}

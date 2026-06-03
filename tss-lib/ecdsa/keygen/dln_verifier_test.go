@@ -1,244 +1,476 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package keygen
 
 import (
+	"context"
 	"crypto/rand"
 	"math/big"
+	"reflect"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
-	"github.com/hemilabs/x/tss-lib/v2/crypto/dlnproof"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
 )
 
-func BenchmarkDlnProof_Verify(b *testing.B) {
-	localPartySaveData, _, err := LoadKeygenTestFixtures(1)
+// dlnTestParams holds a set of DLN proof parameters generated from real
+// safe primes.  Creating these is slow (~seconds) so tests that need them
+// should call generateDLNTestParams once and reuse the result.
+type dlnTestParams struct {
+	H1, H2  *big.Int
+	Alpha   *big.Int // discrete log: H2 = H1^Alpha mod N
+	Beta    *big.Int // modular inverse of Alpha mod p*q
+	P, Q    *big.Int // Sophie Germain primes
+	N       *big.Int // N = (2P+1)(2Q+1)
+	Session []byte
+}
+
+// generateDLNTestParams generates proper DLN proof parameters at runtime
+// using safe primes, mirroring the logic in GeneratePreParamsWithContextAndRandom.
+func generateDLNTestParams(t *testing.T) *dlnTestParams {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	concurrency := runtime.NumCPU()
+	if concurrency < 1 {
+		concurrency = 1
+	}
+
+	sgps, err := common.GetRandomSafePrimesConcurrent(ctx, 1024, 2, concurrency, rand.Reader)
 	if err != nil {
-		b.Fatal(err)
+		t.Fatalf("safe prime generation failed"+": %v", err)
 	}
 
-	params := localPartySaveData[0].LocalPreParams
+	p := sgps[0].Prime()
+	q := sgps[1].Prime()
+	safeP := sgps[0].SafePrime()
+	safeQ := sgps[1].SafePrime()
+	N := new(big.Int).Mul(safeP, safeQ)
 
-	proof := dlnproof.NewDLNProof(
-		params.H1i,
-		params.H2i,
-		params.Alpha,
-		params.P,
-		params.Q,
-		params.NTildei,
-		rand.Reader,
-	)
+	modN := common.ModInt(N)
+	pMulQ := new(big.Int).Mul(p, q)
+	modPQ := common.ModInt(pMulQ)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		proof.Verify(params.H1i, params.H2i, params.NTildei)
-	}
-}
+	f := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	h1 := modN.Mul(f, f)
 
-func BenchmarkDlnVerifier_VerifyProof1(b *testing.B) {
-	preParams, proof := prepareProofB(b)
-	message := &KGRound1Message{
-		Dlnproof_1: proof,
+	alpha := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	alphaModPQ := new(big.Int).Mod(alpha, pMulQ)
+	beta := modPQ.ModInverse(alphaModPQ)
+	if beta == nil {
+		t.Fatal("alpha modular inverse failed")
 	}
 
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
+	h2 := modN.Exp(h1, alpha)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		resultChan := make(chan bool)
-		verifier.VerifyDLNProof1(message, preParams.H1i, preParams.H2i, preParams.NTildei, func(result bool) {
-			resultChan <- result
-		})
-		<-resultChan
+	return &dlnTestParams{
+		H1:      h1,
+		H2:      h2,
+		Alpha:   alphaModPQ,
+		Beta:    beta,
+		P:       p,
+		Q:       q,
+		N:       N,
+		Session: []byte("dln-verifier-test"),
 	}
 }
 
-func BenchmarkDlnVerifier_VerifyProof2(b *testing.B) {
-	preParams, proof := prepareProofB(b)
-	message := &KGRound1Message{
-		Dlnproof_2: proof,
-	}
-
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		resultChan := make(chan bool)
-		verifier.VerifyDLNProof2(message, preParams.H1i, preParams.H2i, preParams.NTildei, func(result bool) {
-			resultChan <- result
-		})
-		<-resultChan
-	}
+// TestNewDlnProofVerifierZeroConcurrencyPanics verifies that constructing a
+// DlnProofVerifier with concurrency=0 panics, as documented.
+func TestNewDlnProofVerifierZeroConcurrencyPanics(t *testing.T) {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("concurrency=0 must panic")
+			}
+		}()
+		NewDlnProofVerifier(0)
+	}()
 }
 
-func TestVerifyDLNProof1_Success(t *testing.T) {
-	preParams, proof := prepareProofT(t)
-	message := &KGRound1Message{
-		Dlnproof_1: proof,
-	}
-
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
-
-	resultChan := make(chan bool)
-
-	verifier.VerifyDLNProof1(message, preParams.H1i, preParams.H2i, preParams.NTildei, func(result bool) {
-		resultChan <- result
-	})
-
-	success := <-resultChan
-	if !success {
-		t.Fatal("expected positive verification")
-	}
-}
-
-func TestVerifyDLNProof1_MalformedMessage(t *testing.T) {
-	preParams, proof := prepareProofT(t)
-	message := &KGRound1Message{
-		Dlnproof_1: proof[:len(proof)-1], // truncate
-	}
-
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
-
-	resultChan := make(chan bool)
-
-	verifier.VerifyDLNProof1(message, preParams.H1i, preParams.H2i, preParams.NTildei, func(result bool) {
-		resultChan <- result
-	})
-
-	success := <-resultChan
-	if success {
-		t.Fatal("expected negative verification")
-	}
-}
-
-func TestVerifyDLNProof1_IncorrectProof(t *testing.T) {
-	preParams, proof := prepareProofT(t)
-	message := &KGRound1Message{
-		Dlnproof_1: proof,
-	}
-
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
-
-	resultChan := make(chan bool)
-
-	wrongH1i := preParams.H1i.Sub(preParams.H1i, big.NewInt(1))
-	verifier.VerifyDLNProof1(message, wrongH1i, preParams.H2i, preParams.NTildei, func(result bool) {
-		resultChan <- result
-	})
-
-	success := <-resultChan
-	if success {
-		t.Fatal("expected negative verification")
-	}
-}
-
-func TestVerifyDLNProof2_Success(t *testing.T) {
-	preParams, proof := prepareProofT(t)
-	message := &KGRound1Message{
-		Dlnproof_2: proof,
-	}
-
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
-
-	resultChan := make(chan bool)
-
-	verifier.VerifyDLNProof2(message, preParams.H1i, preParams.H2i, preParams.NTildei, func(result bool) {
-		resultChan <- result
-	})
-
-	success := <-resultChan
-	if !success {
-		t.Fatal("expected positive verification")
-	}
-}
-
-func TestVerifyDLNProof2_MalformedMessage(t *testing.T) {
-	preParams, proof := prepareProofT(t)
-	message := &KGRound1Message{
-		Dlnproof_2: proof[:len(proof)-1], // truncate
-	}
-
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
-
-	resultChan := make(chan bool)
-
-	verifier.VerifyDLNProof2(message, preParams.H1i, preParams.H2i, preParams.NTildei, func(result bool) {
-		resultChan <- result
-	})
-
-	success := <-resultChan
-	if success {
-		t.Fatal("expected negative verification")
-	}
-}
-
-func TestVerifyDLNProof2_IncorrectProof(t *testing.T) {
-	preParams, proof := prepareProofT(t)
-	message := &KGRound1Message{
-		Dlnproof_2: proof,
-	}
-
-	verifier := NewDlnProofVerifier(runtime.GOMAXPROCS(0))
-
-	resultChan := make(chan bool)
-
-	wrongH2i := preParams.H2i.Add(preParams.H2i, big.NewInt(1))
-	verifier.VerifyDLNProof2(message, preParams.H1i, wrongH2i, preParams.NTildei, func(result bool) {
-		resultChan <- result
-	})
-
-	success := <-resultChan
-	if success {
-		t.Fatal("expected negative verification")
-	}
-}
-
-func prepareProofT(t *testing.T) (*LocalPreParams, [][]byte) {
-	preParams, serialized, err := prepareProof()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return preParams, serialized
-}
-
-func prepareProofB(b *testing.B) (*LocalPreParams, [][]byte) {
-	preParams, serialized, err := prepareProof()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	return preParams, serialized
-}
-
-func prepareProof() (*LocalPreParams, [][]byte, error) {
-	localPartySaveData, _, err := LoadKeygenTestFixtures(1)
-	if err != nil {
-		return nil, [][]byte{}, err
-	}
-
-	preParams := localPartySaveData[0].LocalPreParams
-
-	proof := dlnproof.NewDLNProof(
-		preParams.H1i,
-		preParams.H2i,
-		preParams.Alpha,
-		preParams.P,
-		preParams.Q,
-		preParams.NTildei,
-		rand.Reader,
-	)
-
-	serialized, err := proof.Serialize()
-	if err != nil {
-		if err != nil {
-			return nil, [][]byte{}, err
+// TestNewDlnProofVerifierValidConcurrency verifies that concurrency values
+// 1 and greater succeed without panic.
+func TestNewDlnProofVerifierValidConcurrency(t *testing.T) {
+	for _, c := range []int{1, 2, 4, 128} {
+		dpv := NewDlnProofVerifier(c)
+		if dpv == nil {
+			t.Fatalf("concurrency=%d should create valid verifier", c)
 		}
 	}
+}
 
-	return &preParams, serialized, nil
+// TestVerifyDLNProofSuccess creates a real DLN proof from safe-prime
+// parameters and verifies that VerifyDLNProof calls onDone(true).
+func TestVerifyDLNProofSuccess(t *testing.T) {
+	params := generateDLNTestParams(t)
+	proof := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	dpv := NewDlnProofVerifier(1)
+	var result atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+	dpv.VerifyDLNProof(proof, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+		result.Store(ok)
+		wg.Done()
+	})
+	wg.Wait()
+	if !result.Load() {
+		t.Fatal("valid proof must pass verification")
+	}
+}
+
+// TestVerifyDLNProofIncorrectH1 creates a valid proof then verifies with a
+// tampered H1 value, expecting onDone(false).
+func TestVerifyDLNProofIncorrectH1(t *testing.T) {
+	params := generateDLNTestParams(t)
+	proof := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	// Tamper: H1 + 2 (still odd, still in range, but wrong)
+	badH1 := new(big.Int).Add(params.H1, big.NewInt(2))
+
+	dpv := NewDlnProofVerifier(1)
+	var result atomic.Bool
+	result.Store(true) // pre-set to true to detect false negative
+	var wg sync.WaitGroup
+	wg.Add(1)
+	dpv.VerifyDLNProof(proof, params.Session, badH1, params.H2, params.N, func(ok bool) {
+		result.Store(ok)
+		wg.Done()
+	})
+	wg.Wait()
+	if result.Load() {
+		t.Fatal("tampered H1 must cause verification failure")
+	}
+}
+
+// TestVerifyDLNProofIncorrectH2 creates a valid proof then verifies with a
+// tampered H2 value, expecting onDone(false).
+func TestVerifyDLNProofIncorrectH2(t *testing.T) {
+	params := generateDLNTestParams(t)
+	proof := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	// Tamper: H2 + 2
+	badH2 := new(big.Int).Add(params.H2, big.NewInt(2))
+
+	dpv := NewDlnProofVerifier(1)
+	var result atomic.Bool
+	result.Store(true)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	dpv.VerifyDLNProof(proof, params.Session, params.H1, badH2, params.N, func(ok bool) {
+		result.Store(ok)
+		wg.Done()
+	})
+	wg.Wait()
+	if result.Load() {
+		t.Fatal("tampered H2 must cause verification failure")
+	}
+}
+
+// TestVerifyDLNProofWrongSession creates a proof with one session ID and
+// verifies with a different one, expecting onDone(false).  This exercises
+// the SSID domain-separation fork (SHA512_256i_TAGGED with Session).
+func TestVerifyDLNProofWrongSession(t *testing.T) {
+	params := generateDLNTestParams(t)
+	proof := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	wrongSession := []byte("wrong-session-id")
+
+	dpv := NewDlnProofVerifier(1)
+	var result atomic.Bool
+	result.Store(true)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	dpv.VerifyDLNProof(proof, wrongSession, params.H1, params.H2, params.N, func(ok bool) {
+		result.Store(ok)
+		wg.Done()
+	})
+	wg.Wait()
+	if result.Load() {
+		t.Fatal("wrong session must cause verification failure")
+	}
+}
+
+// TestVerifyDLNProofNilProof passes a nil proof pointer and verifies that
+// onDone(false) is called (SNARK mode path).
+func TestVerifyDLNProofNilProof(t *testing.T) {
+	dpv := NewDlnProofVerifier(1)
+	var result atomic.Bool
+	result.Store(true)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	dpv.VerifyDLNProof(nil, []byte("session"), big.NewInt(3), big.NewInt(5), big.NewInt(15), func(ok bool) {
+		result.Store(ok)
+		wg.Done()
+	})
+	wg.Wait()
+	if result.Load() {
+		t.Fatal("nil proof must call onDone(false)")
+	}
+}
+
+// TestVerifyDLNProofNilProofCallbackInvoked ensures that with a nil proof the
+// callback is always invoked exactly once (no deadlock, no double-call).
+func TestVerifyDLNProofNilProofCallbackInvoked(t *testing.T) {
+	dpv := NewDlnProofVerifier(2)
+	var count atomic.Int32
+	var wg sync.WaitGroup
+
+	const iterations = 10
+	wg.Add(iterations)
+	for i := 0; i < iterations; i++ {
+		dpv.VerifyDLNProof(nil, []byte("s"), big.NewInt(3), big.NewInt(5), big.NewInt(15), func(ok bool) {
+			if ok {
+				t.Fatal("expected false")
+			}
+			count.Add(1)
+			wg.Done()
+		})
+	}
+	wg.Wait()
+	if !reflect.DeepEqual(int32(iterations), count.Load()) {
+		t.Fatalf("callback must be invoked exactly once per call")
+	}
+}
+
+// TestVerifyDLNProofConcurrencyBound launches more verifications than the
+// concurrency limit and verifies that all complete successfully.  This
+// exercises the semaphore: with concurrency=2 and 20 verifications, the
+// goroutines must queue on the semaphore.
+func TestVerifyDLNProofConcurrencyBound(t *testing.T) {
+	params := generateDLNTestParams(t)
+	proof := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	const concurrency = 2
+	const numVerifications = 20
+
+	dpv := NewDlnProofVerifier(concurrency)
+	var successCount atomic.Int32
+	var failCount atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(numVerifications)
+
+	for i := 0; i < numVerifications; i++ {
+		dpv.VerifyDLNProof(proof, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+			if ok {
+				successCount.Add(1)
+			} else {
+				failCount.Add(1)
+			}
+			wg.Done()
+		})
+	}
+
+	wg.Wait()
+	if !reflect.DeepEqual(int32(numVerifications), successCount.Load()) {
+		t.Fatalf("all %d verifications must succeed", numVerifications)
+	}
+	if !reflect.DeepEqual(int32(0), failCount.Load()) {
+		t.Fatalf("no verifications should fail")
+	}
+}
+
+// TestVerifyDLNProofConcurrencyBoundMixed launches a mix of valid and nil
+// proofs beyond the concurrency limit to verify that the semaphore properly
+// serializes work and all callbacks fire correctly.
+func TestVerifyDLNProofConcurrencyBoundMixed(t *testing.T) {
+	params := generateDLNTestParams(t)
+	proof := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	const concurrency = 3
+	const numValid = 10
+	const numNil = 10
+	const total = numValid + numNil
+
+	dpv := NewDlnProofVerifier(concurrency)
+	var successCount atomic.Int32
+	var failCount atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(total)
+
+	// Interleave valid and nil proofs.
+	for i := 0; i < total; i++ {
+		var p *dlnproof.Proof
+		if i%2 == 0 {
+			p = proof
+		}
+		dpv.VerifyDLNProof(p, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+			if ok {
+				successCount.Add(1)
+			} else {
+				failCount.Add(1)
+			}
+			wg.Done()
+		})
+	}
+
+	wg.Wait()
+	if !reflect.DeepEqual(int32(numValid), successCount.Load()) {
+		t.Fatalf("valid proofs must succeed")
+	}
+	if !reflect.DeepEqual(int32(numNil), failCount.Load()) {
+		t.Fatalf("nil proofs must fail")
+	}
+}
+
+// TestVerifyDLNProofSemaphoreReleasedOnNilProof verifies that the semaphore
+// slot is released even when the proof is nil.  If it were not released,
+// subsequent verifications would deadlock.
+func TestVerifyDLNProofSemaphoreReleasedOnNilProof(t *testing.T) {
+	// concurrency=1: if the semaphore is not released after nil proof,
+	// the second call will block forever.
+	dpv := NewDlnProofVerifier(1)
+
+	done := make(chan struct{})
+	go func() {
+		var wg sync.WaitGroup
+		// First: nil proof
+		wg.Add(1)
+		dpv.VerifyDLNProof(nil, nil, nil, nil, nil, func(bool) {
+			wg.Done()
+		})
+		wg.Wait()
+
+		// Second: also nil — should not deadlock
+		wg.Add(1)
+		dpv.VerifyDLNProof(nil, nil, nil, nil, nil, func(bool) {
+			wg.Done()
+		})
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// success
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: semaphore not released after nil proof")
+	}
+}
+
+// TestVerifyDLNProofSwappedH1H2 verifies that swapping H1 and H2 at
+// verification time causes failure.  The proof is for (H1, H2) but we
+// verify with (H2, H1).
+func TestVerifyDLNProofSwappedH1H2(t *testing.T) {
+	params := generateDLNTestParams(t)
+	proof := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	dpv := NewDlnProofVerifier(1)
+	var result atomic.Bool
+	result.Store(true)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	// Swap H1 and H2
+	dpv.VerifyDLNProof(proof, params.Session, params.H2, params.H1, params.N, func(ok bool) {
+		result.Store(ok)
+		wg.Done()
+	})
+	wg.Wait()
+	if result.Load() {
+		t.Fatal("swapped H1/H2 must cause verification failure")
+	}
+}
+
+// TestVerifyDLNProofBothProofDirections mirrors the Round 1 pattern where
+// two DLN proofs are created: one for (H1, H2, Alpha) and one for
+// (H2, H1, Beta).  Both must verify with the correct parameters.
+func TestVerifyDLNProofBothProofDirections(t *testing.T) {
+	params := generateDLNTestParams(t)
+
+	// DLNProof1: proves knowledge of Alpha such that H2 = H1^Alpha mod N
+	proof1 := dlnproof.NewDLNProof(
+		params.Session, params.H1, params.H2,
+		params.Alpha, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	// DLNProof2: proves knowledge of Beta such that H1 = H2^Beta mod N
+	proof2 := dlnproof.NewDLNProof(
+		params.Session, params.H2, params.H1,
+		params.Beta, params.P, params.Q, params.N,
+		rand.Reader,
+	)
+	if proof1 == nil {
+		t.Fatal("expected non-nil")
+	}
+	if proof2 == nil {
+		t.Fatal("expected non-nil")
+	}
+
+	dpv := NewDlnProofVerifier(2)
+
+	var result1, result2 atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(2)
+	dpv.VerifyDLNProof(proof1, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+		result1.Store(ok)
+		wg.Done()
+	})
+	dpv.VerifyDLNProof(proof2, params.Session, params.H2, params.H1, params.N, func(ok bool) {
+		result2.Store(ok)
+		wg.Done()
+	})
+	wg.Wait()
+	if !result1.Load() {
+		t.Fatal("proof1 (H1->H2, Alpha) must verify")
+	}
+	if !result2.Load() {
+		t.Fatal("proof2 (H2->H1, Beta) must verify")
+	}
 }

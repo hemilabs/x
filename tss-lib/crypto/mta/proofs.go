@@ -1,8 +1,7 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package mta
 
@@ -13,16 +12,18 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 const (
 	ProofBobBytesParts   = 10
 	ProofBobWCBytesParts = 12
 )
+
+var zero = big.NewInt(0)
 
 type (
 	ProofBob struct {
@@ -37,6 +38,7 @@ type (
 
 // ProveBobWC implements Bob's proof both with or without check "ProveMtawc_Bob" and "ProveMta_Bob" used in the MtA protocol from GG18Spec (9) Figs. 10 & 11.
 // an absent `X` generates the proof without the X consistency check X = g^x
+// ProveBobWC implements Bob's proof. Session provides SSID domain separation (replay prevention).
 func ProveBobWC(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2, x, y, r *big.Int, X *crypto.ECPoint, rand io.Reader) (*ProofBobWC, error) {
 	if pk == nil || NTilde == nil || h1 == nil || h2 == nil || c1 == nil || c2 == nil || x == nil || y == nil || r == nil {
 		return nil, errors.New("ProveBob() received a nil argument")
@@ -191,7 +193,42 @@ func ProofBobFromBytes(bzs [][]byte) (*ProofBob, error) {
 // ProveBobWC.Verify implements verification of Bob's proof with check "VerifyMtawc_Bob" used in the MtA protocol from GG18Spec (9) Fig. 10.
 // an absent `X` verifies a proof generated without the X consistency check X = g^x
 func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2 *big.Int, X *crypto.ECPoint) bool {
+	if pf == nil || pf.ProofBob == nil {
+		return false
+	}
 	if pk == nil || NTilde == nil || h1 == nil || h2 == nil || c1 == nil || c2 == nil {
+		return false
+	}
+	// [FORK] Reject degenerate Pedersen parameters: h1=1 or h2=1 eliminates
+	// binding or hiding, making the range proof unsound. Upstream does not check.
+	one := big.NewInt(1)
+	if h1.Cmp(one) == 0 || h2.Cmp(one) == 0 {
+		return false
+	}
+
+	// [FORK] Ciphertexts c1, c2 must be coprime to N (i.e. valid Paillier ciphertexts).
+	// A malicious ciphertext sharing a factor with N reveals N's factorization.
+	// Upstream does not check.
+	if new(big.Int).GCD(nil, nil, c1, pk.N).Cmp(one) != 0 {
+		return false
+	}
+	if new(big.Int).GCD(nil, nil, c2, pk.N).Cmp(one) != 0 {
+		return false
+	}
+
+	// [FORK] NTilde (Pedersen commitment modulus) must be sufficiently large for soundness.
+	// Upstream does not check NTilde size in the proof verifier (only at keygen round 2).
+	// Defense-in-depth: proof verifiers should be self-contained against untrusted parameters.
+	if NTilde.BitLen() < 2048 {
+		return false
+	}
+
+	// [FORK] Paillier modulus must also be sufficiently large. Upstream does not check
+	// pk.N size in the proof verifier. A malicious party could use a small Paillier key
+	// to break range proof soundness, allowing extraction of the discrete log from the
+	// ciphertext. Defense-in-depth: keygen round 2 validates exact 2048 bits, but the
+	// proof verifier should not rely on that.
+	if pk.N.BitLen() < 2048 {
 		return false
 	}
 
@@ -201,6 +238,9 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	q7 := new(big.Int).Mul(q3, q3) // q^6
 	q7 = new(big.Int).Mul(q7, q)   // q^7
 
+	// Interval and coprimality checks on proof elements (present in both upstream and fork).
+	// Without them, a malicious prover can submit out-of-range or degenerate elements
+	// that cause modular arithmetic failures or weaken proof soundness.
 	if !common.IsInInterval(pf.Z, NTilde) {
 		return false
 	}
@@ -236,12 +276,17 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	}
 
 	gcd := big.NewInt(0)
+	// Defense-in-depth: S==0 is caught by the GCD check below (GCD(0,N)=N!=1),
+	// but an explicit zero-check makes the rejection reason unambiguous.
 	if pf.S.Cmp(zero) == 0 {
 		return false
 	}
 	if gcd.GCD(nil, nil, pf.S, pk.N).Cmp(one) != 0 {
 		return false
 	}
+	// Defense-in-depth: V==0 is caught by GCD(V,N^2)==1 on line 267, and
+	// GCD(V,N)!=1 below is implied by GCD(V,N^2)==1. Both retained for
+	// explicit rejection at the Paillier-N boundary, not just N^2.
 	if pf.V.Cmp(zero) == 0 {
 		return false
 	}
@@ -268,6 +313,24 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	if pf.T1.Cmp(q7) > 0 {
 		return false
 	}
+	// [FORK] Defense-in-depth: s2 and t2 upper bounds.
+	// s2 = e·rho + rhoPrm where e ∈ [0, q), rho ∈ [1, q·NTilde), rhoPrm ∈ [1, q³·NTilde).
+	// t2 = e·sigma + tau where e ∈ [0, q), sigma ∈ [1, q·NTilde), tau ∈ [1, q³·NTilde).
+	// Both have the same maximum honest value:
+	//   (q-1)(q·NTilde - 1) + (q³·NTilde - 1) = q³·NTilde + q²·NTilde - q·NTilde - q
+	//   < 2·q³·NTilde (since q² < q³ for q > 1).
+	// This bound has EXACTLY ZERO false-rejection probability for honest provers.
+	// Without it, a malicious prover could submit arbitrarily large s2/t2 values,
+	// forcing the verifier to compute h2^s2 and h2^t2 with unbounded exponents,
+	// enabling DoS via expensive modular exponentiation. Upstream does not check.
+	q3NTilde := new(big.Int).Mul(q3, NTilde)
+	s2t2Bound := new(big.Int).Lsh(q3NTilde, 1) // 2 · q³ · NTilde
+	if pf.S2.Cmp(s2t2Bound) > 0 {
+		return false
+	}
+	if pf.T2.Cmp(s2t2Bound) > 0 {
+		return false
+	}
 
 	// 1-2. e'
 	var e *big.Int
@@ -290,6 +353,13 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	// 4. runs only in the "with check" mode from Fig. 10
 	if X != nil {
 		s1ModQ := new(big.Int).Mod(pf.S1, ec.Params().N)
+		// [FORK] Guard s1ModQ=0 and e=0 before EC operations to prevent identity-point panic.
+		if s1ModQ.Sign() == 0 {
+			return false
+		}
+		if e.Sign() == 0 {
+			return false
+		}
 		gS1 := crypto.ScalarBaseMult(ec, s1ModQ)
 		xEU, err := X.ScalarMult(e).Add(pf.U)
 		if err != nil || !gS1.Equals(xEU) {

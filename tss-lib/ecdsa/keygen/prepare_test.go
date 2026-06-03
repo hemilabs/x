@@ -10,17 +10,21 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestGeneratePreParamsTimeout(t *testing.T) {
 	start := time.Now()
 	preParams, err := GeneratePreParams(5*time.Millisecond, 1)
 
-	assert.Nil(t, preParams)
-	assert.NotNil(t, err)
-	assert.WithinDuration(t, start, time.Now(), 1*time.Second)
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("expected non-nil")
+	}
+	if diff := time.Since(start); diff < 0 || diff > 1*time.Second {
+		t.Fatalf("duration %v exceeds %v", diff, 1*time.Second)
+	}
 }
 
 func TestGeneratePreParamsWithContextTimeout(t *testing.T) {
@@ -30,9 +34,15 @@ func TestGeneratePreParamsWithContextTimeout(t *testing.T) {
 	start := time.Now()
 	preParams, err := GeneratePreParamsWithContext(ctx, 1)
 
-	assert.Nil(t, preParams)
-	assert.NotNil(t, err)
-	assert.WithinDuration(t, start, time.Now(), 1*time.Second)
+	if preParams != nil {
+		t.Fatalf("expected nil, got %v", preParams)
+	}
+	if err == nil {
+		t.Fatal("expected non-nil")
+	}
+	if diff := time.Since(start); diff < 0 || diff > 1*time.Second {
+		t.Fatalf("duration %v exceeds %v", diff, 1*time.Second)
+	}
 }
 
 func TestGenerateWithContext(t *testing.T) {
@@ -40,14 +50,34 @@ func TestGenerateWithContext(t *testing.T) {
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContext(ctx, 1)
-	assert.NotNil(t, preParams)
-	assert.Nil(t, err)
-	assert.NotNil(t, preParams.PaillierSK)
-	assert.NotNil(t, preParams.NTildei)
-	assert.NotNil(t, preParams.H1i)
-	assert.NotNil(t, preParams.H2i)
-	assert.NotNil(t, preParams.Alpha)
-	assert.NotNil(t, preParams.Beta)
-	assert.NotNil(t, preParams.P)
-	assert.NotNil(t, preParams.Q)
+	if preParams == nil {
+		t.Fatal("expected non-nil")
+	}
+	if err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+	if preParams.PaillierSK == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.NTildei == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.H1i == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.H2i == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.Alpha == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.Beta == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.P == nil {
+		t.Fatal("expected non-nil")
+	}
+	if preParams.Q == nil {
+		t.Fatal("expected non-nil")
+	}
 }

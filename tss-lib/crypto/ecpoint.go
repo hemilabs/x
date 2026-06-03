@@ -1,8 +1,7 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package crypto
 
@@ -18,7 +17,7 @@ import (
 
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
 // ECPoint convenience helper
@@ -55,13 +54,27 @@ func (p *ECPoint) Y() *big.Int {
 }
 
 func (p *ECPoint) Add(p1 *ECPoint) (*ECPoint, error) {
+	// [FORK] Upstream does not validate p1 before calling elliptic.Curve.Add. A nil p1
+	// causes a nil-pointer panic, and mismatched curves silently miscompute. Added nil
+	// check and curve mismatch guard, and wrapped the result in NewECPoint for validation.
+	if p1 == nil {
+		return nil, fmt.Errorf("ECPoint.Add: p1 is nil")
+	}
+	if p.curve != p1.curve {
+		return nil, fmt.Errorf("ECPoint.Add: cannot add points on different curves")
+	}
 	x, y := p.curve.Add(p.X(), p.Y(), p1.X(), p1.Y())
 	return NewECPoint(p.curve, x, y)
 }
 
 func (p *ECPoint) ScalarMult(k *big.Int) *ECPoint {
 	x, y := p.curve.ScalarMult(p.X(), p.Y(), k.Bytes())
-	newP, err := NewECPoint(p.curve, x, y) // it must be on the curve, no need to check.
+	// [FORK] Restored upstream panic behavior. Identity results (from zero scalar or
+	// group-order multiples) cause NewECPoint to reject (0,0) and panic. This is
+	// intentional: ~30 of 34 call sites do not check IsIdentity(), so silently
+	// returning identity would propagate bad math through the protocol. Pre-call
+	// guards at each site ensure the panic is unreachable in normal operation.
+	newP, err := NewECPoint(p.curve, x, y)
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
 	}
@@ -91,6 +104,28 @@ func (p *ECPoint) Equals(p2 *ECPoint) bool {
 	return p.X().Cmp(p2.X()) == 0 && p.Y().Cmp(p2.Y()) == 0
 }
 
+// [FORK] IsIdentity returns true if this point is the identity element (point at infinity).
+// On Weierstrass curves (secp256k1, P-256, etc.), Go represents identity as (0, 0).
+// On Edwards curves (edwards25519), the identity is (0, 1).
+// New method added to support callers that need to detect identity results from
+// ScalarMult/ScalarBaseMult.
+func (p *ECPoint) IsIdentity() bool {
+	if p == nil {
+		return true
+	}
+	if p.coords[0].Sign() != 0 {
+		return false // x != 0 means definitely not identity on any curve
+	}
+	// x == 0: check y
+	if p.coords[1].Sign() == 0 {
+		return true // (0, 0) — Weierstrass identity
+	}
+	if p.coords[1].Cmp(big.NewInt(1)) == 0 {
+		return true // (0, 1) — Edwards identity
+	}
+	return false
+}
+
 func (p *ECPoint) SetCurve(curve elliptic.Curve) *ECPoint {
 	p.curve = curve
 	return p
@@ -101,12 +136,28 @@ func (p *ECPoint) ValidateBasic() bool {
 }
 
 func (p *ECPoint) EightInvEight() *ECPoint {
-	return p.ScalarMult(eight).ScalarMult(eightInv)
+	// [FORK] Use raw curve.ScalarMult for the *8 step to detect torsion points without
+	// panicking. If p*8 = identity, the point is small-order; return identity directly.
+	// Callers' subsequent crypto checks (Schnorr verify, VSS verify) will reject it.
+	// CRITICAL: On Edwards25519 the identity is (0, 1), NOT (0, 0). Must use IsIdentity()
+	// — a raw x==0 && y==0 check would MISS the Edwards identity and the subsequent
+	// ScalarMult(eightInv) would panic on the identity input.
+	x, y := p.curve.ScalarMult(p.X(), p.Y(), eight.Bytes())
+	tmp := NewECPointNoCurveCheck(p.curve, x, y)
+	if tmp.IsIdentity() {
+		return tmp
+	}
+	cleared, err := NewECPoint(p.curve, x, y)
+	if err != nil {
+		panic(fmt.Errorf("EightInvEight: intermediate point not on curve: %s", err.Error()))
+	}
+	return cleared.ScalarMult(eightInv)
 }
 
 func ScalarBaseMult(curve elliptic.Curve, k *big.Int) *ECPoint {
 	x, y := curve.ScalarBaseMult(k.Bytes())
-	p, err := NewECPoint(curve, x, y) // it must be on the curve, no need to check.
+	// [FORK] Restored upstream panic behavior. See ScalarMult comment for rationale.
+	p, err := NewECPoint(curve, x, y)
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
 	}
@@ -145,12 +196,12 @@ func UnFlattenECPoints(curve elliptic.Curve, in []*big.Int, noCurveCheck ...bool
 	unFlat := make([]*ECPoint, len(in)/2)
 	for i, j := 0, 0; i < len(in); i, j = i+2, j+1 {
 		if len(noCurveCheck) == 0 || !noCurveCheck[0] {
-			unFlat[j], err = NewECPoint(curve, in[i], in[i+1])
+			unFlat[j], err = NewECPoint(curve, in[i], in[i+1]) //nolint:gosec // i+1 safe: len(in) is even, i increments by 2
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			unFlat[j] = NewECPointNoCurveCheck(curve, in[i], in[i+1])
+			unFlat[j] = NewECPointNoCurveCheck(curve, in[i], in[i+1]) //nolint:gosec // i+1 safe: len(in) is even, i increments by 2
 		}
 	}
 	for _, point := range unFlat {
@@ -175,12 +226,12 @@ func (p *ECPoint) GobEncode() ([]byte, error) {
 		return nil, err
 	}
 
-	err = binary.Write(buf, binary.LittleEndian, uint32(len(x)))
+	err = binary.Write(buf, binary.LittleEndian, uint32(len(x))) //nolint:gosec // big.Int coord bytes
 	if err != nil {
 		return nil, err
 	}
 	buf.Write(x)
-	err = binary.Write(buf, binary.LittleEndian, uint32(len(y)))
+	err = binary.Write(buf, binary.LittleEndian, uint32(len(y))) //nolint:gosec // big.Int coord bytes
 	if err != nil {
 		return nil, err
 	}
@@ -190,23 +241,32 @@ func (p *ECPoint) GobEncode() ([]byte, error) {
 }
 
 func (p *ECPoint) GobDecode(buf []byte) error {
+	// [FORK] Upstream has no length bound on decoded coordinates, allowing a crafted
+	// payload to allocate arbitrary memory. Cap at 1024 bytes (covers all standard curves).
+	const maxCoordLen = 1024
 	reader := bytes.NewReader(buf)
 	var length uint32
 	if err := binary.Read(reader, binary.LittleEndian, &length); err != nil {
 		return err
 	}
+	if length > maxCoordLen {
+		return fmt.Errorf("gob decode failed: x coordinate length %d exceeds maximum %d", length, maxCoordLen)
+	}
 	x := make([]byte, length)
 	n, err := reader.Read(x)
 	if n != int(length) || err != nil {
-		return fmt.Errorf("gob decode failed: %v", err)
+		return fmt.Errorf("gob decode failed: %w", err)
 	}
 	if err := binary.Read(reader, binary.LittleEndian, &length); err != nil {
 		return err
 	}
+	if length > maxCoordLen {
+		return fmt.Errorf("gob decode failed: y coordinate length %d exceeds maximum %d", length, maxCoordLen)
+	}
 	y := make([]byte, length)
 	n, err = reader.Read(y)
 	if n != int(length) || err != nil {
-		return fmt.Errorf("gob decode failed: %v", err)
+		return fmt.Errorf("gob decode failed: %w", err)
 	}
 
 	X := new(big.Int)

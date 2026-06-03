@@ -1,8 +1,7 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package facproof
 
@@ -13,7 +12,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
+	"github.com/hemilabs/x/tss-lib/v3/common"
 )
 
 const (
@@ -26,13 +25,7 @@ type (
 	}
 )
 
-var (
-	// rangeParameter l limits the bits of p or q to be in [1024-l, 1024+l]
-	rangeParameter = new(big.Int).Lsh(big.NewInt(1), 15)
-	one            = big.NewInt(1)
-)
-
-// NewProof implements prooffac
+// NewProof implements prooffac. Session provides SSID domain separation (replay prevention).
 func NewProof(Session []byte, ec elliptic.Curve, N0, NCap, s, t, N0p, N0q *big.Int, rand io.Reader) (*ProofFac, error) {
 	if ec == nil || N0 == nil || NCap == nil || s == nil || t == nil || N0p == nil || N0q == nil {
 		return nil, errors.New("ProveFac constructor received nil value(s)")
@@ -107,18 +100,36 @@ func NewProofFromBytes(bzs [][]byte) (*ProofFac, error) {
 	if !common.NonEmptyMultiBytes(bzs, ProofFacBytesParts) {
 		return nil, fmt.Errorf("expected %d byte parts to construct ProofFac", ProofFacBytesParts)
 	}
+	// [FORK] V uses sign-magnitude encoding: first byte is 0x00 (positive) or 0x01 (negative).
+	// Upstream uses SetBytes which cannot represent negative V, silently truncating
+	// to |V| and causing verification failures for ~50% of honest proofs.
+	vBz := bzs[10] //nolint:gosec // len(bzs) >= 11 checked above
+	if len(vBz) < 1 {
+		return nil, fmt.Errorf("v field too short for sign-magnitude decoding")
+	}
+	vSign := vBz[0]
+	if vSign != 0x00 && vSign != 0x01 {
+		return nil, fmt.Errorf("invalid V sign byte: 0x%02x", vSign)
+	}
+	vAbs := new(big.Int).SetBytes(vBz[1:])
+	if vSign == 0x01 {
+		if vAbs.Sign() == 0 {
+			return nil, fmt.Errorf("negative zero V encoding is not canonical")
+		}
+		vAbs.Neg(vAbs)
+	}
 	return &ProofFac{
-		P:     new(big.Int).SetBytes(bzs[0]),
-		Q:     new(big.Int).SetBytes(bzs[1]),
-		A:     new(big.Int).SetBytes(bzs[2]),
-		B:     new(big.Int).SetBytes(bzs[3]),
-		T:     new(big.Int).SetBytes(bzs[4]),
-		Sigma: new(big.Int).SetBytes(bzs[5]),
-		Z1:    new(big.Int).SetBytes(bzs[6]),
-		Z2:    new(big.Int).SetBytes(bzs[7]),
-		W1:    new(big.Int).SetBytes(bzs[8]),
-		W2:    new(big.Int).SetBytes(bzs[9]),
-		V:     new(big.Int).SetBytes(bzs[10]),
+		P:     new(big.Int).SetBytes(bzs[0]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Q:     new(big.Int).SetBytes(bzs[1]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		A:     new(big.Int).SetBytes(bzs[2]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		B:     new(big.Int).SetBytes(bzs[3]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		T:     new(big.Int).SetBytes(bzs[4]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Sigma: new(big.Int).SetBytes(bzs[5]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Z1:    new(big.Int).SetBytes(bzs[6]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		Z2:    new(big.Int).SetBytes(bzs[7]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		W1:    new(big.Int).SetBytes(bzs[8]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		W2:    new(big.Int).SetBytes(bzs[9]), //nolint:gosec // guarded by NonEmptyMultiBytes
+		V:     vAbs,
 	}, nil
 }
 
@@ -127,6 +138,16 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 		return false
 	}
 	if N0.Sign() != 1 {
+		return false
+	}
+	// [FORK] Reject undersized moduli — FacProof is only sound when N0 is the
+	// product of two large primes (>= 2048-bit modulus). Upstream does not check.
+	if N0.BitLen() < 2048 {
+		return false
+	}
+	// [FORK] NCap (the Pedersen commitment modulus) must also be sufficiently large.
+	// Upstream does not check.
+	if NCap.BitLen() < 2048 {
 		return false
 	}
 
@@ -173,7 +194,21 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 
 	{
 		R := modNCap.Mul(modNCap.Exp(s, N0), modNCap.Exp(t, pf.Sigma))
-		LHS := modNCap.Mul(modNCap.Exp(pf.Q, pf.Z1), modNCap.Exp(t, pf.V))
+		// [FORK] V can be negative (v = e*(sigma - nu*p) + r). Upstream silently drops the
+		// sign via SetBytes, causing ~50% of honest proofs to fail. We handle negative
+		// exponents explicitly: compute t^(-1) mod NCap then raise to |V|. The nil check
+		// on tInv prevents a panic if t is not invertible mod NCap.
+		var tExpV *big.Int
+		if pf.V.Sign() < 0 {
+			tInv := modNCap.ModInverse(t)
+			if tInv == nil {
+				return false // t not invertible mod NCap
+			}
+			tExpV = modNCap.Exp(tInv, new(big.Int).Abs(pf.V))
+		} else {
+			tExpV = modNCap.Exp(t, pf.V)
+		}
+		LHS := modNCap.Mul(modNCap.Exp(pf.Q, pf.Z1), tExpV)
 		RHS := modNCap.Mul(pf.T, modNCap.Exp(R, e))
 
 		if LHS.Cmp(RHS) != 0 {
@@ -199,6 +234,15 @@ func (pf *ProofFac) ValidateBasic() bool {
 }
 
 func (pf *ProofFac) Bytes() [ProofFacBytesParts][]byte {
+	// [FORK] V can be negative (v = e*(sigma - nu*p) + r). Use sign-magnitude
+	// encoding: prefix 0x00 for non-negative, 0x01 for negative.
+	// Upstream uses big.Int.Bytes() which discards the sign, corrupting negative values.
+	vBytes := pf.V.Bytes()
+	if pf.V.Sign() < 0 {
+		vBytes = append([]byte{0x01}, vBytes...)
+	} else {
+		vBytes = append([]byte{0x00}, vBytes...)
+	}
 	return [...][]byte{
 		pf.P.Bytes(),
 		pf.Q.Bytes(),
@@ -210,6 +254,6 @@ func (pf *ProofFac) Bytes() [ProofFacBytesParts][]byte {
 		pf.Z2.Bytes(),
 		pf.W1.Bytes(),
 		pf.W2.Bytes(),
-		pf.V.Bytes(),
+		vBytes,
 	}
 }

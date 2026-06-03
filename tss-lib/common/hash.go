@@ -1,16 +1,16 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package common
 
 import (
 	"crypto"
-	_ "crypto/sha512"
 	"encoding/binary"
 	"math/big"
+
+	_ "crypto/sha512"
 )
 
 const (
@@ -20,7 +20,6 @@ const (
 // SHA-512/256 is protected against length extension attacks and is more performant than SHA-256 on 64-bit architectures.
 // https://en.wikipedia.org/wiki/Template:Comparison_of_SHA_functions
 func SHA512_256(in ...[]byte) []byte {
-	var data []byte
 	state := crypto.SHA512_256.New()
 	inLen := len(in)
 	if inLen == 0 {
@@ -36,7 +35,7 @@ func SHA512_256(in ...[]byte) []byte {
 		bzSize += len(bz)
 	}
 	dataCap := len(inLenBz) + bzSize + inLen + (inLen * 8)
-	data = make([]byte, 0, dataCap)
+	data := make([]byte, 0, dataCap)
 	data = append(data, inLenBz...)
 	for _, bz := range in {
 		data = append(data, bz...)
@@ -56,7 +55,6 @@ func SHA512_256(in ...[]byte) []byte {
 }
 
 func SHA512_256i(in ...*big.Int) *big.Int {
-	var data []byte
 	state := crypto.SHA512_256.New()
 	inLen := len(in)
 	if inLen == 0 {
@@ -70,11 +68,18 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 	binary.LittleEndian.PutUint64(inLenBz, uint64(inLen))
 	ptrs := make([][]byte, inLen)
 	for i, n := range in {
-		ptrs[i] = n.Bytes()
+		// [FORK] Nil guard: upstream panics on nil big.Int input. Protocol fields
+		// (e.g., optional SSID components) may legitimately be nil; we hash the
+		// encoding of zero instead, matching the behaviour of big.NewInt(0).Bytes().
+		if n == nil {
+			ptrs[i] = zero.Bytes()
+		} else {
+			ptrs[i] = n.Bytes()
+		}
 		bzSize += len(ptrs[i])
 	}
 	dataCap := len(inLenBz) + bzSize + inLen + (inLen * 8)
-	data = make([]byte, 0, dataCap)
+	data := make([]byte, 0, dataCap)
 	data = append(data, inLenBz...)
 	for i := range in {
 		data = append(data, ptrs[i]...)
@@ -93,10 +98,12 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 	return new(big.Int).SetBytes(state.Sum(nil))
 }
 
-// SHA512_256i_TAGGED tagged version of SHA512_256i
+// SHA512_256i_TAGGED implements a tagged hash (double-prefix construction per BIP-340)
+// for SSID domain separation. All proof constructors/verifiers pass Session tags through
+// this function to bind proofs to a specific ceremony session, preventing cross-ceremony
+// replay attacks.
 func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 	tagBz := SHA512_256(tag)
-	var data []byte
 	state := crypto.SHA512_256.New()
 	state.Write(tagBz)
 	state.Write(tagBz)
@@ -112,6 +119,7 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 	binary.LittleEndian.PutUint64(inLenBz, uint64(inLen))
 	ptrs := make([][]byte, inLen)
 	for i, n := range in {
+		// Nil guard (same as SHA512_256i above, present in both upstream and fork).
 		if n == nil {
 			ptrs[i] = zero.Bytes()
 		} else {
@@ -120,7 +128,7 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 		bzSize += len(ptrs[i])
 	}
 	dataCap := len(inLenBz) + bzSize + inLen + (inLen * 8)
-	data = make([]byte, 0, dataCap)
+	data := make([]byte, 0, dataCap)
 	data = append(data, inLenBz...)
 	for i := range in {
 		data = append(data, ptrs[i]...)
@@ -140,12 +148,11 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 }
 
 func SHA512_256iOne(in *big.Int) *big.Int {
-	var data []byte
 	state := crypto.SHA512_256.New()
 	if in == nil {
 		return nil
 	}
-	data = in.Bytes()
+	data := in.Bytes()
 	// n < len(data) or an error will never happen.
 	// see: https://golang.org/pkg/hash/#Hash and https://github.com/golang/go/wiki/Hashing#the-hashhash-interface
 	if _, err := state.Write(data); err != nil {

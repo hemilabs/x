@@ -1,33 +1,19 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package signing
 
 import (
-	"crypto/elliptic"
-	"io"
 	"math/big"
-
-	"github.com/binance-chain/edwards25519"
-
-	"github.com/hemilabs/x/tss-lib/v2/common"
 )
 
 func encodedBytesToBigInt(s *[32]byte) *big.Int {
-	// Use a copy so we don't screw up our original
-	// memory.
 	sCopy := new([32]byte)
-	for i := 0; i < 32; i++ {
-		sCopy[i] = s[i]
-	}
+	copy(sCopy[:], s[:])
 	reverse(sCopy)
-
-	bi := new(big.Int).SetBytes(sCopy[:])
-
-	return bi
+	return new(big.Int).SetBytes(sCopy[:])
 }
 
 func bigIntToEncodedBytes(a *big.Int) *[32]byte {
@@ -35,14 +21,8 @@ func bigIntToEncodedBytes(a *big.Int) *[32]byte {
 	if a == nil {
 		return s
 	}
-
-	// Caveat: a can be longer than 32 bytes.
 	s = copyBytes(a.Bytes())
-
-	// Reverse the byte string --> little endian after
-	// encoding.
 	reverse(s)
-
 	return s
 }
 
@@ -51,37 +31,30 @@ func copyBytes(aB []byte) *[32]byte {
 		return nil
 	}
 	s := new([32]byte)
-
-	// If we have a short byte string, expand
-	// it so that it's long enough.
+	if len(aB) > 32 {
+		panic("copyBytes: input exceeds 32 bytes, would silently truncate")
+	}
 	aBLen := len(aB)
 	if aBLen < 32 {
 		diff := 32 - aBLen
-		for i := 0; i < diff; i++ {
-			aB = append([]byte{0x00}, aB...)
-		}
+		padded := make([]byte, 32)
+		copy(padded[diff:], aB)
+		aB = padded
 	}
-
-	for i := 0; i < 32; i++ {
-		s[i] = aB[i]
-	}
-
+	copy(s[:], aB)
 	return s
 }
 
+// ecPointToEncodedBytes produces the Ed25519-format compressed encoding:
+// y coordinate in little-endian with the sign bit of x in the top bit
+// of byte 31.  The "sign" of x in Ed25519 is x mod 2 (the low bit).
 func ecPointToEncodedBytes(x *big.Int, y *big.Int) *[32]byte {
 	s := bigIntToEncodedBytes(y)
-	xB := bigIntToEncodedBytes(x)
-	xFE := new(edwards25519.FieldElement)
-	edwards25519.FeFromBytes(xFE, xB)
-	isNegative := edwards25519.FeIsNegative(xFE) == 1
-
-	if isNegative {
+	if x.Bit(0) == 1 {
 		s[31] |= (1 << 7)
 	} else {
 		s[31] &^= (1 << 7)
 	}
-
 	return s
 }
 
@@ -91,39 +64,20 @@ func reverse(s *[32]byte) {
 	}
 }
 
-func addExtendedElements(p, q edwards25519.ExtendedGroupElement) edwards25519.ExtendedGroupElement {
-	var r edwards25519.CompletedGroupElement
-	var qCached edwards25519.CachedGroupElement
-	q.ToCached(&qCached)
-	edwards25519.GeAdd(&r, &p, &qCached)
-	var result edwards25519.ExtendedGroupElement
-	r.ToExtended(&result)
-	return result
+// scReduce reduces a 64-byte little-endian scalar mod the curve order.
+func scReduce(in *[64]byte, N *big.Int) *big.Int {
+	// Convert 64-byte LE to big.Int.
+	buf := make([]byte, 64)
+	copy(buf, in[:])
+	for i, j := 0, 63; i < j; i, j = i+1, j-1 {
+		buf[i], buf[j] = buf[j], buf[i]
+	}
+	return new(big.Int).Mod(new(big.Int).SetBytes(buf), N)
 }
 
-func ecPointToExtendedElement(ec elliptic.Curve, x *big.Int, y *big.Int, rand io.Reader) edwards25519.ExtendedGroupElement {
-	encodedXBytes := bigIntToEncodedBytes(x)
-	encodedYBytes := bigIntToEncodedBytes(y)
-
-	z := common.GetRandomPositiveInt(rand, ec.Params().N)
-	encodedZBytes := bigIntToEncodedBytes(z)
-
-	var fx, fy, fxy edwards25519.FieldElement
-	edwards25519.FeFromBytes(&fx, encodedXBytes)
-	edwards25519.FeFromBytes(&fy, encodedYBytes)
-
-	var X, Y, Z, T edwards25519.FieldElement
-	edwards25519.FeFromBytes(&Z, encodedZBytes)
-
-	edwards25519.FeMul(&X, &fx, &Z)
-	edwards25519.FeMul(&Y, &fy, &Z)
-	edwards25519.FeMul(&fxy, &fx, &fy)
-	edwards25519.FeMul(&T, &fxy, &Z)
-
-	return edwards25519.ExtendedGroupElement{
-		X: X,
-		Y: Y,
-		Z: Z,
-		T: T,
-	}
+// scMulAdd computes (a*b + c) mod N.
+func scMulAdd(a, b, c, N *big.Int) *big.Int {
+	ab := new(big.Int).Mul(a, b)
+	ab.Add(ab, c)
+	return ab.Mod(ab, N)
 }

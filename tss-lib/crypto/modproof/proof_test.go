@@ -1,8 +1,7 @@
-// Copyright © 2019-2023 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019-2023 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package modproof_test
 
@@ -11,36 +10,38 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
-	"time"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	. "github.com/hemilabs/x/tss-lib/v2/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v2/ecdsa/keygen"
-	"github.com/stretchr/testify/assert"
+	"github.com/hemilabs/x/tss-lib/v3/common"
+	. "github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss-lib/v3/testutil"
 )
 
 var Session = []byte("session")
 
 func TestMod(test *testing.T) {
-	preParams, err := keygen.GeneratePreParams(time.Minute*10, 8)
-	assert.NoError(test, err)
+	pps := testutil.LoadPreParams(test, 1)
+	preParams := &pps[0]
 
 	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
 
 	proof, err := NewProof(Session, N, P, Q, rand.Reader)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	proofBzs := proof.Bytes()
 	proof, err = NewProofFromBytes(proofBzs[:])
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 
 	ok := proof.Verify(Session, N)
-	assert.True(test, ok, "proof must verify")
+	if !ok {
+		test.Fatal("proof must verify")
+	}
 }
 
-var (
-	one = big.NewInt(1)
-)
+var one = big.NewInt(1)
 
 func NewHackedProof(Session []byte, N, P *big.Int, Q []*big.Int) (*ProofMod, error) {
 	Phi := new(big.Int).Sub(P, one)
@@ -106,6 +107,51 @@ func mustSetString(s string) *big.Int {
 	return i
 }
 
+func TestModProofRejectsSmallN(test *testing.T) {
+	// Generate valid 2048-bit parameters and a valid proof.
+	pps := testutil.LoadPreParams(test, 1)
+	preParams := &pps[0]
+
+	P, Q, N := preParams.PaillierSK.P, preParams.PaillierSK.Q, preParams.PaillierSK.N
+
+	proof, err := NewProof(Session, N, P, Q, rand.Reader)
+	if err != nil {
+		test.Fatal(err)
+	}
+
+	// Sanity: the proof must pass with the proper N (>= 2048 bits).
+	ok := proof.Verify(Session, N)
+	if !ok {
+		test.Fatal("proof must verify with proper 2048-bit N")
+	}
+
+	// Build a small N (1024-bit) from two 512-bit primes.
+	smallP, err := rand.Prime(rand.Reader, 512)
+	if err != nil {
+		test.Fatal(err)
+	}
+	smallQ, err := rand.Prime(rand.Reader, 512)
+	if err != nil {
+		test.Fatal(err)
+	}
+	smallN := new(big.Int).Mul(smallP, smallQ)
+	if !(smallN.BitLen() < 2048) {
+		test.Fatal("smallN must be less than 2048 bits")
+	}
+
+	// The [FORK] BitLen < 2048 check in Verify must reject smallN.
+	ok = proof.Verify(Session, smallN)
+	if ok {
+		test.Fatal("proof must be rejected when N.BitLen() < 2048")
+	}
+
+	// nil N must also be rejected.
+	ok = proof.Verify(Session, nil)
+	if ok {
+		test.Fatal("proof must be rejected when N is nil")
+	}
+}
+
 func TestAttackMod(test *testing.T) {
 	fmt.Printf("Starting TestAttackMod\n")
 
@@ -129,7 +175,11 @@ func TestAttackMod(test *testing.T) {
 		N.Mul(N, q)
 	}
 	proof, err := NewHackedProof(Session, N, P, Q)
-	assert.NoError(test, err)
+	if err != nil {
+		test.Fatal(err)
+	}
 	ok := proof.Verify(Session, N)
-	assert.Falsef(test, ok, "false proof should not verify")
+	if ok {
+		test.Fatalf("false proof should not verify")
+	}
 }

@@ -1,0 +1,74 @@
+version: "2"
+run:
+  tests: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  enable:
+    - "asasalint" # Check for pass []any as any in variadic func(...any).
+    - "dupword" # Checks for duplicate words in the source code.
+    - "errcheck" # Checks for unchecked errors.
+    - "errorlint" # Verifies errors are properly wrapped.
+    - "errname" # Checks that sentinel errors are prefixed with the Err.
+    - "gocheckcompilerdirectives" # Checks that go compiler directives are valid.
+    - "gochecksumtype" # Run exhaustiveness checks on Go "sum types".
+    - "gomoddirectives" # Manages 'replace', 'retract' and 'excludes' directives.
+    - "gosmopolitan" # Report certain i18n/l10n anti-patterns.
+    - "govet" # Runs go vet.
+    - "ineffassign" # Detects when assignments to variables are not used.
+    - "makezero" # Finds slice declarations with non-zero initial length.
+    - "misspell" # Finds common typing mistakes.
+    - "nilerr" # Finds code that returns nil even if it checks error is not nil.
+    - "nolintlint" # Reports ill-formed or insufficient nolint directives.
+    - "prealloc" # Finds slice declarations that could be pre-allocated.
+    - "predeclared" # Find code that shadows predeclared identifiers.
+    - "staticcheck" # Runs staticcheck.
+    - "unconvert" # Checks for unnecessary type conversions.
+    - "usestdlibvars" # Detects the possibility to use stdlib vars/constants.
+    - "usetesting" # Reports use of functions with replacements in testing.
+    - "unused" # Checks for unused constants, variables, functions, types.
+    - "whitespace" # Checks for unnecessary newlines.
+  settings:
+    gomoddirectives:
+      replace-local: true # tss-lib fork not yet pushed.
+    nolintlint:
+      require-explanation: true
+  exclusions:
+    generated: "strict"
+    presets:
+      - "comments"
+      - "common-false-positives"
+      - "legacy"
+      - "std-error-handling"
+    rules:
+      - linters: [ "staticcheck" ]
+        text: "QF1001:" # "could apply De Morgan's law"
+      - linters: [ "staticcheck" ]
+        text: "QF1007:" # "could merge conditional assignment"
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*elliptic\\." # tss-lib requires raw curve arithmetic (Add, ScalarMult, etc.)
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.Add has been deprecated" # elliptic.Curve.Add
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.ScalarMult has been deprecated" # elliptic.Curve.ScalarMult
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.ScalarBaseMult has been deprecated" # elliptic.Curve.ScalarBaseMult
+      - linters: [ "staticcheck" ]
+        text: "SA1019:.*\\.IsOnCurve has been deprecated" # elliptic.Curve.IsOnCurve
+
+formatters:
+  enable:
+    - "gci" # Enforces package import order.
+    - "gofumpt" # Extended go fmt.
+  settings:
+    gci:
+      sections:
+        - "standard"
+        - "default"
+        - "blank"
+        - "dot"
+        - "localmodule"
+      custom-order: true

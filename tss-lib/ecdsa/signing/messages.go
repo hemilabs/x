@@ -1,391 +1,254 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright (c) 2019 Binance
+// Copyright (c) 2026 Hemi Labs, Inc.
+// Use of this source code is governed by the MIT License,
+// which can be found in the LICENSE file.
 
 package signing
 
 import (
-	"crypto/elliptic"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v2/common"
-	"github.com/hemilabs/x/tss-lib/v2/crypto"
-	cmt "github.com/hemilabs/x/tss-lib/v2/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/mta"
-	"github.com/hemilabs/x/tss-lib/v2/crypto/schnorr"
-	"github.com/hemilabs/x/tss-lib/v2/tss"
+	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/mta"
+	"github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss-lib/v3/tss"
 )
 
-// These messages were generated from Protocol Buffers definitions into ecdsa-signing.pb.go
-// The following messages are registered on the Protocol Buffers "wire"
-
-var (
-	// Ensure that signing messages implement ValidateBasic
-	_ = []tss.MessageContent{
-		(*SignRound1Message1)(nil),
-		(*SignRound1Message2)(nil),
-		(*SignRound2Message)(nil),
-		(*SignRound3Message)(nil),
-		(*SignRound4Message)(nil),
-		(*SignRound5Message)(nil),
-		(*SignRound6Message)(nil),
-		(*SignRound7Message)(nil),
-		(*SignRound8Message)(nil),
-		(*SignRound9Message)(nil),
-	}
-)
-
-// ----- //
-
-func NewSignRound1Message1(
-	to, from *tss.PartyID,
-	c *big.Int,
-	proof *mta.RangeProofAlice,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:        from,
-		To:          []*tss.PartyID{to},
-		IsBroadcast: false,
-	}
-	pfBz := proof.Bytes()
-	content := &SignRound1Message1{
-		C:               c.Bytes(),
-		RangeProofAlice: pfBz[:],
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
+// SignRound1Message1 is a P2P message: Paillier ciphertext + range proof.
+type SignRound1Message1 struct {
+	C               *big.Int
+	RangeProofAlice *mta.RangeProofAlice
+	ReceiverID      []byte
 }
 
+// ValidateBasic checks that required fields of SignRound1Message1 are non-nil.
 func (m *SignRound1Message1) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.GetC()) &&
-		common.NonEmptyMultiBytes(m.GetRangeProofAlice(), mta.RangeProofAliceBytesParts)
+	return m != nil && m.C != nil && m.C.Sign() > 0 &&
+		m.RangeProofAlice != nil && len(m.ReceiverID) > 0
 }
 
-func (m *SignRound1Message1) UnmarshalC() *big.Int {
-	return new(big.Int).SetBytes(m.GetC())
+// NewSignRound1Message1 constructs a *tss.Message with the given content.
+func NewSignRound1Message1(to, from *tss.PartyID, c *big.Int, proof *mta.RangeProofAlice) *tss.Message {
+	return &tss.Message{
+		From: from,
+		To:   []*tss.PartyID{to},
+		Content: &SignRound1Message1{
+			C:               c,
+			RangeProofAlice: proof,
+			ReceiverID:      to.Key,
+		},
+	}
 }
 
-func (m *SignRound1Message1) UnmarshalRangeProofAlice() (*mta.RangeProofAlice, error) {
-	return mta.RangeProofAliceFromBytes(m.GetRangeProofAlice())
+// SignRound1Message2 is broadcast: commitment to gamma share.
+type SignRound1Message2 struct {
+	Commitment *big.Int
 }
 
-// ----- //
+// ValidateBasic checks that required fields of SignRound1Message2 are non-nil.
+func (m *SignRound1Message2) ValidateBasic() bool {
+	return m != nil && m.Commitment != nil && m.Commitment.Sign() > 0
+}
 
-func NewSignRound1Message2(
-	from *tss.PartyID,
-	commitment cmt.HashCommitment,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewSignRound1Message2 constructs a *tss.Message with the given content.
+func NewSignRound1Message2(from *tss.PartyID, commitment cmt.HashCommitment) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &SignRound1Message2{
+			Commitment: commitment,
+		},
 	}
-	content := &SignRound1Message2{
-		Commitment: commitment.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
-func (m *SignRound1Message2) ValidateBasic() bool {
-	return m.Commitment != nil &&
-		common.NonEmptyBytes(m.GetCommitment())
+// SignRound2Message is P2P: MtA ciphertexts + Bob proofs.
+type SignRound2Message struct {
+	C1         *big.Int
+	C2         *big.Int
+	ProofBob   *mta.ProofBob
+	ProofBobWC *mta.ProofBobWC
+	ReceiverID []byte
 }
 
-func (m *SignRound1Message2) UnmarshalCommitment() *big.Int {
-	return new(big.Int).SetBytes(m.GetCommitment())
-}
-
-// ----- //
-
-func NewSignRound2Message(
-	to, from *tss.PartyID,
-	c1Ji *big.Int,
-	pi1Ji *mta.ProofBob,
-	c2Ji *big.Int,
-	pi2Ji *mta.ProofBobWC,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:        from,
-		To:          []*tss.PartyID{to},
-		IsBroadcast: false,
-	}
-	pfBob := pi1Ji.Bytes()
-	pfBobWC := pi2Ji.Bytes()
-	content := &SignRound2Message{
-		C1:         c1Ji.Bytes(),
-		C2:         c2Ji.Bytes(),
-		ProofBob:   pfBob[:],
-		ProofBobWc: pfBobWC[:],
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
-}
-
+// ValidateBasic checks that required fields of SignRound2Message are non-nil.
 func (m *SignRound2Message) ValidateBasic() bool {
 	return m != nil &&
-		common.NonEmptyBytes(m.C1) &&
-		common.NonEmptyBytes(m.C2) &&
-		common.NonEmptyMultiBytes(m.ProofBob, mta.ProofBobBytesParts) &&
-		common.NonEmptyMultiBytes(m.ProofBobWc, mta.ProofBobWCBytesParts)
+		m.C1 != nil && m.C1.Sign() > 0 &&
+		m.C2 != nil && m.C2.Sign() > 0 &&
+		m.ProofBob != nil && m.ProofBobWC != nil &&
+		len(m.ReceiverID) > 0
 }
 
-func (m *SignRound2Message) UnmarshalProofBob() (*mta.ProofBob, error) {
-	return mta.ProofBobFromBytes(m.ProofBob)
-}
-
-func (m *SignRound2Message) UnmarshalProofBobWC(ec elliptic.Curve) (*mta.ProofBobWC, error) {
-	return mta.ProofBobWCFromBytes(ec, m.ProofBobWc)
-}
-
-// ----- //
-
-func NewSignRound3Message(
-	from *tss.PartyID,
-	theta *big.Int,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
-		From:        from,
-		IsBroadcast: true,
+// NewSignRound2Message constructs a *tss.Message with the given content.
+func NewSignRound2Message(to, from *tss.PartyID, c1Ji *big.Int, pi1Ji *mta.ProofBob, c2Ji *big.Int, pi2Ji *mta.ProofBobWC) *tss.Message {
+	return &tss.Message{
+		From: from,
+		To:   []*tss.PartyID{to},
+		Content: &SignRound2Message{
+			C1:         c1Ji,
+			C2:         c2Ji,
+			ProofBob:   pi1Ji,
+			ProofBobWC: pi2Ji,
+			ReceiverID: to.Key,
+		},
 	}
-	content := &SignRound3Message{
-		Theta: theta.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// SignRound3Message is broadcast: theta share.
+type SignRound3Message struct {
+	Theta *big.Int
+}
+
+// ValidateBasic checks that required fields of SignRound3Message are non-nil.
 func (m *SignRound3Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.Theta)
+	return m != nil && m.Theta != nil && m.Theta.Sign() > 0
 }
 
-// ----- //
-
-func NewSignRound4Message(
-	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
-	proof *schnorr.ZKProof,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewSignRound3Message constructs a *tss.Message with the given content.
+func NewSignRound3Message(from *tss.PartyID, theta *big.Int) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content:     &SignRound3Message{Theta: theta},
 	}
-	dcBzs := common.BigIntsToBytes(deCommitment)
-	content := &SignRound4Message{
-		DeCommitment: dcBzs,
-		ProofAlphaX:  proof.Alpha.X().Bytes(),
-		ProofAlphaY:  proof.Alpha.Y().Bytes(),
-		ProofT:       proof.T.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// SignRound4Message is broadcast: decommitment to gamma + ZK proof.
+type SignRound4Message struct {
+	DeCommitment cmt.HashDeCommitment
+	ZKProof      *schnorr.ZKProof
+}
+
+// ValidateBasic checks that required fields of SignRound4Message are non-nil.
 func (m *SignRound4Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.DeCommitment, 3) &&
-		common.NonEmptyBytes(m.ProofAlphaX) &&
-		common.NonEmptyBytes(m.ProofAlphaY) &&
-		common.NonEmptyBytes(m.ProofT)
+	return m != nil && len(m.DeCommitment) >= 2 && m.ZKProof != nil
 }
 
-func (m *SignRound4Message) UnmarshalDeCommitment() []*big.Int {
-	deComBzs := m.GetDeCommitment()
-	return cmt.NewHashDeCommitmentFromBytes(deComBzs)
-}
-
-func (m *SignRound4Message) UnmarshalZKProof(ec elliptic.Curve) (*schnorr.ZKProof, error) {
-	point, err := crypto.NewECPoint(
-		ec,
-		new(big.Int).SetBytes(m.GetProofAlphaX()),
-		new(big.Int).SetBytes(m.GetProofAlphaY()))
-	if err != nil {
-		return nil, err
-	}
-	return &schnorr.ZKProof{
-		Alpha: point,
-		T:     new(big.Int).SetBytes(m.GetProofT()),
-	}, nil
-}
-
-// ----- //
-
-func NewSignRound5Message(
-	from *tss.PartyID,
-	commitment cmt.HashCommitment,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewSignRound4Message constructs a *tss.Message with the given content.
+func NewSignRound4Message(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *schnorr.ZKProof) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &SignRound4Message{
+			DeCommitment: deCommitment,
+			ZKProof:      proof,
+		},
 	}
-	content := &SignRound5Message{
-		Commitment: commitment.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// SignRound5Message is broadcast: commitment to blinding.
+type SignRound5Message struct {
+	Commitment *big.Int
+}
+
+// ValidateBasic checks that required fields of SignRound5Message are non-nil.
 func (m *SignRound5Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.Commitment)
+	return m != nil && m.Commitment != nil && m.Commitment.Sign() > 0
 }
 
-func (m *SignRound5Message) UnmarshalCommitment() *big.Int {
-	return new(big.Int).SetBytes(m.GetCommitment())
-}
-
-// ----- //
-
-func NewSignRound6Message(
-	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
-	proof *schnorr.ZKProof,
-	vProof *schnorr.ZKVProof,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewSignRound5Message constructs a *tss.Message with the given content.
+func NewSignRound5Message(from *tss.PartyID, commitment cmt.HashCommitment) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &SignRound5Message{
+			Commitment: commitment,
+		},
 	}
-	dcBzs := common.BigIntsToBytes(deCommitment)
-	content := &SignRound6Message{
-		DeCommitment: dcBzs,
-		ProofAlphaX:  proof.Alpha.X().Bytes(),
-		ProofAlphaY:  proof.Alpha.Y().Bytes(),
-		ProofT:       proof.T.Bytes(),
-		VProofAlphaX: vProof.Alpha.X().Bytes(),
-		VProofAlphaY: vProof.Alpha.Y().Bytes(),
-		VProofT:      vProof.T.Bytes(),
-		VProofU:      vProof.U.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// SignRound6Message is broadcast: decommitment + ZK + ZKV proofs.
+type SignRound6Message struct {
+	DeCommitment cmt.HashDeCommitment
+	ZKProof      *schnorr.ZKProof
+	ZKVProof     *schnorr.ZKVProof
+}
+
+// ValidateBasic checks that required fields of SignRound6Message are non-nil.
 func (m *SignRound6Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.DeCommitment, 5) &&
-		common.NonEmptyBytes(m.ProofAlphaX) &&
-		common.NonEmptyBytes(m.ProofAlphaY) &&
-		common.NonEmptyBytes(m.ProofT) &&
-		common.NonEmptyBytes(m.VProofAlphaX) &&
-		common.NonEmptyBytes(m.VProofAlphaY) &&
-		common.NonEmptyBytes(m.VProofT) &&
-		common.NonEmptyBytes(m.VProofU)
+	return m != nil && len(m.DeCommitment) >= 2 &&
+		m.ZKProof != nil && m.ZKVProof != nil
 }
 
-func (m *SignRound6Message) UnmarshalDeCommitment() []*big.Int {
-	deComBzs := m.GetDeCommitment()
-	return cmt.NewHashDeCommitmentFromBytes(deComBzs)
-}
-
-func (m *SignRound6Message) UnmarshalZKProof(ec elliptic.Curve) (*schnorr.ZKProof, error) {
-	point, err := crypto.NewECPoint(
-		ec,
-		new(big.Int).SetBytes(m.GetProofAlphaX()),
-		new(big.Int).SetBytes(m.GetProofAlphaY()))
-	if err != nil {
-		return nil, err
-	}
-	return &schnorr.ZKProof{
-		Alpha: point,
-		T:     new(big.Int).SetBytes(m.GetProofT()),
-	}, nil
-}
-
-func (m *SignRound6Message) UnmarshalZKVProof(ec elliptic.Curve) (*schnorr.ZKVProof, error) {
-	point, err := crypto.NewECPoint(
-		ec,
-		new(big.Int).SetBytes(m.GetVProofAlphaX()),
-		new(big.Int).SetBytes(m.GetVProofAlphaY()))
-	if err != nil {
-		return nil, err
-	}
-	return &schnorr.ZKVProof{
-		Alpha: point,
-		T:     new(big.Int).SetBytes(m.GetVProofT()),
-		U:     new(big.Int).SetBytes(m.GetVProofU()),
-	}, nil
-}
-
-// ----- //
-
-func NewSignRound7Message(
-	from *tss.PartyID,
-	commitment cmt.HashCommitment,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewSignRound6Message constructs a *tss.Message with the given content.
+func NewSignRound6Message(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *schnorr.ZKProof, vProof *schnorr.ZKVProof) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &SignRound6Message{
+			DeCommitment: deCommitment,
+			ZKProof:      proof,
+			ZKVProof:     vProof,
+		},
 	}
-	content := &SignRound7Message{
-		Commitment: commitment.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// SignRound7Message is broadcast: commitment to Ui/Ti.
+type SignRound7Message struct {
+	Commitment *big.Int
+}
+
+// ValidateBasic checks that required fields of SignRound7Message are non-nil.
 func (m *SignRound7Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.Commitment)
+	return m != nil && m.Commitment != nil && m.Commitment.Sign() > 0
 }
 
-func (m *SignRound7Message) UnmarshalCommitment() *big.Int {
-	return new(big.Int).SetBytes(m.GetCommitment())
-}
-
-// ----- //
-
-func NewSignRound8Message(
-	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewSignRound7Message constructs a *tss.Message with the given content.
+func NewSignRound7Message(from *tss.PartyID, commitment cmt.HashCommitment) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &SignRound7Message{
+			Commitment: commitment,
+		},
 	}
-	dcBzs := common.BigIntsToBytes(deCommitment)
-	content := &SignRound8Message{
-		DeCommitment: dcBzs,
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// SignRound8Message is broadcast: decommitment of Ui/Ti.
+type SignRound8Message struct {
+	DeCommitment cmt.HashDeCommitment
+}
+
+// ValidateBasic checks that required fields of SignRound8Message are non-nil.
 func (m *SignRound8Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.DeCommitment, 5)
+	return m != nil && len(m.DeCommitment) >= 2
 }
 
-func (m *SignRound8Message) UnmarshalDeCommitment() []*big.Int {
-	deComBzs := m.GetDeCommitment()
-	return cmt.NewHashDeCommitmentFromBytes(deComBzs)
-}
-
-// ----- //
-
-func NewSignRound9Message(
-	from *tss.PartyID,
-	si *big.Int,
-) tss.ParsedMessage {
-	meta := tss.MessageRouting{
+// NewSignRound8Message constructs a *tss.Message with the given content.
+func NewSignRound8Message(from *tss.PartyID, deCommitment cmt.HashDeCommitment) *tss.Message {
+	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
+		Content: &SignRound8Message{
+			DeCommitment: deCommitment,
+		},
 	}
-	content := &SignRound9Message{
-		S: si.Bytes(),
-	}
-	msg := tss.NewMessageWrapper(meta, content)
-	return tss.NewMessage(meta, content, msg)
 }
 
+// SignRound9Message is broadcast: partial signature share.
+type SignRound9Message struct {
+	S *big.Int
+}
+
+// ValidateBasic checks that required fields of SignRound9Message are non-nil.
 func (m *SignRound9Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.S)
+	return m != nil && m.S != nil && m.S.Sign() > 0
 }
 
-func (m *SignRound9Message) UnmarshalS() *big.Int {
-	return new(big.Int).SetBytes(m.S)
+// NewSignRound9Message constructs a *tss.Message with the given content.
+func NewSignRound9Message(from *tss.PartyID, si *big.Int) *tss.Message {
+	return &tss.Message{
+		From:        from,
+		IsBroadcast: true,
+		Content:     &SignRound9Message{S: si},
+	}
+}
+
+// SignatureData holds the final ECDSA signature components.
+type SignatureData struct {
+	R                 []byte
+	S                 []byte
+	Signature         []byte // DER-encoded signature (optional)
+	SignatureRecovery []byte
+	M                 []byte // message hash
 }
