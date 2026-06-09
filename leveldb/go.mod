@@ -1,6 +1,6 @@
 module github.com/hemilabs/x/leveldb
 
-go 1.23
+go 1.26
 
 require (
 	github.com/golang/snappy v0.0.4
