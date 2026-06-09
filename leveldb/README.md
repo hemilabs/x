@@ -1,4 +1,4 @@
-# Hemi goleveldb
+# github.com/hemilabs/x/leveldb 
 
 [![BSD-2-Clause licensed](https://img.shields.io/badge/license-BSD--2--Clause-blue.svg)](LICENSE)
 
