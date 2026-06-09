@@ -1,6 +1,6 @@
 # Hemi goleveldb
 
-[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![BSD-2-Clause licensed](https://img.shields.io/badge/license-BSD--2--Clause-blue.svg)](LICENSE)
 
 LevelDB key/value database in Go, forked from
 [syndtr/goleveldb](https://github.com/syndtr/goleveldb).
@@ -32,9 +32,9 @@ github.com/hemilabs/x/goleveldb
 Consume via a `replace` directive while iterating locally:
 
 ```
-replace github.com/syndtr/goleveldb => github.com/hemilabs/x/goleveldb v0.0.0-...
+replace github.com/syndtr/goleveldb => github.com/hemilabs/x/goleveldb ...
 ```
 
 ## License
 
-MIT, same as upstream. See [LICENSE](LICENSE).
+The contents of this directory are licensed under the 2-Clause BSD License. See [LICENSE](LICENSE).
