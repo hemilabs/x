@@ -8,9 +8,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // runKeygenForReshare does a 3-party EdDSA keygen and returns saves + party IDs.

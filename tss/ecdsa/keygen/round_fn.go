@@ -16,15 +16,15 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	cmts "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	cmts "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // getSSID computes the SSID for a given round number using the state's

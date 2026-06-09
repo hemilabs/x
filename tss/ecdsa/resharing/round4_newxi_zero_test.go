@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TestReshareRound4RejectsNewXiZero exercises the "newXi is zero" check at

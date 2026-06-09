@@ -8,9 +8,9 @@ import (
 	"math/big"
 	"testing"
 
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/mta"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/mta"
+	"github.com/hemilabs/x/tss/v3/crypto/schnorr"
 )
 
 // validR1M1 returns a SignRound1Message1 that passes ValidateBasic.

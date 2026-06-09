@@ -5,8 +5,8 @@
 package signing
 
 import (
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // SigningState holds all mutable state between signing rounds.

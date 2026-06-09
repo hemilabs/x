@@ -11,9 +11,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/testutil"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/testutil"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TestRoundFnSignThreeParties runs keygen + signing using pure round

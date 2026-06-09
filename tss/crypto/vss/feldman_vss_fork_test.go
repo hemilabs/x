@@ -9,8 +9,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 func makeValidShares(t *testing.T) (Vs, Shares) {

@@ -8,10 +8,10 @@ package signing
 import (
 	"math/big"
 
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/mta"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/mta"
+	"github.com/hemilabs/x/tss/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // SignRound1Message1 is a P2P message: Paillier ciphertext + range proof.

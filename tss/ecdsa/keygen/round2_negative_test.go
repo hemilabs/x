@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // round1Fixture holds the state and messages produced by a valid 3-party

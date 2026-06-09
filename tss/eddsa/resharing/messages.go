@@ -8,10 +8,10 @@ package resharing
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // DGRound1Message is broadcast by old committee: EdDSA pub + VSS commitment.

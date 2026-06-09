@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss/v3/common"
 )
 
 // PrepareForSigning computes the Lagrange interpolated secret share

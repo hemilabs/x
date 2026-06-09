@@ -8,10 +8,10 @@ package resharing
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
+	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TaskName identifies the EdDSA resharing protocol in error messages.

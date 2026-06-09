@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 const (

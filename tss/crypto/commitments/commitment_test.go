@@ -11,7 +11,7 @@ import (
 	"math/big"
 	"testing"
 
-	. "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	. "github.com/hemilabs/x/tss/v3/crypto/commitments"
 )
 
 func TestCreateVerify(t *testing.T) {

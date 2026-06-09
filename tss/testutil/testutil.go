@@ -13,7 +13,7 @@ import (
 
 	_ "embed"
 
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
 )
 
 //go:embed preparams.json

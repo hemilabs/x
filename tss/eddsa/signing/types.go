@@ -8,8 +8,8 @@ package signing
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TaskName identifies the EdDSA signing protocol in error messages.

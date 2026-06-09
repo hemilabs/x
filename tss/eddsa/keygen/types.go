@@ -8,9 +8,9 @@ package keygen
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TaskName identifies the EdDSA keygen protocol in error messages.

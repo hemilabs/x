@@ -11,9 +11,9 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
 )
 
 // UpdatePublicKeyAndAdjustBigXj adjusts the distributed public key and BigXj shares for BIP-32 key derivation.

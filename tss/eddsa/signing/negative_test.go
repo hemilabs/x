@@ -9,9 +9,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // runEdDSAKeygen performs a 3-party keygen for signing tests.

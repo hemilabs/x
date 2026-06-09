@@ -1,4 +1,4 @@
-module github.com/hemilabs/x/tss-lib/v3
+module github.com/hemilabs/x/tss/v3
 
 go 1.25
 

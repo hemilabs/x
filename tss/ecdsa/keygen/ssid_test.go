@@ -9,7 +9,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // makeSSIDTestParams builds a *tss.Parameters and *localTempData suitable for

@@ -26,8 +26,8 @@ import (
 
 	"github.com/otiai10/primes"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	crypto2 "github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/common"
+	crypto2 "github.com/hemilabs/x/tss/v3/crypto"
 )
 
 const (

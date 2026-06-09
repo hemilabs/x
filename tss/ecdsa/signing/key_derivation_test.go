@@ -9,9 +9,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 func TestUpdatePublicKeyAndAdjustBigXj(t *testing.T) {

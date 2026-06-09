@@ -9,7 +9,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss/v3/crypto/dlnproof"
 )
 
 // DlnProofVerifier runs DLN proof verification concurrently with

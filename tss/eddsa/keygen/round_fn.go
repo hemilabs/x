@@ -11,12 +11,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	cmts "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	cmts "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // getSSID computes the session ID for domain separation.

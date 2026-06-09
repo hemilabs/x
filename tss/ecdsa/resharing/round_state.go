@@ -7,9 +7,9 @@ package resharing
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // ReshareState holds all mutable state between resharing rounds.

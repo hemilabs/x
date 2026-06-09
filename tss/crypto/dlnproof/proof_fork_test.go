@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss/v3/common"
 )
 
 var dlnSession = []byte("dln-fork-test")

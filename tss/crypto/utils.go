@@ -10,7 +10,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss/v3/common"
 )
 
 func GenerateNTildei(rand io.Reader, safePrimes [2]*big.Int) (NTildei, h1i, h2i *big.Int, err error) {

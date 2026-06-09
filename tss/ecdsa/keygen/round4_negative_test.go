@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // fullKeygenFixture holds state after running rounds 1-3 for all n parties,

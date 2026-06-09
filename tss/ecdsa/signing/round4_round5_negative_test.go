@@ -54,8 +54,8 @@ import (
 	"strings"
 	"testing"
 
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // ===========================================================================

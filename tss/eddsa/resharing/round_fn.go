@@ -11,13 +11,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/signing"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
+	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
+	"github.com/hemilabs/x/tss/v3/eddsa/signing"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // oldIndex returns this party's index in the old committee, or -1.

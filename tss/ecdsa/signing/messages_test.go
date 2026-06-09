@@ -8,9 +8,9 @@ import (
 	"math/big"
 	"testing"
 
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/mta"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/mta"
+	"github.com/hemilabs/x/tss/v3/crypto/schnorr"
 )
 
 func TestValidateBasicAllSignMessages(t *testing.T) {
