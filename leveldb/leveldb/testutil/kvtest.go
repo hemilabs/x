@@ -13,8 +13,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 func TestFind(db Find, kv KeyValue) {

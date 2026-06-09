@@ -9,9 +9,9 @@ package iterator
 import (
 	"container/heap"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/comparer"
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/comparer"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 type dir int

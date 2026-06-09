@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/iterator"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/iterator"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 var errTransactionDone = errors.New("leveldb: transaction already closed")

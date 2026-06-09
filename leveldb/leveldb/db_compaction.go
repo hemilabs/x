@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
 )
 
 var (

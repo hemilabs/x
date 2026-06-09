@@ -12,12 +12,12 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/cache"
-	"github.com/hemilabs/x/goleveldb/leveldb/iterator"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
-	"github.com/hemilabs/x/goleveldb/leveldb/table"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/cache"
+	"github.com/hemilabs/x/leveldb/leveldb/iterator"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/table"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 // tFile holds basic information about a table.

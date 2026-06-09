@@ -14,10 +14,10 @@ import (
 
 	"github.com/golang/snappy"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/comparer"
-	"github.com/hemilabs/x/goleveldb/leveldb/filter"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/comparer"
+	"github.com/hemilabs/x/leveldb/leveldb/filter"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 func sharedPrefixLen(a, b []byte) int {

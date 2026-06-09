@@ -20,13 +20,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hemilabs/x/goleveldb/leveldb"
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/filter"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
-	"github.com/hemilabs/x/goleveldb/leveldb/table"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/filter"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/table"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 var (

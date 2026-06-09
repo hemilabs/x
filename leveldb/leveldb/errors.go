@@ -7,7 +7,7 @@
 package leveldb
 
 import (
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
 )
 
 // Common errors.

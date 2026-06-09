@@ -12,8 +12,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
 )
 
 type byteReader interface {

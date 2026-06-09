@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/filter"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/filter"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
 )
 
 const ctValSize = 1000

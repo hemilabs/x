@@ -11,8 +11,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 // Common errors.

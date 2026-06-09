@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/memdb"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/memdb"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
 )
 
 // ErrBatchCorrupted records reason of batch corruption. This error will be

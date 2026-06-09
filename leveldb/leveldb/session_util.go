@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/journal"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/journal"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
 )
 
 // Logging.

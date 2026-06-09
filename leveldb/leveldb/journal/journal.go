@@ -82,9 +82,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 // These constants are part of the wire format and should not be changed.

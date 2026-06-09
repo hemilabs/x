@@ -7,8 +7,8 @@
 package leveldb
 
 import (
-	"github.com/hemilabs/x/goleveldb/leveldb/filter"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/filter"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
 )
 
 func dupOptions(o *opt.Options) *opt.Options {

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/iterator"
-	"github.com/hemilabs/x/goleveldb/leveldb/memdb"
-	"github.com/hemilabs/x/goleveldb/leveldb/opt"
+	"github.com/hemilabs/x/leveldb/leveldb/iterator"
+	"github.com/hemilabs/x/leveldb/leveldb/memdb"
+	"github.com/hemilabs/x/leveldb/leveldb/opt"
 )
 
 const (
@@ -44,7 +44,7 @@ func (s *session) flushMemdb(rec *sessionRecord, mdb *memdb.DB, maxLevel int) (i
 	// key-space is strictly incrementing it will not overlaps with
 	// higher level, thus maximum possible level is always picked, while
 	// overlapping deletion marker pushed into lower level.
-	// See: https://github.com/hemilabs/x/goleveldb/issues/127.
+	// See: https://github.com/hemilabs/x/leveldb/issues/127.
 	flushLevel := s.pickMemdbLevel(t.imin.ukey(), t.imax.ukey(), maxLevel)
 	rec.addTableFile(flushLevel, t)
 

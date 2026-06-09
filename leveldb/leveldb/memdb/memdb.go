@@ -11,10 +11,10 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/comparer"
-	"github.com/hemilabs/x/goleveldb/leveldb/errors"
-	"github.com/hemilabs/x/goleveldb/leveldb/iterator"
-	"github.com/hemilabs/x/goleveldb/leveldb/util"
+	"github.com/hemilabs/x/leveldb/leveldb/comparer"
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
+	"github.com/hemilabs/x/leveldb/leveldb/iterator"
+	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
 // Common errors.

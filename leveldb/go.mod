@@ -1,4 +1,4 @@
-module github.com/hemilabs/x/goleveldb
+module github.com/hemilabs/x/leveldb
 
 go 1.23
 

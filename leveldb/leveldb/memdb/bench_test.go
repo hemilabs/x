@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/comparer"
+	"github.com/hemilabs/x/leveldb/leveldb/comparer"
 )
 
 func BenchmarkPut(b *testing.B) {

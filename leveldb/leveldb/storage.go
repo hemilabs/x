@@ -1,7 +1,7 @@
 package leveldb
 
 import (
-	"github.com/hemilabs/x/goleveldb/leveldb/storage"
+	"github.com/hemilabs/x/leveldb/leveldb/storage"
 	"sync/atomic"
 )
 

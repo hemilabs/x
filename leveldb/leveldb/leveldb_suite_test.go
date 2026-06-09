@@ -3,7 +3,7 @@ package leveldb
 import (
 	"testing"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/testutil"
+	"github.com/hemilabs/x/leveldb/leveldb/testutil"
 )
 
 func TestLevelDB(t *testing.T) {

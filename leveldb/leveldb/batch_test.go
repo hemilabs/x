@@ -13,7 +13,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/hemilabs/x/goleveldb/leveldb/testutil"
+	"github.com/hemilabs/x/leveldb/leveldb/testutil"
 )
 
 func TestBatchHeader(t *testing.T) {
