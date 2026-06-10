@@ -1,11 +1,16 @@
-linters-settings:
-  gocritic:
-    disabled-checks:
-      - ifElseChain
-      - elseif
+version: "2"
 
 linters:
-  enable:
-    - gofmt
+  default: none
+  enable: # TODO: enable more linters
     - gocritic
     - unconvert
+  settings:
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+        - elseif
+
+formatters:
+  enable: # TODO: switch to gofumpt, gci, goimports.
+    - gofmt
