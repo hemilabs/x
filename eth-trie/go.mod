@@ -1,8 +1,6 @@
 module github.com/hemilabs/x/eth-trie
 
-go 1.25.1
-
-toolchain go1.25.3
+go 1.25
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.13.0

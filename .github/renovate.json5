@@ -1,0 +1,63 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'local>hemilabs/.github:renovate-config.json5',
+    ':assignAndReview(joshuasing)',
+  ],
+  commitMessagePrefix: 'all:',
+  commitMessageAction: 'update',
+  commitMessageTopic: '{{depName}}',
+  labels: [
+    'type: dependencies',
+    'changelog: skip',
+  ],
+  packageRules: [
+    {
+      matchDatasources: ['docker'],
+      commitMessageTopic: 'image {{depName}}',
+    },
+    {
+      matchManagers: ['gomod'],
+      commitMessagePrefix: 'go.mod:',
+      postUpdateOptions: ['gomodTidy'],
+    },
+    {
+      description: 'Prevent updating minimum Go version in go.mod',
+      matchManagers: ['gomod'],
+      matchDepNames: ['go'],
+      enabled: false,
+    },
+    {
+      description: 'Enable Go toolchain updates',
+      matchManagers: ['gomod'],
+      matchDepTypes: ['toolchain'],
+      enabled: true,
+      rangeStrategy: 'bump',
+    },
+    {
+      matchManagers: ['github-actions'],
+      commitMessagePrefix: 'ci:',
+    },
+    {
+      matchUpdateTypes: ['pin', 'pinDigest'],
+      commitMessageAction: 'pin',
+    },
+    {
+      description: "Enable auto-merge on pull requests",
+      matchPackageNames: ["*"],
+      automerge: true,
+      automergeType: "pr",
+    },
+  ],
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: [
+        '/(^|/)Makefile$/',
+      ],
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>[a-zA-Z0-9-._]+?) depName=(?<depName>[^\\s]+?)(?: (?:lookupName|packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s+[A-Za-z0-9_]+?_VERSION\\s*(:|\\?)?=\\s*["\']?(?<currentValue>.+?)["\']?\\s',
+      ],
+    },
+  ],
+}
