@@ -333,11 +333,11 @@ func (h *indexHeap) Swap(i, j int) {
 	h.indexes[i], h.indexes[j] = h.indexes[j], h.indexes[i]
 }
 
-func (h *indexHeap) Push(value interface{}) {
+func (h *indexHeap) Push(value any) {
 	h.indexes = append(h.indexes, value.(int))
 }
 
-func (h *indexHeap) Pop() interface{} {
+func (h *indexHeap) Pop() any {
 	e := len(h.indexes) - 1
 	popped := h.indexes[e]
 	h.indexes = h.indexes[:e]

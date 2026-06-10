@@ -17,7 +17,7 @@ import (
 	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
 
-type DB interface{}
+type DB any
 
 type Put interface {
 	TestPut(key []byte, value []byte) error
@@ -183,7 +183,7 @@ func (t *DBTesting) DeleteRandom() bool {
 }
 
 func (t *DBTesting) RandomAct(round int) {
-	for i := 0; i < round; i++ {
+	for range round {
 		if t.Rand.Int()%2 == 0 {
 			t.PutRandom()
 		} else {

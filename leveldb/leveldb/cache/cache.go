@@ -37,7 +37,7 @@ type Cacher interface {
 
 // Value is a 'cache-able object'. It may implements util.Releaser, if
 // so the the Release method will be called once object is released.
-type Value interface{}
+type Value any
 
 // NamespaceGetter provides convenient wrapper for namespace.
 type NamespaceGetter struct {

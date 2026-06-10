@@ -23,7 +23,7 @@ var (
 	runmu sync.Mutex
 )
 
-func Defer(args ...interface{}) bool {
+func Defer(args ...any) bool {
 	var (
 		group string
 		fn    func()
@@ -122,7 +122,7 @@ func RandomIndex(rnd *rand.Rand, n, round int, fn func(i int)) {
 	if rnd == nil {
 		rnd = NewRand()
 	}
-	for x := 0; x < round; x++ {
+	for range round {
 		fn(rnd.Intn(n))
 	}
 }
@@ -131,7 +131,7 @@ func ShuffledIndex(rnd *rand.Rand, n, round int, fn func(i int)) {
 	if rnd == nil {
 		rnd = NewRand()
 	}
-	for x := 0; x < round; x++ {
+	for range round {
 		for _, i := range rnd.Perm(n) {
 			fn(i)
 		}
@@ -142,7 +142,7 @@ func RandomRange(rnd *rand.Rand, n, round int, fn func(start, limit int)) {
 	if rnd == nil {
 		rnd = NewRand()
 	}
-	for x := 0; x < round; x++ {
+	for range round {
 		start := rnd.Intn(n)
 		length := 0
 		if j := n - start; j > 0 {

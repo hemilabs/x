@@ -5,7 +5,6 @@
 // found in the LICENSE file.
 
 //go:build solaris
-// +build solaris
 
 package storage
 

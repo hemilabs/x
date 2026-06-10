@@ -211,7 +211,7 @@ func (tr *Transaction) Commit() error {
 		tr.db.compCommitLk.Lock()
 		tr.stats.startTimer()
 		var cerr error
-		for retry := 0; retry < 3; retry++ {
+		for retry := range 3 {
 			cerr = tr.db.s.commit(&tr.rec, false)
 			if cerr != nil {
 				tr.db.logf("transaction@commit error R·%d %q", retry, cerr)

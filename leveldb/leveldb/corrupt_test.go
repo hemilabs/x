@@ -55,7 +55,7 @@ func (h *dbCorruptHarness) build(n int) {
 	db := p.db
 
 	batch := new(Batch)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		batch.Reset()
 		batch.Put(tkey(i), tval(i, ctValSize))
 		err := db.Write(batch, p.wo)
@@ -87,7 +87,7 @@ func (h *dbCorruptHarness) deleteRand(n, max int, rnd *rand.Rand) {
 	db := p.db
 
 	batch := new(Batch)
-	for i := 0; i < n; i++ {
+	for range n {
 		batch.Reset()
 		batch.Delete(tkey(rnd.Intn(max)))
 		err := db.Write(batch, p.wo)

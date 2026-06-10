@@ -57,7 +57,7 @@ var invalidCases = []string{
 }
 
 func tempDir(t *testing.T) string {
-	dir, err := ioutil.TempDir("", "goleveldb-")
+	dir, err := os.MkdirTemp("", "goleveldb-")
 	if err != nil {
 		t.Fatal(t)
 	}
@@ -80,7 +80,7 @@ func TestFileStorage_MetaSetGet(t *testing.T) {
 		t.Fatal("OpenFile: got error: ", err)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		num := rand.Int63()
 		fd := FileDesc{Type: TypeManifest, Num: num}
 		w, err := fs.Create(fd)
@@ -241,7 +241,7 @@ func TestFileStorage_Meta(t *testing.T) {
 			if cur.corrupt {
 				content = content[:len(content)-1-rand.Intn(3)]
 			}
-			if err := ioutil.WriteFile(filepath.Join(temp, curName), []byte(content), 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(temp, curName), []byte(content), 0644); err != nil {
 				t.Fatal(err)
 			}
 			if cur.manifest {

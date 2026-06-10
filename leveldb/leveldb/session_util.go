@@ -8,6 +8,7 @@ package leveldb
 
 import (
 	"fmt"
+	"maps"
 	"sync/atomic"
 	"time"
 
@@ -30,8 +31,8 @@ func (d dropper) Drop(err error) {
 	}
 }
 
-func (s *session) log(v ...interface{})                 { s.stor.Log(fmt.Sprint(v...)) }
-func (s *session) logf(format string, v ...interface{}) { s.stor.Log(fmt.Sprintf(format, v...)) }
+func (s *session) log(v ...any)                 { s.stor.Log(fmt.Sprint(v...)) }
+func (s *session) logf(format string, v ...any) { s.stor.Log(fmt.Sprintf(format, v...)) }
 
 // File utils.
 
@@ -236,9 +237,7 @@ func (s *session) refLoop() {
 
 		case r := <-s.fileRefCh:
 			ref := make(map[int64]int)
-			for f, c := range fileRef {
-				ref[f] = c
-			}
+			maps.Copy(ref, fileRef)
 			r <- ref
 
 		case <-s.closeC:

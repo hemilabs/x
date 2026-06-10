@@ -34,8 +34,8 @@ func (sizes Sizes) Sum() int64 {
 }
 
 // Logging.
-func (db *DB) log(v ...interface{})                 { db.s.log(v...) }
-func (db *DB) logf(format string, v ...interface{}) { db.s.logf(format, v...) }
+func (db *DB) log(v ...any)                 { db.s.log(v...) }
+func (db *DB) logf(format string, v ...any) { db.s.logf(format, v...) }
 
 // Check and clean files.
 func (db *DB) checkAndCleanFiles() error {

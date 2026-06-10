@@ -228,7 +228,7 @@ func (b *Batch) putMem(seq uint64, mdb *memdb.DB) error {
 	return nil
 }
 
-func newBatch() interface{} {
+func newBatch() any {
 	return &Batch{}
 }
 

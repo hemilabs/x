@@ -84,7 +84,7 @@ func testGenerator(t *testing.T, reset func(), gen func() (string, bool)) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		x, err := ioutil.ReadAll(rr)
+		x, err := io.ReadAll(rr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -249,7 +249,7 @@ func TestNonExhaustiveRead(t *testing.T) {
 	rnd := rand.New(rand.NewSource(1))
 
 	w := NewWriter(buf)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		length := len(p) + rnd.Intn(3*blockSize)
 		s := string(uint8(i)) + "123456789abcdefgh"
 		ww, _ := w.Next()
@@ -262,7 +262,7 @@ func TestNonExhaustiveRead(t *testing.T) {
 	}
 
 	r := NewReader(buf, dropper{t}, true, true)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		rr, _ := r.Next()
 		_, err := io.ReadFull(rr, p)
 		if err != nil {
@@ -348,7 +348,7 @@ func TestSize(t *testing.T) {
 	var buf bytes.Buffer
 	zeroes := make([]byte, 8<<10)
 	w := NewWriter(&buf)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		writer, err := w.Next()
 		require.NoError(t, err)
 
@@ -472,7 +472,7 @@ func TestCorrupt_CorruptedFirstBlock(t *testing.T) {
 
 	b := buf.Bytes()
 	// Corrupting block #0.
-	for i := 0; i < 1024; i++ {
+	for i := range 1024 {
 		b[i] = '1'
 	}
 
@@ -556,7 +556,7 @@ func TestCorrupt_CorruptedMiddleBlock(t *testing.T) {
 
 	b := buf.Bytes()
 	// Corrupting block #1.
-	for i := 0; i < 1024; i++ {
+	for i := range 1024 {
 		b[blockSize+i] = '1'
 	}
 
