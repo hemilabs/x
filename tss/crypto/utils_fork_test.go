@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss/v3/common"
 )
 
 func TestGenerateNTildeiRejectsEqualPrimes(t *testing.T) {

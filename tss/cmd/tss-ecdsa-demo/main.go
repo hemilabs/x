@@ -23,10 +23,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/resharing"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/ecdsa/resharing"
+	"github.com/hemilabs/x/tss/v3/ecdsa/signing"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 func main() {

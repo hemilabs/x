@@ -19,10 +19,10 @@ import (
 
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/resharing"
-	"github.com/hemilabs/x/tss-lib/v3/eddsa/signing"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
+	"github.com/hemilabs/x/tss/v3/eddsa/resharing"
+	"github.com/hemilabs/x/tss/v3/eddsa/signing"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TestEdDSAKeygenSignReshare demonstrates the full lifecycle:

@@ -11,10 +11,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
-	"github.com/hemilabs/x/tss-lib/v3/testutil"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/ecdsa/signing"
+	"github.com/hemilabs/x/tss/v3/testutil"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TestRoundFnReshareAndSign does keygen(3) → reshare(3→3) → sign(3)

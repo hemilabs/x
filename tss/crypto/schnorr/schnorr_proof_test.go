@@ -10,10 +10,10 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	. "github.com/hemilabs/x/tss-lib/v3/crypto/schnorr"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	. "github.com/hemilabs/x/tss/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 var Session = []byte("session")

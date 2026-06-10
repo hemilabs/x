@@ -10,8 +10,8 @@ import (
 	"math/big"
 	"testing"
 
-	crypto2 "github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	crypto2 "github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // --- HomoMult error paths ---

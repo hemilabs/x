@@ -9,11 +9,11 @@ import (
 	"math/big"
 	"testing"
 
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/vss"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 func TestValidateBasicKGRound1(t *testing.T) {

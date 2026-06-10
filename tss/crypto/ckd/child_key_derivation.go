@@ -21,8 +21,8 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck,gosec // BIP-32 requires RIPEMD-160
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto"
 )
 
 type ExtendedKey struct {

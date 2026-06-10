@@ -11,9 +11,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	. "github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v3/testutil"
+	"github.com/hemilabs/x/tss/v3/common"
+	. "github.com/hemilabs/x/tss/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss/v3/testutil"
 )
 
 var Session = []byte("session")

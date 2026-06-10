@@ -7,7 +7,7 @@ package keygen
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // KeygenState holds all mutable state between keygen rounds.

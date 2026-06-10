@@ -15,8 +15,8 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	cmts "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/common"
+	cmts "github.com/hemilabs/x/tss/v3/crypto/commitments"
 )
 
 const Iterations = 128

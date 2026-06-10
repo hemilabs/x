@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // expectRound4ParamError calls ReshareRound4 on new-committee party 0 with the

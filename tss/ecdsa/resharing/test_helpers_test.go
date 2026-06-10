@@ -10,14 +10,14 @@ import (
 	"math/big"
 	"testing"
 
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/facproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/modproof"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/paillier"
-	"github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
-	"github.com/hemilabs/x/tss-lib/v3/testutil"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss/v3/crypto/facproof"
+	"github.com/hemilabs/x/tss/v3/crypto/modproof"
+	"github.com/hemilabs/x/tss/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
+	"github.com/hemilabs/x/tss/v3/testutil"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 const (

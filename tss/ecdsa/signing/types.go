@@ -8,10 +8,10 @@ package signing
 import (
 	"math/big"
 
-	"github.com/hemilabs/x/tss-lib/v3/crypto"
-	cmt "github.com/hemilabs/x/tss-lib/v3/crypto/commitments"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/mta"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	"github.com/hemilabs/x/tss/v3/crypto"
+	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
+	"github.com/hemilabs/x/tss/v3/crypto/mta"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // TaskName identifies the signing protocol in error messages.

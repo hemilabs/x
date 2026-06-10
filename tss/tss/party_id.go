@@ -11,7 +11,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
+	"github.com/hemilabs/x/tss/v3/common"
 )
 
 // PartyIDData holds the wire-format fields for a party identifier.

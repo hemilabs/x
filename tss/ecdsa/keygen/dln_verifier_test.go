@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hemilabs/x/tss-lib/v3/common"
-	"github.com/hemilabs/x/tss-lib/v3/crypto/dlnproof"
+	"github.com/hemilabs/x/tss/v3/common"
+	"github.com/hemilabs/x/tss/v3/crypto/dlnproof"
 )
 
 // dlnTestParams holds a set of DLN proof parameters generated from real

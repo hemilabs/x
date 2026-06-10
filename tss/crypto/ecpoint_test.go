@@ -15,8 +15,8 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 
-	. "github.com/hemilabs/x/tss-lib/v3/crypto"
-	"github.com/hemilabs/x/tss-lib/v3/tss"
+	. "github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 func TestFlattenECPoints(t *testing.T) {
