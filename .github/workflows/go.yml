@@ -33,22 +33,36 @@ jobs:
           - eth-trie
           - merkle
           - tss
+          - leveldb
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: "Setup Go"
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: "${{ matrix.module }}/go.mod"
 
-      - name: "go get"
-        working-directory: ${{ matrix.module }}
+      - name: "Download dependencies"
+        working-directory: "${{ matrix.module }}"
         run: go mod download && go mod verify
 
       - name: "go test"
-        working-directory: ${{ matrix.module }}
+        if: matrix.module != 'leveldb'
+        working-directory: "${{ matrix.module }}"
         run: go test -tags tssexamples -timeout 120m -v -cover ./...
+
+      - name: "go test (short)"
+        if: matrix.module == 'leveldb'
+        working-directory: "${{ matrix.module }}"
+        run: go test -short -timeout 1h ./...
+
+      - name: "go test (leveldb)"
+        if: matrix.module == 'leveldb'
+        working-directory: "${{ matrix.module }}"
+        run: go test -timeout 30m -race -run "TestDB_(Concurrent|GoleveldbIssue74)" ./leveldb
 
   lint:
     name: "Lint"
@@ -58,9 +72,12 @@ jobs:
       matrix:
         module:
           - tss
+          - leveldb
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: "Setup Go"
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
