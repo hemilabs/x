@@ -12,9 +12,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/onsi/gomega"
 	"github.com/hemilabs/x/leveldb/leveldb/storage"
 	"github.com/hemilabs/x/leveldb/leveldb/testutil"
+	"github.com/onsi/gomega"
 )
 
 func TestGetOverlaps(t *testing.T) {
