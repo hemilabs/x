@@ -5,7 +5,6 @@
 // found in the LICENSE file.
 
 //go:build nacl
-// +build nacl
 
 package storage
 

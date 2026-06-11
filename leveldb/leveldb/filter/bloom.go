@@ -41,7 +41,7 @@ func (f bloomFilter) Contains(filter, key []byte) bool {
 
 	kh := bloomHash(key)
 	delta := (kh >> 17) | (kh << 15) // Rotate right 17 bits
-	for j := uint8(0); j < k; j++ {
+	for range k {
 		bitpos := kh % nBits
 		if (uint32(filter[bitpos/8]) & (1 << (bitpos % 8))) == 0 {
 			return false
@@ -80,12 +80,10 @@ func (g *bloomFilterGenerator) Add(key []byte) {
 
 func (g *bloomFilterGenerator) Generate(b Buffer) {
 	// Compute bloom filter size (in both bits and bytes)
-	nBits := uint32(len(g.keyHashes) * g.n)
-	// For small n, we can see a very high false positive rate.  Fix it
-	// by enforcing a minimum bloom filter length.
-	if nBits < 64 {
-		nBits = 64
-	}
+	nBits := max(
+		// For small n, we can see a very high false positive rate.  Fix it
+		// by enforcing a minimum bloom filter length.
+		uint32(len(g.keyHashes)*g.n), 64)
 	nBytes := (nBits + 7) / 8
 	nBits = nBytes * 8
 

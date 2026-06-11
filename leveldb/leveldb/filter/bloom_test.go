@@ -120,7 +120,7 @@ func TestBloomFilter_VaryingLengths(t *testing.T) {
 		}
 
 		var rate float32
-		for i := 0; i < 10000; i++ {
+		for i := range 10000 {
 			if h.assertNum(uint32(i+1000000000), true, true) {
 				rate++
 			}

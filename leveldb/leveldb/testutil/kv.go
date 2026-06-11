@@ -310,7 +310,7 @@ func KeyValue_Generate(rnd *rand.Rand, n, incr, minlen, maxlen, vminlen, vmaxlen
 	kv := &KeyValue{}
 	endC := byte(len(keymap) - incr)
 	gen := make([]byte, 0, maxlen)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m := rrand(minlen, maxlen)
 		last := gen
 	retry:

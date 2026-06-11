@@ -36,7 +36,7 @@ import (
 )
 
 func tkey(i int) []byte {
-	return []byte(fmt.Sprintf("%016d", i))
+	return fmt.Appendf(nil, "%016d", i)
 }
 
 func tval(seed, n int) []byte {
@@ -169,7 +169,7 @@ func (h *dbHarness) put(key, value string) {
 }
 
 func (h *dbHarness) putMulti(n int, low, hi string) {
-	for i := 0; i < n; i++ {
+	for range n {
 		h.put(low, "begin")
 		h.put(hi, "end")
 		h.compactMem()
@@ -509,7 +509,7 @@ func numKey(num int) string {
 var testingBloomFilter = filter.NewBloomFilter(10)
 
 func truno(t *testing.T, o *opt.Options, f func(h *dbHarness)) {
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		func() {
 			switch i {
 			case 0:
@@ -701,7 +701,7 @@ func TestDB_GetLevel0Ordering(t *testing.T) {
 	trun(t, func(h *dbHarness) {
 		h.db.memdbMaxLevel = 2
 
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			h.put("bar", fmt.Sprintf("b%d", i))
 			h.put("foo", fmt.Sprintf("v%d", i))
 			h.compactMem()
@@ -797,7 +797,7 @@ func TestDB_GetEncountersEmptyLevel(t *testing.T) {
 		h.getVal("z", "end")
 
 		// Step 3: read a bunch of times
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			h.get("missing", false)
 		}
 
@@ -852,7 +852,7 @@ func TestDB_IteratorPinsRef(t *testing.T) {
 
 	// Write to force compactions
 	h.put("foo", "newvalue1")
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		h.put(numKey(i), strings.Repeat(fmt.Sprintf("v%09d", i), 100000/10))
 	}
 	h.put("foo", "newvalue2")
@@ -927,16 +927,16 @@ func TestDB_MinorCompactionsHappen(t *testing.T) {
 		return fmt.Sprintf("key%06d", i)
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.put(key(i), key(i)+strings.Repeat("v", 1000))
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.getVal(key(i), key(i)+strings.Repeat("v", 1000))
 	}
 
 	h.reopenDB()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.getVal(key(i), key(i)+strings.Repeat("v", 1000))
 	}
 }
@@ -983,7 +983,7 @@ func TestDB_CompactionsGenerateMultipleFiles(t *testing.T) {
 	n := 80
 
 	// Write 8MB (80 values, each 100K)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.put(numKey(i), strings.Repeat(fmt.Sprintf("v%09d", i), 100000/10))
 	}
 
@@ -1000,7 +1000,7 @@ func TestDB_CompactionsGenerateMultipleFiles(t *testing.T) {
 	}
 	v.release()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.getVal(numKey(i), strings.Repeat(fmt.Sprintf("v%09d", i), 100000/10))
 	}
 }
@@ -1056,7 +1056,7 @@ func TestDB_SparseMerge(t *testing.T) {
 	// Check that we do not do a compaction that merges all of B in one shot.
 	h.put("A", "va")
 	value := strings.Repeat("x", 1000)
-	for i := 0; i < 100000; i++ {
+	for i := range 100000 {
 		h.put(fmt.Sprintf("B%010d", i), value)
 	}
 	h.put("C", "vc")
@@ -1097,14 +1097,14 @@ func TestDB_SizeOf(t *testing.T) {
 	s1 := 100000
 	s2 := 105000
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.put(numKey(i), strings.Repeat(fmt.Sprintf("v%09d", i), s1/10))
 	}
 
 	// 0 because SizeOf() does not account for memtable space
 	h.sizeAssert("", numKey(50), 0, 0)
 
-	for r := 0; r < 3; r++ {
+	for range 3 {
 		h.reopenDB()
 
 		for cs := 0; cs < n; cs += 10 {
@@ -1153,7 +1153,7 @@ func TestDB_SizeOf_MixOfSmallAndLarge(t *testing.T) {
 		h.put(numKey(i), strings.Repeat(fmt.Sprintf("v%09d", i), int(n)/10))
 	}
 
-	for r := 0; r < 3; r++ {
+	for range 3 {
 		h.reopenDB()
 
 		var x int64
@@ -1338,9 +1338,9 @@ func TestDB_CompactionTableOpenError(t *testing.T) {
 
 	im := 10
 	jm := 10
-	for r := 0; r < 2; r++ {
-		for i := 0; i < im; i++ {
-			for j := 0; j < jm; j++ {
+	for range 2 {
+		for i := range im {
+			for j := range jm {
 				h.put(fmt.Sprintf("k%d,%d", i, j), fmt.Sprintf("v%d,%d", i, j))
 			}
 			h.compactMem()
@@ -1366,8 +1366,8 @@ func TestDB_CompactionTableOpenError(t *testing.T) {
 	h.openDB()
 	h.stor.EmulateError(testutil.ModeOpen, storage.TypeTable, nil)
 
-	for i := 0; i < im; i++ {
-		for j := 0; j < jm; j++ {
+	for i := range im {
+		for j := range jm {
 			h.getVal(fmt.Sprintf("k%d,%d", i, j), fmt.Sprintf("v%d,%d", i, j))
 		}
 	}
@@ -1465,7 +1465,7 @@ func TestDB_L0_CompactionBug_Issue44_b(t *testing.T) {
 
 func TestDB_SingleEntryMemCompaction(t *testing.T) {
 	trun(t, func(h *dbHarness) {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			h.put("big", strings.Repeat("v", opt.DefaultWriteBuffer))
 			h.compactMem()
 			h.put("key", strings.Repeat("v", opt.DefaultBlockSize))
@@ -1481,7 +1481,7 @@ func TestDB_SingleEntryMemCompaction(t *testing.T) {
 }
 
 func TestDB_ManifestWriteError(t *testing.T) {
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		func() {
 			h := newDbHarness(t)
 			defer h.close()
@@ -1635,7 +1635,7 @@ func TestDB_CustomComparer(t *testing.T) {
 
 	h.put("[10]", "ten")
 	h.put("[0x14]", "twenty")
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		h.getVal("[10]", "ten")
 		h.getVal("[0xa]", "ten")
 		h.getVal("[20]", "twenty")
@@ -1646,8 +1646,8 @@ func TestDB_CustomComparer(t *testing.T) {
 		h.compactRange("[0]", "[9999]")
 	}
 
-	for n := 0; n < 2; n++ {
-		for i := 0; i < 100; i++ {
+	for range 2 {
+		for i := range 100 {
 			v := fmt.Sprintf("[%d]", i*10)
 			h.put(v, v)
 		}
@@ -1707,7 +1707,7 @@ func TestDB_BloomFilter(t *testing.T) {
 	const n = 10000
 
 	// Populate multiple layers
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.put(key(i), key(i))
 	}
 	h.compactMem()
@@ -1722,7 +1722,7 @@ func TestDB_BloomFilter(t *testing.T) {
 
 	// Lookup present keys. Should rarely read from small sstable.
 	h.stor.ResetCounter(testutil.ModeRead, storage.TypeTable)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.getVal(key(i), key(i))
 	}
 	cnt, _ := h.stor.Counter(testutil.ModeRead, storage.TypeTable)
@@ -1733,7 +1733,7 @@ func TestDB_BloomFilter(t *testing.T) {
 
 	// Lookup missing keys. Should rarely read from either sstable.
 	h.stor.ResetCounter(testutil.ModeRead, storage.TypeTable)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.get(key(i)+".missing", false)
 	}
 	cnt, _ = h.stor.Counter(testutil.ModeRead, storage.TypeTable)
@@ -1758,7 +1758,7 @@ func TestDB_Concurrent(t *testing.T) {
 		cnt     [n]uint32
 	)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		closeWg.Add(1)
 		go func(i int) {
 			var put, get, found uint
@@ -1823,7 +1823,7 @@ func TestDB_ConcurrentIterator(t *testing.T) {
 		stop    uint32
 	)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		closeWg.Add(1)
 		go func(i int) {
 			for k := 0; atomic.LoadUint32(&stop) == 0; k++ {
@@ -1833,7 +1833,7 @@ func TestDB_ConcurrentIterator(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		closeWg.Add(1)
 		go func(i int) {
 			for k := 1000000; k < 0 || atomic.LoadUint32(&stop) == 0; k-- {
@@ -1844,7 +1844,7 @@ func TestDB_ConcurrentIterator(t *testing.T) {
 	}
 
 	cmp := comparer.DefaultComparer
-	for i := 0; i < n2; i++ {
+	for i := range n2 {
 		closeWg.Add(1)
 		go func(i int) {
 			it := h.db.NewIterator(nil, nil)
@@ -1891,11 +1891,11 @@ func TestDB_ConcurrentWrite(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			for k := 0; k < niter; k++ {
+			for k := range niter {
 				kstr := fmt.Sprintf("put-%d.%d", i, k)
 				vstr := fmt.Sprintf("v%d", k)
 				h.put(kstr, vstr)
@@ -1904,19 +1904,19 @@ func TestDB_ConcurrentWrite(t *testing.T) {
 			}
 		}(i)
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		batch := &Batch{}
 		go func(i int) {
 			defer wg.Done()
-			for k := 0; k < niter; k++ {
+			for k := range niter {
 				batch.Reset()
-				for j := 0; j < bk; j++ {
-					batch.Put([]byte(fmt.Sprintf("batch-%d.%d.%d", i, k, j)), []byte(fmt.Sprintf("v%d", k)))
+				for j := range bk {
+					batch.Put(fmt.Appendf(nil, "batch-%d.%d.%d", i, k, j), fmt.Appendf(nil, "v%d", k))
 				}
 				h.write(batch)
 				// Key should immediately available after put returns.
-				for j := 0; j < bk; j++ {
+				for j := range bk {
 					h.getVal(fmt.Sprintf("batch-%d.%d.%d", i, k, j), fmt.Sprintf("v%d", k))
 				}
 			}
@@ -1932,7 +1932,7 @@ func TestDB_CreateReopenDbOnFile(t *testing.T) {
 	}
 	defer os.RemoveAll(dbpath)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		stor, err := storage.OpenFile(dbpath, false)
 		if err != nil {
 			t.Fatalf("(%d) cannot open storage: %s", i, err)
@@ -1960,7 +1960,7 @@ func TestDB_CreateReopenDbOnFile2(t *testing.T) {
 	}
 	defer os.RemoveAll(dbpath)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		db, err := OpenFile(dbpath, nil)
 		if err != nil {
 			t.Fatalf("(%d) cannot open db: %s", i, err)
@@ -2004,21 +2004,21 @@ func TestDB_LeveldbIssue178(t *testing.T) {
 
 	// Create first key range.
 	batch := new(Batch)
-	for i := 0; i < nKeys; i++ {
+	for i := range nKeys {
 		batch.Put([]byte(key1(i)), []byte("value for range 1 key"))
 	}
 	h.write(batch)
 
 	// Create second key range.
 	batch.Reset()
-	for i := 0; i < nKeys; i++ {
+	for i := range nKeys {
 		batch.Put([]byte(key2(i)), []byte("value for range 2 key"))
 	}
 	h.write(batch)
 
 	// Delete second key range.
 	batch.Reset()
-	for i := 0; i < nKeys; i++ {
+	for i := range nKeys {
 		batch.Delete([]byte(key2(i)))
 	}
 	h.write(batch)
@@ -2088,10 +2088,10 @@ func TestDB_GoleveldbIssue74(t *testing.T) {
 			}
 
 			iv := fmt.Sprintf("VAL%010d", i)
-			for k := 0; k < n; k++ {
+			for k := range n {
 				key := fmt.Sprintf("KEY%06d", k)
 				b.Put([]byte(key), []byte(key+iv))
-				b.Put([]byte(fmt.Sprintf("PTR%06d", k)), []byte(key))
+				b.Put(fmt.Appendf(nil, "PTR%06d", k), []byte(key))
 			}
 			h.write(b)
 
@@ -2378,7 +2378,7 @@ func TestDB_TransientError(t *testing.T) {
 	for i := range snaps {
 		vtail := fmt.Sprintf("VAL%030d", i)
 		b.Reset()
-		for k := 0; k < nKey; k++ {
+		for k := range nKey {
 			key := fmt.Sprintf("KEY%8d", k)
 			b.Put([]byte(key), []byte(key+vtail))
 		}
@@ -2397,7 +2397,7 @@ func TestDB_TransientError(t *testing.T) {
 
 		snaps[i] = h.db.newSnapshot()
 		b.Reset()
-		for k := 0; k < nKey; k++ {
+		for k := range nKey {
 			key := fmt.Sprintf("KEY%8d", k)
 			b.Delete([]byte(key))
 		}
@@ -2452,7 +2452,7 @@ func TestDB_TransientError(t *testing.T) {
 			vtail := fmt.Sprintf("VAL%030d", i)
 			iter := snap.NewIterator(nil, nil)
 			defer iter.Release()
-			for k := 0; k < nKey; k++ {
+			for k := range nKey {
 				if t.Failed() {
 					return
 				}
@@ -2505,7 +2505,7 @@ func TestDB_UkeyShouldntHopAcrossTable(t *testing.T) {
 	for i := range snaps {
 		vtail := fmt.Sprintf("VAL%030d", i)
 		b.Reset()
-		for k := 0; k < nKey; k++ {
+		for k := range nKey {
 			key := fmt.Sprintf("KEY%08d", k)
 			b.Put([]byte(key), []byte(key+vtail))
 		}
@@ -2515,7 +2515,7 @@ func TestDB_UkeyShouldntHopAcrossTable(t *testing.T) {
 
 		snaps[i] = h.db.newSnapshot()
 		b.Reset()
-		for k := 0; k < nKey; k++ {
+		for k := range nKey {
 			key := fmt.Sprintf("KEY%08d", k)
 			b.Delete([]byte(key))
 		}
@@ -2557,7 +2557,7 @@ func TestDB_UkeyShouldntHopAcrossTable(t *testing.T) {
 			defer wg.Done()
 
 			vtail := fmt.Sprintf("VAL%030d", i)
-			for k := 0; k < nKey; k++ {
+			for k := range nKey {
 				if t.Failed() {
 					return
 				}
@@ -2610,15 +2610,15 @@ func TestDB_TableCompactionBuilder(t *testing.T) {
 		targetSize = 5 * o.CompactionTableSize
 		value      = bytes.Repeat([]byte{'0'}, 100)
 	)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		tw, err := s.tops.create(0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for k := 0; tw.tw.BytesLen() < targetSize; k++ {
-			key := []byte(fmt.Sprintf("%09d", k))
+			key := fmt.Appendf(nil, "%09d", k)
 			seq += nSeq - 1
-			for x := uint64(0); x < nSeq; x++ {
+			for x := range uint64(nSeq) {
 				if err := tw.append(makeInternalKey(nil, key, seq-x, keyTypeVal), value); err != nil {
 					t.Fatal(err)
 				}
@@ -2785,13 +2785,13 @@ func testDB_IterTriggeredCompaction(t *testing.T, limitDiv int) {
 
 	// Fill.
 	value := strings.Repeat("x", vSize)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.put(key(i), value)
 	}
 	h.compactMem()
 
 	// Delete all.
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.delete(key(i))
 	}
 	h.compactMem()
@@ -2900,15 +2900,15 @@ func TestDB_BulkInsertDelete(t *testing.T) {
 	const N = 2500
 	key := make([]byte, 4)
 	value := make([]byte, 256)
-	for i := 0; i < R; i++ {
+	for i := range R {
 		offset := N * i
-		for j := 0; j < N; j++ {
+		for j := range N {
 			binary.BigEndian.PutUint32(key, uint32(offset+j))
 			if err := h.db.Put(key, value, nil); err != nil {
 				t.Fatal("Put error: ", err)
 			}
 		}
-		for j := 0; j < N; j++ {
+		for j := range N {
 			binary.BigEndian.PutUint32(key, uint32(offset+j))
 			if err := h.db.Delete(key, nil); err != nil {
 				t.Fatal("Delete error: ", err)
@@ -2937,17 +2937,15 @@ func TestDB_GracefulClose(t *testing.T) {
 	// During write.
 	n := 0
 	closing := false
-	for i := 0; i < 1000000; i++ {
+	for i := range 1000000 {
 		if !closing && h.totalTables() > 3 {
 			t.Logf("close db during write, index=%d", i)
-			closeWait.Add(1)
-			go func() {
+			closeWait.Go(func() {
 				h.closeDB()
-				closeWait.Done()
-			}()
+			})
 			closing = true
 		}
-		if err := h.db.Put([]byte(fmt.Sprintf("%09d", i)), []byte(fmt.Sprintf("VAL-%09d", i)), h.wo); err != nil {
+		if err := h.db.Put(fmt.Appendf(nil, "%09d", i), fmt.Appendf(nil, "VAL-%09d", i), h.wo); err != nil {
 			t.Logf("Put error: %s (expected)", err)
 			n = i
 			break
@@ -2961,14 +2959,12 @@ func TestDB_GracefulClose(t *testing.T) {
 	for i := 0; i < n; i++ {
 		if !closing && i > n/2 {
 			t.Logf("close db during read, index=%d", i)
-			closeWait.Add(1)
-			go func() {
+			closeWait.Go(func() {
 				h.closeDB()
-				closeWait.Done()
-			}()
+			})
 			closing = true
 		}
-		if _, err := h.db.Get([]byte(fmt.Sprintf("%09d", i)), h.ro); err != nil {
+		if _, err := h.db.Get(fmt.Appendf(nil, "%09d", i), h.ro); err != nil {
 			t.Logf("Get error: %s (expected)", err)
 			break
 		}
@@ -2985,11 +2981,9 @@ func TestDB_GracefulClose(t *testing.T) {
 		}
 		if !closing {
 			t.Logf("close db during iter, index=%d", i)
-			closeWait.Add(1)
-			go func() {
+			closeWait.Go(func() {
 				h.closeDB()
-				closeWait.Done()
-			}()
+			})
 			closing = true
 		}
 		time.Sleep(time.Millisecond)

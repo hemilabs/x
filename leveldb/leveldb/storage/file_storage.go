@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -249,7 +248,7 @@ func (fs *fileStorage) setMeta(fd FileDesc) error {
 	// Check and backup old CURRENT file.
 	currentPath := filepath.Join(fs.path, "CURRENT")
 	if _, err := os.Stat(currentPath); err == nil {
-		b, err := ioutil.ReadFile(currentPath)
+		b, err := os.ReadFile(currentPath)
 		if err != nil {
 			fs.log(fmt.Sprintf("backup CURRENT: %v", err))
 			return err
@@ -328,7 +327,7 @@ func (fs *fileStorage) GetMeta() (FileDesc, error) {
 		fd   FileDesc
 	}
 	tryCurrent := func(name string) (*currentFile, error) {
-		b, err := ioutil.ReadFile(filepath.Join(fs.path, name))
+		b, err := os.ReadFile(filepath.Join(fs.path, name))
 		if err != nil {
 			if os.IsNotExist(err) {
 				err = os.ErrNotExist

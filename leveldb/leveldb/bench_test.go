@@ -23,7 +23,7 @@ import (
 
 func randomString(r *rand.Rand, n int) []byte {
 	b := new(bytes.Buffer)
-	for i := 0; i < n; i++ {
+	for range n {
 		b.WriteByte(' ' + byte(r.Intn(95)))
 	}
 	return b.Bytes()
@@ -120,7 +120,7 @@ func (p *dbBench) populate(n int) {
 	p.keys, p.values = make([][]byte, n), make([][]byte, n)
 	v := newValueGen(0.5)
 	for i := range p.keys {
-		p.keys[i], p.values[i] = []byte(fmt.Sprintf("%016d", i)), v.get(100)
+		p.keys[i], p.values[i] = fmt.Appendf(nil, "%016d", i), v.get(100)
 	}
 }
 
@@ -128,7 +128,7 @@ func (p *dbBench) randomize() {
 	m := len(p.keys)
 	times := m * 2
 	r1, r2 := rand.New(rand.NewSource(0xdeadbeef)), rand.New(rand.NewSource(0xbeefface))
-	for n := 0; n < times; n++ {
+	for range times {
 		i, j := r1.Int()%m, r2.Int()%m
 		if i == j {
 			continue

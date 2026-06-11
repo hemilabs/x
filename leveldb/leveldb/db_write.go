@@ -138,7 +138,7 @@ type writeMerge struct {
 }
 
 func (db *DB) unlockWrite(overflow bool, merged int, err error) {
-	for i := 0; i < merged; i++ {
+	for range merged {
 		db.writeAckC <- err
 	}
 	if overflow {

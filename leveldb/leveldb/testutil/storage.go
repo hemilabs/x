@@ -300,7 +300,7 @@ func (s *Storage) log(skip int, str string) {
 	}
 }
 
-func (s *Storage) logISkip(skip int, format string, args ...interface{}) {
+func (s *Storage) logISkip(skip int, format string, args ...any) {
 	pc, _, _, ok := runtime.Caller(skip + 1)
 	if ok {
 		if f := runtime.FuncForPC(pc); f != nil {
@@ -314,7 +314,7 @@ func (s *Storage) logISkip(skip int, format string, args ...interface{}) {
 	s.log(skip+1, fmt.Sprintf(format, args...))
 }
 
-func (s *Storage) logI(format string, args ...interface{}) {
+func (s *Storage) logI(format string, args ...any) {
 	s.logISkip(1, format, args...)
 }
 
@@ -512,12 +512,13 @@ func (s *Storage) ForceRename(oldfd, newfd storage.FileDesc) (err error) {
 }
 
 func (s *Storage) openFiles() string {
-	out := "Open files:"
+	var out strings.Builder
+	out.WriteString("Open files:")
 	for x, writer := range s.opens {
 		fd := unpackFile(x)
-		out += fmt.Sprintf("\n · fd=%s writer=%v", fd, writer)
+		out.WriteString(fmt.Sprintf("\n · fd=%s writer=%v", fd, writer))
 	}
-	return out
+	return out.String()
 }
 
 func (s *Storage) CloseCheck() {

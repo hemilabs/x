@@ -70,10 +70,7 @@ func newTableFile(fd storage.FileDesc, size int64, imin, imax internalKey) *tFil
 	// same as the compaction of 40KB of data.  We are a little
 	// conservative and allow approximately one seek for every 16KB
 	// of data before triggering a compaction.
-	f.seekLeft = int32(size / 16384)
-	if f.seekLeft < 100 {
-		f.seekLeft = 100
-	}
+	f.seekLeft = max(int32(size/16384), 100)
 
 	return f
 }

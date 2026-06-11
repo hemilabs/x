@@ -451,7 +451,7 @@ func (p *DB) Reset() {
 	p.nodeData[nKey] = 0
 	p.nodeData[nVal] = 0
 	p.nodeData[nHeight] = tMaxHeight
-	for n := 0; n < tMaxHeight; n++ {
+	for n := range tMaxHeight {
 		p.nodeData[nNext+n] = 0
 		p.prevNode[n] = 0
 	}

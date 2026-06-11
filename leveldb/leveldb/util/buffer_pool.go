@@ -111,22 +111,22 @@ func NewBufferPool(baseline int) *BufferPool {
 		baseline: [...]int{baseline / 4, baseline / 2, baseline, baseline * 2, baseline * 4},
 		pool: [6]sync.Pool{
 			{
-				New: func() interface{} { return new([]byte) },
+				New: func() any { return new([]byte) },
 			},
 			{
-				New: func() interface{} { return new([]byte) },
+				New: func() any { return new([]byte) },
 			},
 			{
-				New: func() interface{} { return new([]byte) },
+				New: func() any { return new([]byte) },
 			},
 			{
-				New: func() interface{} { return new([]byte) },
+				New: func() any { return new([]byte) },
 			},
 			{
-				New: func() interface{} { return new([]byte) },
+				New: func() any { return new([]byte) },
 			},
 			{
-				New: func() interface{} { return new([]byte) },
+				New: func() any { return new([]byte) },
 			},
 		},
 	}

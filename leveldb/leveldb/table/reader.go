@@ -46,13 +46,6 @@ func (e *ErrCorrupted) Error() string {
 	return fmt.Sprintf("leveldb/table: corruption on %s (pos=%d): %s", e.Kind, e.Pos, e.Reason)
 }
 
-func max(x, y int) int {
-	if x > y {
-		return x
-	}
-	return y
-}
-
 type block struct {
 	bpool          *util.BufferPool
 	bh             blockHandle

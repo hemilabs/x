@@ -62,7 +62,7 @@ func (co *cachedOptions) cache() {
 	co.compactionTableSize = make([]int, optCachedLevel)
 	co.compactionTotalSize = make([]int64, optCachedLevel)
 
-	for level := 0; level < optCachedLevel; level++ {
+	for level := range optCachedLevel {
 		co.compactionExpandLimit[level] = co.Options.GetCompactionExpandLimit(level)
 		co.compactionGPOverlaps[level] = co.Options.GetCompactionGPOverlaps(level)
 		co.compactionSourceLimit[level] = co.Options.GetCompactionSourceLimit(level)

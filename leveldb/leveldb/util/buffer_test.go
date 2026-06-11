@@ -18,7 +18,7 @@ var testBytes []byte // test data; same as data but as a slice.
 
 func init() {
 	testBytes = make([]byte, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		testBytes[i] = 'a' + byte(i%26)
 	}
 	data = string(testBytes)
@@ -92,7 +92,7 @@ func empty(t *testing.T, testname string, buf *Buffer, s string, fub []byte) {
 func TestBasicOperations(t *testing.T) {
 	var buf Buffer
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		check(t, "TestBasicOperations (1)", &buf, "")
 
 		buf.Reset()
@@ -175,7 +175,7 @@ func TestLargeByteReads(t *testing.T) {
 func TestMixedReadsAndWrites(t *testing.T) {
 	var buf Buffer
 	s := ""
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		wlen := rand.Intn(len(data))
 		s = fillBytes(t, "TestMixedReadsAndWrites (1)", &buf, s, 1, testBytes[0:wlen])
 		rlen := rand.Intn(len(data))
@@ -233,10 +233,7 @@ func TestNext(t *testing.T) {
 					t.Fatalf("Read %d returned %d", i, n)
 				}
 				bb := buf.Next(k)
-				want := k
-				if want > j-i {
-					want = j - i
-				}
+				want := min(k, j-i)
 				if len(bb) != want {
 					t.Fatalf("in %d,%d: len(Next(%d)) == %d", i, j, k, len(bb))
 				}
@@ -339,7 +336,7 @@ func TestBufferGrowth(t *testing.T) {
 		t.Fatal(err)
 	}
 	var cap0 int
-	for i := 0; i < 5<<10; i++ {
+	for i := range 5 << 10 {
 		if _, err := b.Write(buf); err != nil {
 			t.Fatal(err)
 		}
@@ -364,7 +361,7 @@ func BenchmarkWriteByte(b *testing.B) {
 	buf := NewBuffer(make([]byte, n))
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
-		for i := 0; i < n; i++ {
+		for range n {
 			if err := buf.WriteByte('x'); err != nil {
 				b.Fatal(err)
 			}
@@ -378,7 +375,7 @@ func BenchmarkAlloc(b *testing.B) {
 	buf := NewBuffer(make([]byte, n))
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
-		for i := 0; i < n; i++ {
+		for range n {
 			buf.Alloc(1)
 		}
 	}
@@ -392,7 +389,7 @@ func BenchmarkBufferNotEmptyWriteRead(b *testing.B) {
 		if _, err := buf2.Write(buf[0:1]); err != nil {
 			b.Fatal(err)
 		}
-		for i := 0; i < 5<<10; i++ {
+		for range 5 << 10 {
 			if _, err := buf2.Write(buf); err != nil {
 				b.Fatal(err)
 			}
@@ -416,7 +413,7 @@ func BenchmarkBufferFullSmallReads(b *testing.B) {
 				b.Fatal(err)
 			}
 		}
-		for i := 0; i < 5<<10; i++ {
+		for range 5 << 10 {
 			if _, err := buf2.Read(buf[:1]); err != nil {
 				b.Fatal(err)
 			}
