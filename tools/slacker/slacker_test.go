@@ -42,10 +42,9 @@ func TestConfigFromEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("SLACK_OAUTH_TOKEN", tt.token)
-			t.Setenv("SLACK_CHANNEL", tt.channel)
 			t.Setenv("SLACK_URL", tt.url)
 
-			cfg, err := configFromEnv()
+			cfg, err := configFromEnv(tt.channel)
 			if err == nil {
 				if tt.wantErr {
 					t.Fatal("expected error")

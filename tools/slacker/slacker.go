@@ -18,10 +18,10 @@ type config struct {
 	SlackURL        string
 }
 
-func configFromEnv() (*config, error) {
+func configFromEnv(channelID string) (*config, error) {
 	cfg := &config{
 		SlackOauthToken: os.Getenv("SLACK_OAUTH_TOKEN"),
-		SlackChannel:    os.Getenv("SLACK_CHANNEL"),
+		SlackChannel:    channelID,
 		SlackURL:        os.Getenv("SLACK_URL"),
 	}
 
@@ -29,7 +29,7 @@ func configFromEnv() (*config, error) {
 		return nil, fmt.Errorf("SLACK_OAUTH_TOKEN must be set")
 	}
 	if cfg.SlackChannel == "" {
-		return nil, fmt.Errorf("SLACK_CHANNEL must be set")
+		return nil, fmt.Errorf("channel ID must be set")
 	}
 
 	return cfg, nil

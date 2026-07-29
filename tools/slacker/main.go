@@ -5,10 +5,23 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
+
+	"github.com/spf13/pflag"
 )
+
+const slackerHelp = `Slacker is a CLI tool to send messages to slack through an app.
+
+Usage:
+  slacker --channel <id> [--json] <message>
+
+Environment Variables:
+
+[SLACK_OAUTH_TOKEN]      (Required) App OAuth Token.
+[SLACK_URL]              (Optional) Slack url for the client. Useful for testing.
+
+Flags:`
 
 func main() {
 	if err := run(); err != nil {
@@ -18,17 +31,25 @@ func main() {
 }
 
 func run() error {
-	jsonFlag := flag.Bool("json", false, "treat <message> as a JSON Block Kit payload")
-	flag.Parse()
+	jsonFlag := pflag.Bool("json", false, "treat <message> as a JSON Block Kit payload")
+	channelID := pflag.StringP("channel", "c", "", "slack channel id to send the message in")
+	pflag.Usage = func() {
+		_, _ = fmt.Fprintf(os.Stderr, "%s", slackerHelp)
+		fmt.Println()
+		pflag.PrintDefaults()
+	}
+	pflag.Parse()
 
-	args := flag.Args()
+	args := pflag.Args()
 	if len(args) != 1 {
-		return fmt.Errorf("usage: %s [--json] <message>", os.Args[0])
+		pflag.Usage()
+		return nil
 	}
 	message := args[0]
 
-	cfg, err := configFromEnv()
+	cfg, err := configFromEnv(*channelID)
 	if err != nil {
+		pflag.Usage()
 		return err
 	}
 
