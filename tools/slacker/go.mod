@@ -1,4 +1,4 @@
-module slacker
+module github.com/hemilabs/x/tools/slacker
 
 go 1.26.2
 
