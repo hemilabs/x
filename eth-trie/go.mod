@@ -3,7 +3,7 @@ module github.com/hemilabs/x/eth-trie
 go 1.25.0
 
 require (
-	github.com/VictoriaMetrics/fastcache v1.13.0
+	github.com/VictoriaMetrics/fastcache v1.13.3
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.16.6
 	github.com/ethereum/go-verkle v0.2.2
