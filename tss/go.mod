@@ -1,6 +1,6 @@
 module github.com/hemilabs/x/tss/v3
 
-go 1.25
+go 1.26.0
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
@@ -10,7 +10,7 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/otiai10/primes v0.0.0-20210501021515-f1b2be525a11
 	github.com/pkg/errors v0.9.1
-	golang.org/x/crypto v0.13.0
+	golang.org/x/crypto v0.56.0
 )
 
 require (
