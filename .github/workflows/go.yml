@@ -16,7 +16,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=golangci/golangci-lint versioning=semver
-  GOLANGCI_LINT_VERSION: "v2.11.3"
+  GOLANGCI_LINT_VERSION: "v2.14.0"
 
 permissions:
   contents: read
