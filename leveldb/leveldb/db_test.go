@@ -2994,3 +2994,30 @@ func TestDB_GracefulClose(t *testing.T) {
 	iter.Release()
 	closeWait.Wait()
 }
+
+func TestDB_ConcurrentTransactionClose(t *testing.T) {
+	for range 100 {
+		db, err := Open(storage.NewMemStorage(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tr, err := db.OpenTransaction()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := tr.Put([]byte("k"), []byte("v"), nil); err != nil {
+			t.Fatal(err)
+		}
+
+		// Commit and Close race on db.tr. Either may win; the
+		// race detector must not fire.
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			_ = tr.Commit()
+		})
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+		wg.Wait()
+	}
+}

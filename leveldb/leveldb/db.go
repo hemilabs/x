@@ -70,6 +70,7 @@ type DB struct {
 	writeAckC    chan error
 	writeDelay   time.Duration
 	writeDelayN  int
+	trMu         sync.Mutex // protects tr
 	tr           *Transaction
 
 	// Compaction.
@@ -1193,8 +1194,11 @@ func (db *DB) Close() error {
 	close(db.closeC)
 
 	// Discard open transaction.
-	if db.tr != nil {
-		db.tr.Discard()
+	db.trMu.Lock()
+	tr := db.tr
+	db.trMu.Unlock()
+	if tr != nil {
+		tr.Discard()
 	}
 
 	// Acquire writer lock.
