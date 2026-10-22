@@ -70,12 +70,13 @@ type SignRound2Message struct {
 	ReceiverID []byte
 }
 
-// ValidateBasic checks that required fields of SignRound2Message are non-nil.
+// ValidateBasic checks that required fields of SignRound2Message,
+// including the fields of both Bob proofs, are non-nil.
 func (m *SignRound2Message) ValidateBasic() bool {
 	return m != nil &&
 		m.C1 != nil && m.C1.Sign() > 0 &&
 		m.C2 != nil && m.C2.Sign() > 0 &&
-		m.ProofBob != nil && m.ProofBobWC != nil &&
+		m.ProofBob.ValidateBasic() && m.ProofBobWC.ValidateBasic() &&
 		len(m.ReceiverID) > 0
 }
 
