@@ -8,9 +8,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/hemilabs/x/tss/v3/crypto"
 	cmt "github.com/hemilabs/x/tss/v3/crypto/commitments"
 	"github.com/hemilabs/x/tss/v3/crypto/mta"
 	"github.com/hemilabs/x/tss/v3/crypto/schnorr"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 // validR1M1 returns a SignRound1Message1 that passes ValidateBasic.
@@ -96,13 +98,25 @@ func TestSignRound1Message2_ValidateBasic(t *testing.T) {
 	}
 }
 
+// validProofBob returns a ProofBob with every field set.
+func validProofBob() *mta.ProofBob {
+	one := func() *big.Int { return big.NewInt(1) }
+	return &mta.ProofBob{
+		Z: one(), ZPrm: one(), T: one(), V: one(), W: one(),
+		S: one(), S1: one(), S2: one(), T1: one(), T2: one(),
+	}
+}
+
 // validR2 returns a SignRound2Message that passes ValidateBasic.
 func validR2() *SignRound2Message {
 	return &SignRound2Message{
-		C1:         big.NewInt(10),
-		C2:         big.NewInt(20),
-		ProofBob:   &mta.ProofBob{},
-		ProofBobWC: &mta.ProofBobWC{},
+		C1:       big.NewInt(10),
+		C2:       big.NewInt(20),
+		ProofBob: validProofBob(),
+		ProofBobWC: &mta.ProofBobWC{
+			ProofBob: validProofBob(),
+			U:        crypto.ScalarBaseMult(tss.S256(), big.NewInt(1)),
+		},
 		ReceiverID: []byte("recv"),
 	}
 }
@@ -153,6 +167,21 @@ func TestSignRound2Message_ValidateBasic(t *testing.T) {
 		{"ProofBobWC nil", func() *SignRound2Message {
 			m := validR2()
 			m.ProofBobWC = nil
+			return m
+		}(), false},
+		{"ProofBob.S1 nil", func() *SignRound2Message {
+			m := validR2()
+			m.ProofBob.S1 = nil
+			return m
+		}(), false},
+		{"ProofBobWC.ProofBob nil", func() *SignRound2Message {
+			m := validR2()
+			m.ProofBobWC.ProofBob = nil
+			return m
+		}(), false},
+		{"ProofBobWC.U nil", func() *SignRound2Message {
+			m := validR2()
+			m.ProofBobWC.U = nil
 			return m
 		}(), false},
 		{"ReceiverID nil", func() *SignRound2Message {

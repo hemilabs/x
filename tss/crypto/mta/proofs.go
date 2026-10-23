@@ -193,7 +193,13 @@ func ProofBobFromBytes(bzs [][]byte) (*ProofBob, error) {
 // ProveBobWC.Verify implements verification of Bob's proof with check "VerifyMtawc_Bob" used in the MtA protocol from GG18Spec (9) Fig. 10.
 // an absent `X` verifies a proof generated without the X consistency check X = g^x
 func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2 *big.Int, X *crypto.ECPoint) bool {
-	if pf == nil || pf.ProofBob == nil {
+	// [FORK] Reject proofs with nil fields before any of them is
+	// dereferenced. Verify runs in library-started goroutines during
+	// SignRound3, where a panic cannot be recovered by the caller.
+	if pf == nil || !pf.ProofBob.ValidateBasic() {
+		return false
+	}
+	if X != nil && !pf.U.ValidateBasic() {
 		return false
 	}
 	if pk == nil || NTilde == nil || h1 == nil || h2 == nil || c1 == nil || c2 == nil {
@@ -420,7 +426,8 @@ func (pf *ProofBob) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Publi
 }
 
 func (pf *ProofBob) ValidateBasic() bool {
-	return pf.Z != nil &&
+	return pf != nil &&
+		pf.Z != nil &&
 		pf.ZPrm != nil &&
 		pf.T != nil &&
 		pf.V != nil &&
@@ -433,7 +440,7 @@ func (pf *ProofBob) ValidateBasic() bool {
 }
 
 func (pf *ProofBobWC) ValidateBasic() bool {
-	return pf.ProofBob.ValidateBasic() && pf.U != nil
+	return pf != nil && pf.ProofBob.ValidateBasic() && pf.U.ValidateBasic()
 }
 
 func (pf *ProofBob) Bytes() [ProofBobBytesParts][]byte {

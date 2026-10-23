@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/hemilabs/x/tss/v3/common"
@@ -320,6 +321,50 @@ func TestProofBobWCRoundTrip(t *testing.T) {
 	if !pf2.ValidateBasic() {
 		t.Fatal("ValidateBasic after round-trip failed")
 	}
+
+	// A nil field must make ValidateBasic and Verify fail, not panic.
+	// Verify runs in library goroutines during SignRound3 (TSS-03).
+	rv := reflect.ValueOf(*pf.ProofBob)
+	for i := range rv.NumField() {
+		name := rv.Type().Field(i).Name
+		t.Run("nil "+name, func(t *testing.T) {
+			pb := *pf.ProofBob
+			f := reflect.ValueOf(&pb).Elem().Field(i)
+			f.Set(reflect.Zero(f.Type()))
+			bad := &mta.ProofBobWC{ProofBob: &pb, U: pf.U}
+			if bad.ValidateBasic() {
+				t.Fatal("ValidateBasic accepted nil field")
+			}
+			if bad.Verify(testSession, ec, p.pkA, p.NTildeA, p.h1A, p.h2A, cA, c2, B) {
+				t.Fatal("ProofBobWC.Verify accepted nil field")
+			}
+			if pb.Verify(testSession, ec, p.pkA, p.NTildeA, p.h1A, p.h2A, cA, c2) {
+				t.Fatal("ProofBob.Verify accepted nil field")
+			}
+		})
+	}
+	t.Run("nil U", func(t *testing.T) {
+		bad := &mta.ProofBobWC{ProofBob: pf.ProofBob}
+		if bad.ValidateBasic() {
+			t.Fatal("ValidateBasic accepted nil U")
+		}
+		if bad.Verify(testSession, ec, p.pkA, p.NTildeA, p.h1A, p.h2A, cA, c2, B) {
+			t.Fatal("Verify accepted nil U")
+		}
+	})
+	t.Run("nil proof", func(t *testing.T) {
+		var bad *mta.ProofBobWC
+		if bad.ValidateBasic() {
+			t.Fatal("ValidateBasic accepted nil proof")
+		}
+		var badBob *mta.ProofBob
+		if badBob.ValidateBasic() {
+			t.Fatal("ValidateBasic accepted nil ProofBob")
+		}
+		if (&mta.ProofBobWC{U: pf.U}).ValidateBasic() {
+			t.Fatal("ValidateBasic accepted nil embedded ProofBob")
+		}
+	})
 	t.Log("ProofBobWC round-trip OK")
 }
 
