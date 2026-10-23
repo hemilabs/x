@@ -131,6 +131,10 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 	if numPrimes < 1 {
 		return nil, errors.New("numPrimes should be > 0")
 	}
+	// With no worker, the loop below waits forever.
+	if concurrency < 1 {
+		return nil, errors.New("concurrency should be > 0")
+	}
 
 	primeCh := make(chan *GermainSafePrime, concurrency*numPrimes)
 	errCh := make(chan error, concurrency)
@@ -226,7 +230,10 @@ func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, e
 			default:
 				_, err := io.ReadFull(rand, bytes)
 				if err != nil {
-					errCh <- err
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+					}
 					return
 				}
 
@@ -308,8 +315,15 @@ func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, e
 				if q.ProbablyPrime(20) &&
 					isPocklingtonCriterionSatisfied(p) &&
 					q.BitLen() == qBitLen {
+					// [FORK] Send with a select.  When the buffer is full
+					// and the caller returned, a plain send blocks forever,
+					// and the caller's deferred Wait never returns.
 					if sgp := (&GermainSafePrime{p: p, q: q}); sgp.Validate() {
-						primeCh <- &GermainSafePrime{p: p, q: q}
+						select {
+						case primeCh <- sgp:
+						case <-ctx.Done():
+							return
+						}
 					}
 					p, q = new(big.Int), new(big.Int)
 				}

@@ -60,3 +60,14 @@ func TestGetRandomPrimeInt(t *testing.T) {
 		t.Fatal("rand prime should be prime")
 	}
 }
+
+// TestRandomHelpersDegenerateBounds verifies that bounds with no valid
+// result give nil and do not loop forever.
+func TestRandomHelpersDegenerateBounds(t *testing.T) {
+	if common.GetRandomPrimeInt(rand.Reader, 1) != nil {
+		t.Fatal("GetRandomPrimeInt(1): want nil")
+	}
+	if common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, big.NewInt(1)) != nil {
+		t.Fatal("GetRandomPositiveRelativelyPrimeInt(1): want nil")
+	}
+}

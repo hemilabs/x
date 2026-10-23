@@ -68,3 +68,29 @@ func TestGetRandomGermainPrimeConcurrent(t *testing.T) {
 		}
 	}
 }
+
+// TestGetRandomSafePrimesConcurrentReturns verifies that a search for
+// small safe primes with many workers always returns.  Workers find
+// primes faster than the caller reads them, so a full buffer must not
+// block them after the caller returns.  A concurrency below 1 gives an
+// error and does not wait forever.
+func TestGetRandomSafePrimesConcurrentReturns(t *testing.T) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			if _, err := GetRandomSafePrimesConcurrent(context.Background(), 32, 1, 8, rand.Reader); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+		if _, err := GetRandomSafePrimesConcurrent(context.Background(), 32, 1, 0, rand.Reader); err == nil {
+			t.Error("concurrency 0: expected an error")
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(60 * time.Second):
+		t.Fatal("GetRandomSafePrimesConcurrent did not return")
+	}
+}

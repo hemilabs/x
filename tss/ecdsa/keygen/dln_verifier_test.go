@@ -83,17 +83,14 @@ func generateDLNTestParams(t *testing.T) *dlnTestParams {
 	}
 }
 
-// TestNewDlnProofVerifierZeroConcurrencyPanics verifies that constructing a
-// DlnProofVerifier with concurrency=0 panics, as documented.
-func TestNewDlnProofVerifierZeroConcurrencyPanics(t *testing.T) {
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatal("concurrency=0 must panic")
-			}
-		}()
-		NewDlnProofVerifier(0)
-	}()
+// TestNewDlnProofVerifierLowConcurrency verifies that a concurrency of
+// 0 or below is used as 1 and does not panic.
+func TestNewDlnProofVerifierLowConcurrency(t *testing.T) {
+	for _, c := range []int{0, -3} {
+		if got := cap(NewDlnProofVerifier(c).semaphore); got != 1 {
+			t.Fatalf("concurrency %d: semaphore size %d, want 1", c, got)
+		}
+	}
 }
 
 // TestNewDlnProofVerifierValidConcurrency verifies that concurrency values

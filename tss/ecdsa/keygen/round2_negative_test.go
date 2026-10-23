@@ -7,8 +7,10 @@ package keygen
 import (
 	"context"
 	"math/big"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hemilabs/x/tss/v3/crypto/paillier"
 	"github.com/hemilabs/x/tss/v3/tss"
@@ -440,4 +442,36 @@ func TestRound2RejectsOversizedNTilde(t *testing.T) {
 	nt.SetBit(nt, 2048, 1) // set bit 2048 → 2049-bit value
 	msgs[victimIdx] = bad
 	expectRound2Error(t, fix, msgs, "NTildej insufficient bits", victimIdx)
+}
+
+// TestRound2LeavesNoDLNGoroutine gives peer 1 bad Pedersen values with
+// DLN proofs on.  Round2 must check every peer before it starts any DLN
+// verification, so no verification is still running after it returns.
+func TestRound2LeavesNoDLNGoroutine(t *testing.T) {
+	preParams := loadTestPreParams(t, negN)
+	pIDs := tss.GenerateTestPartyIDs(negN)
+	peerCtx := tss.NewPeerContext(pIDs)
+	states := make([]*KeygenState, negN)
+	r1 := make([]*tss.Message, negN)
+	for i := 0; i < negN; i++ {
+		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
+		st, out, err := Round1(context.Background(), params, preParams[i])
+		if err != nil {
+			t.Fatalf("Round1[%d]: %v", i, err)
+		}
+		states[i], r1[i] = st, out.Messages[0]
+	}
+	bad := cloneR1MsgContent(r1[victimIdx])
+	c := bad.Content.(*KGRound1Message)
+	c.H2 = new(big.Int).Set(c.H1)
+	r1[victimIdx] = bad
+
+	before := runtime.NumGoroutine()
+	if _, err := Round2(context.Background(), states[0], r1); err == nil {
+		t.Fatal("Round2 accepted h1 == h2")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if after := runtime.NumGoroutine(); after > before+1 {
+		t.Fatalf("%d goroutines still running after Round2 returned", after-before)
+	}
 }
