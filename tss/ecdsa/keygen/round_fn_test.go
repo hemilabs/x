@@ -32,6 +32,7 @@ func TestRoundFnKeygenThreeParties(t *testing.T) {
 	r1Msgs := make([][]*tss.Message, n) // r1Msgs[i] = party i's broadcasts
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := Round1(context.Background(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
@@ -188,6 +189,7 @@ func TestRoundFnKeygenNoProofFlags(t *testing.T) {
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofMod()
 		params.SetNoProofFac()
 		params.SetNoProofDLN()

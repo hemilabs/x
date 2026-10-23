@@ -42,9 +42,11 @@ func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]by
 	ssidList = append(ssidList, big.NewInt(int64(params.Threshold())))
 	ssidList = append(ssidList, big.NewInt(int64(roundNumber)))
 	ssidList = append(ssidList, temp.ssidNonce)
-	if cid := params.CeremonyID(); len(cid) > 0 {
-		ssidList = append(ssidList, new(big.Int).SetBytes(cid))
+	cid, err := params.CeremonySSID()
+	if err != nil {
+		return nil, err
 	}
+	ssidList = append(ssidList, cid...)
 	ssid := common.SHA512_256i(ssidList...).Bytes()
 	return ssid, nil
 }
@@ -60,6 +62,10 @@ func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]by
 // GeneratePreParams / ValidateWithProof.  If preParams is zero-value
 // (Validate() returns false), Round1 generates fresh safe primes.
 func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParams) (*KeygenState, *RoundOutput, error) {
+	// Fail before any work when the ceremony ID is missing.
+	if _, err := params.CeremonySSID(); err != nil {
+		return nil, nil, err
+	}
 	partyCount := params.PartyCount()
 	save := NewLocalPartySaveData(partyCount)
 	temp := &localTempData{
@@ -121,7 +127,7 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 	temp.vs = vs
 	ssid, err := getSSID(params, temp, 1)
 	if err != nil {
-		return nil, nil, errors.New("failed to generate ssid")
+		return nil, nil, fmt.Errorf("generate ssid: %w", err)
 	}
 	temp.ssid = ssid
 	temp.shares = shares

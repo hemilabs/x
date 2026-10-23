@@ -50,6 +50,7 @@ import "github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 preParams, _ := keygen.GeneratePreParams(5 * time.Minute)
 
 params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+params.SetCeremonyID(ceremonyID) // required: same for all parties, new for each ceremony
 state, r1out, _ := keygen.Round1(ctx, params, *preParams)
 r2out, _ := keygen.Round2(ctx, state, r1Msgs)
 r3out, _ := keygen.Round3(ctx, state, r2p2p, r2bcast)
@@ -88,6 +89,7 @@ import "github.com/hemilabs/x/tss-lib/v3/ecdsa/resharing"
 params := tss.NewReSharingParameters(
     tss.S256(), oldCtx, newCtx, myPID,
     oldN, oldT, newN, newT)
+params.SetCeremonyID(ceremonyID) // required: same for all parties, new for each ceremony
 
 state, r1out, _ := resharing.ReshareRound1(params, keyShare, newPreParams)
 r2out, _ := resharing.ReshareRound2(state, r1Msgs)
@@ -115,6 +117,7 @@ import "github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
 
 // No pre-parameters needed for EdDSA.
 params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+params.SetCeremonyID(ceremonyID) // required: same for all parties, new for each ceremony
 state, r1out, _ := keygen.Round1(params)
 r2out, _ := keygen.Round2(state, r1Msgs)
 r3out, _ := keygen.Round3(state, r2p2p, r2bcast)
@@ -144,6 +147,7 @@ import "github.com/hemilabs/x/tss-lib/v3/eddsa/resharing"
 params := tss.NewReSharingParameters(
     tss.Edwards(), oldCtx, newCtx, myPID,
     oldN, oldT, newN, newT)
+params.SetCeremonyID(ceremonyID) // required: same for all parties, new for each ceremony
 
 state, r1out, _ := resharing.ReshareRound1(params, &keyShare)
 r2out, _ := resharing.ReshareRound2(state, r1Msgs)

@@ -5,6 +5,7 @@
 package signing
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"math/big"
 	"testing"
@@ -27,6 +28,7 @@ func runEdDSAKeygen(t *testing.T) ([]keygen.LocalPartySaveData, tss.SortedPartyI
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(params)
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -77,6 +79,7 @@ func TestSignRound1NilXi(t *testing.T) {
 	saves, pIDs := runEdDSAKeygen(t)
 	peerCtx := tss.NewPeerContext(pIDs)
 	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	bad := saves[0]
 	bad.Xi = nil
@@ -90,6 +93,7 @@ func TestSignRound1NilEDDSAPub(t *testing.T) {
 	saves, pIDs := runEdDSAKeygen(t)
 	peerCtx := tss.NewPeerContext(pIDs)
 	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	bad := saves[0]
 	bad.EDDSAPub = nil
@@ -103,6 +107,7 @@ func TestSignRound1WrongKeyCount(t *testing.T) {
 	saves, pIDs := runEdDSAKeygen(t)
 	peerCtx := tss.NewPeerContext(pIDs)
 	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	bad := saves[0]
 	bad.Ks = bad.Ks[:1] // wrong count
@@ -125,6 +130,7 @@ func TestSignRound2InvalidR1(t *testing.T) {
 	r1 := make([]*tss.Message, 3)
 	for i := 0; i < 3; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], 3, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := SignRound1(params, saves[i], m, 0)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
@@ -160,6 +166,7 @@ func runToSignRound3(t *testing.T) ([]*SigningState, []*tss.Message, tss.SortedP
 	r1 := make([]*tss.Message, 3)
 	for i := 0; i < 3; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], 3, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := SignRound1(params, saves[i], m, 0)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
@@ -249,5 +256,30 @@ func TestSignFinalizeOutOfRangeS(t *testing.T) {
 	_, err := SignFinalize(states[0], badR3)
 	if err == nil {
 		t.Fatal("expected error for out-of-range s")
+	}
+}
+
+// TestSigningSSIDBindsMessageAndKey verifies that a different message
+// or a different key gives a different SSID.
+func TestSigningSSIDBindsMessageAndKey(t *testing.T) {
+	saves, pIDs := runEdDSAKeygen(t)
+	params := tss.NewParameters(tss.Edwards(), tss.NewPeerContext(pIDs), pIDs[0], 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
+	ssid := func(key *keygen.LocalPartySaveData, m int64) []byte {
+		temp := &localTempData{ssidNonce: big.NewInt(0), m: big.NewInt(m)}
+		s, err := getSigningSSID(params, key, temp, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	base := ssid(&saves[0], 1)
+	if bytes.Equal(base, ssid(&saves[0], 2)) {
+		t.Fatal("the message does not change the SSID")
+	}
+	other := saves[0]
+	other.EDDSAPub = other.BigXj[1]
+	if bytes.Equal(base, ssid(&other, 1)) {
+		t.Fatal("the key does not change the SSID")
 	}
 }

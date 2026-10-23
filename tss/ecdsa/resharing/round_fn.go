@@ -55,7 +55,32 @@ func newIndex(params *tss.ReSharingParameters) int {
 	return -1
 }
 
+// reshareKeyHash hashes the public data of the old key.  Only old
+// parties hold it, so they send the hash in round 1.
+func reshareKeyHash(input *keygen.LocalPartySaveData) ([]byte, error) {
+	keyList, err := crypto.FlattenECPoints(input.BigXj)
+	if err != nil {
+		return nil, fmt.Errorf("flatten ec points: %w", err)
+	}
+	keyList = append(keyList, input.NTildej...)
+	keyList = append(keyList, input.H1j...)
+	keyList = append(keyList, input.H2j...)
+	return common.SHA512_256i(keyList...).Bytes(), nil
+}
+
+// getReshareSSID computes the SSID of an old party from its key.
 func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData, temp *localTempData, roundNumber int) ([]byte, error) {
+	keyHash, err := reshareKeyHash(input)
+	if err != nil {
+		return nil, err
+	}
+	return reshareSSID(params, temp, roundNumber, keyHash)
+}
+
+// reshareSSID computes the SSID from the parameters and the hash of
+// the old key.  A new-only party uses it to check the SSID that the
+// old parties send, with its own nonce and ceremony ID.
+func reshareSSID(params *tss.ReSharingParameters, temp *localTempData, roundNumber int, keyHash []byte) ([]byte, error) {
 	ssidList := []*big.Int{
 		new(big.Int).SetBytes([]byte("ecdsa-resharing")),
 		params.EC().Params().P, params.EC().Params().N,
@@ -64,23 +89,18 @@ func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySav
 	}
 	ssidList = append(ssidList, params.OldParties().IDs().Keys()...)
 	ssidList = append(ssidList, params.NewParties().IDs().Keys()...)
-	BigXjList, err := crypto.FlattenECPoints(input.BigXj)
-	if err != nil {
-		return nil, fmt.Errorf("flatten ec points: %w", err)
-	}
-	ssidList = append(ssidList, BigXjList...)
-	ssidList = append(ssidList, input.NTildej...)
-	ssidList = append(ssidList, input.H1j...)
-	ssidList = append(ssidList, input.H2j...)
+	ssidList = append(ssidList, tss.SSIDBytes(keyHash)...)
 	ssidList = append(ssidList, big.NewInt(int64(params.PartyCount())))
 	ssidList = append(ssidList, big.NewInt(int64(params.Threshold())))
 	ssidList = append(ssidList, big.NewInt(int64(params.NewPartyCount())))
 	ssidList = append(ssidList, big.NewInt(int64(params.NewThreshold())))
 	ssidList = append(ssidList, big.NewInt(int64(roundNumber)))
 	ssidList = append(ssidList, temp.ssidNonce)
-	if cid := params.CeremonyID(); len(cid) > 0 {
-		ssidList = append(ssidList, new(big.Int).SetBytes(cid))
+	cid, err := params.CeremonySSID()
+	if err != nil {
+		return nil, err
 	}
+	ssidList = append(ssidList, cid...)
 	return common.SHA512_256i(ssidList...).Bytes(), nil
 }
 
@@ -90,6 +110,10 @@ func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySav
 // key is the existing key share.  preParams is for the new committee
 // (may be zero-value if this party is old-only).
 func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveData, preParams keygen.LocalPreParams) (*ReshareState, *ReshareRoundOutput, error) {
+	// Fail before any work when the ceremony ID is missing.
+	if _, err := params.CeremonySSID(); err != nil {
+		return nil, nil, err
+	}
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
 	input := key
@@ -116,12 +140,16 @@ func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveDat
 	state := &ReshareState{params: params, input: &input, save: &save, temp: temp}
 	out := &ReshareRoundOutput{}
 
+	temp.ssidNonce = new(big.Int).SetUint64(uint64(params.SSIDNonce()))
 	if !params.IsOldCommittee() {
 		return state, out, nil
 	}
 
-	temp.ssidNonce = new(big.Int).SetUint64(uint64(params.SSIDNonce()))
-	ssid, err := getReshareSSID(params, &input, temp, 1)
+	keyHash, err := reshareKeyHash(&input)
+	if err != nil {
+		return nil, nil, err
+	}
+	ssid, err := reshareSSID(params, temp, 1, keyHash)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -154,7 +182,7 @@ func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveDat
 
 	r1msg := NewDGRound1Message(
 		params.NewParties().IDs().Exclude(Pi), Pi,
-		input.ECDSAPub, vCmt.C, ssid)
+		input.ECDSAPub, vCmt.C, ssid, keyHash)
 	temp.dgRound1Messages[i] = r1msg
 	out.Messages = append(out.Messages, r1msg)
 	out.Poly = poly
@@ -180,17 +208,24 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 	Pi := params.PartyID()
 	i := newIndex(params)
 
-	// Validate SSID consistency across old committee
-	r1msg0 := r1Msgs[0].Content.(*DGRound1Message)
-	SSID := r1msg0.SSID
+	// Each old party's SSID must match the SSID that this party
+	// computes from its own parameters and the sent key hash.
 	for j := range params.OldParties().IDs() {
-		if j == 0 {
-			continue
-		}
 		r1msg := r1Msgs[j].Content.(*DGRound1Message)
-		SSIDj := r1msg.SSID
-		if !bytes.Equal(SSID, SSIDj) {
+		want, err := reshareSSID(params, temp, 1, r1msg.KeyHash)
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(want, r1msg.SSID) {
 			return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi, params.OldParties().IDs()[j])
+		}
+	}
+	// The old parties must agree on the old key.  A mismatch does not
+	// show which party is wrong, so name no culprit.
+	SSID := r1Msgs[0].Content.(*DGRound1Message).SSID
+	for j := range params.OldParties().IDs() {
+		if !bytes.Equal(SSID, r1Msgs[j].Content.(*DGRound1Message).SSID) {
+			return nil, tss.NewError(errors.New("old key mismatch"), TaskName, 2, Pi)
 		}
 	}
 	temp.ssid = SSID

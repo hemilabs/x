@@ -7,6 +7,7 @@ package keygen
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ func makeTestParams() (*tss.Parameters, tss.SortedPartyIDs, *tss.PeerContext) {
 	pIDs := tss.GenerateTestPartyIDs(testN)
 	peerCtx := tss.NewPeerContext(pIDs)
 	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	params.SetNoProofDLN()
 	params.SetNoProofMod()
 	params.SetNoProofFac()
@@ -170,6 +172,7 @@ func TestRound1ExportsCorrectSSIDNonce(t *testing.T) {
 
 	runRound1WithNonce := func(nonce uint) *KeygenState {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -223,6 +226,7 @@ func TestRound1WithCeremonyID(t *testing.T) {
 
 	runRound1WithCeremonyID := func(ceremonyID []byte) *KeygenState {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -285,6 +289,7 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 	states := make([]*KeygenState, testN)
 	for i := 0; i < testN; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], testN, testThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -311,5 +316,16 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 	// only the full sorted party key list, which is shared.
 	if !bytes.Equal(states[0].temp.ssid, states[1].temp.ssid) {
 		t.Fatal("parties with the same CeremonyID should have the same SSID")
+	}
+}
+
+// TestRound1RequiresCeremonyID verifies that Round1 fails without a
+// ceremony ID, before it generates any primes.
+func TestRound1RequiresCeremonyID(t *testing.T) {
+	pIDs := tss.GenerateTestPartyIDs(3)
+	params := tss.NewParameters(tss.S256(), tss.NewPeerContext(pIDs), pIDs[0], 3, 1)
+	_, _, err := Round1(context.Background(), params, LocalPreParams{})
+	if !errors.Is(err, tss.ErrNoCeremonyID) {
+		t.Fatalf("Round1 error = %v, want ErrNoCeremonyID", err)
 	}
 }
