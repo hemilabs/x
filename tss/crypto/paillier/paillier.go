@@ -24,8 +24,6 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/otiai10/primes"
-
 	"github.com/hemilabs/x/tss/v3/common"
 	crypto2 "github.com/hemilabs/x/tss/v3/crypto"
 )
@@ -60,10 +58,24 @@ var (
 	one  = big.NewInt(1)
 )
 
-func init() {
-	// init primes cache
-	_ = primes.Globally.Until(verifyPrimesUntil)
-}
+// smallPrimes holds the primes below verifyPrimesUntil.  It is
+// read-only after init.  [FORK]
+// Upstream took them from github.com/otiai10/primes, which keeps a
+// process-global cache with no lock and ships no licence.
+var smallPrimes = func() []int64 {
+	var out []int64
+	composite := make([]bool, verifyPrimesUntil)
+	for i := 2; i < verifyPrimesUntil; i++ {
+		if composite[i] {
+			continue
+		}
+		out = append(out, int64(i))
+		for j := i * i; j < verifyPrimesUntil; j += i {
+			composite[j] = true
+		}
+	}
+	return out
+}()
 
 // len is the length of the modulus (each prime = len / 2)
 func GenerateKeyPair(ctx context.Context, rand io.Reader, modulusBitLen int, optionalConcurrency ...int) (privateKey *PrivateKey, publicKey *PublicKey, err error) {
@@ -234,7 +246,7 @@ func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error)
 	}
 	iters := ProofIters
 	pch, xch := make(chan bool, 1), make(chan []*big.Int, 1) // buffered to allow early exit
-	prms := primes.Until(verifyPrimesUntil).List()           // uses cache primed in init()
+	prms := smallPrimes
 	go func(ch chan<- bool) {
 		for _, prm := range prms {
 			// If prm divides N then Return 0
