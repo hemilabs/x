@@ -7,7 +7,7 @@ go-ethereum.
 
 This module is derived from the `trie` and `triedb` packages of
 [go-ethereum](https://github.com/ethereum/go-ethereum) v1.16.6. Hemi Labs
-modified it on 2025-11-05.  The changes are:
+modified it on 2025-11-05. The changes are:
 
 - The import paths now point to `github.com/hemilabs/x/eth-trie`.
 - The verkle and binary tries (`trie/verkle.go`, `trie/verkle_test.go`,
@@ -25,7 +25,7 @@ This module is under the GNU Lesser General Public License v3.0
 Public License v3.0 ([COPYING](COPYING)), so both texts apply.
 
 If you distribute a binary that links this module, the LGPL-3.0, section 4,
-applies to the binary.  In summary:
+applies to the binary. In summary:
 
 - Give a notice that the binary uses this library, and that the library is
   under the LGPL-3.0.
