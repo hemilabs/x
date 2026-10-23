@@ -186,3 +186,41 @@ func NewDGRound4Message2(to []*tss.PartyID, from *tss.PartyID) *tss.Message {
 		Content:                 &DGRound4Message2{},
 	}
 }
+
+// DGRound5Message is broadcast by a new party to the old committee
+// after its own Round 5 verification passes.  It confirms the new
+// sharing so that old parties know when to retire their shares.
+type DGRound5Message struct {
+	ECDSAPub     *crypto.ECPoint
+	VCommitments []*big.Int // round 1 commitments, indexed by old party
+	Digest       []byte     // confirmDigest of the new sharing
+}
+
+// ValidateBasic checks that required fields of DGRound5Message are non-nil.
+func (m *DGRound5Message) ValidateBasic() bool {
+	if m == nil || m.ECDSAPub == nil || len(m.VCommitments) == 0 ||
+		len(m.Digest) == 0 {
+		return false
+	}
+	for _, c := range m.VCommitments {
+		if c == nil || c.Sign() <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// NewDGRound5Message constructs a *tss.Message with the given content.
+func NewDGRound5Message(to []*tss.PartyID, from *tss.PartyID, ecdsaPub *crypto.ECPoint, vcts []*big.Int, digest []byte) *tss.Message {
+	return &tss.Message{
+		From:             from,
+		To:               to,
+		IsBroadcast:      true,
+		IsToOldCommittee: true,
+		Content: &DGRound5Message{
+			ECDSAPub:     ecdsaPub,
+			VCommitments: vcts,
+			Digest:       digest,
+		},
+	}
+}

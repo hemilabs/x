@@ -136,23 +136,37 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 
 	// --- Reshare Round 5 (save) ---
 	newSaves := make([]keygen.LocalPartySaveData, newN)
+	r5Msgs := make([]*tss.Message, newN)
 	for i := 0; i < newN; i++ {
 		out, err := ReshareRound5(newStates[i], r4Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound5[new %d]: %v", i, err)
 		}
 		newSaves[i] = *out.Save
+		r5Msgs[i] = out.Messages[0]
 	}
 	for i := 0; i < oldN; i++ {
-		out, err := ReshareRound5(oldStates[i], nil)
-		if err != nil {
+		if _, err := ReshareRound5(oldStates[i], nil); err != nil {
 			t.Fatalf("ReshareRound5[old %d]: %v", i, err)
 		}
-		// Old Xi should be zeroed.
-		if oldSaves[i].Xi.Sign() != 0 {
-			t.Fatalf("old party %d Xi not zeroed", i)
+		// Round 5 must not touch the old share.
+		if oldSaves[i].Xi.Sign() == 0 {
+			t.Fatalf("old party %d Xi zeroed before confirmation", i)
 		}
-		_ = out
+	}
+
+	// --- Confirm: old parties retire only with min(2t+1, n) confirmations ---
+	partial := make([]*tss.Message, newN)
+	copy(partial, r5Msgs[:newN-1])
+	if ok, err := ReshareConfirm(oldStates[0], partial); err != nil || ok {
+		t.Fatalf("ReshareConfirm with %d confirmations = %v, %v; want false",
+			newN-1, ok, err)
+	}
+	for i := 0; i < oldN; i++ {
+		ok, err := ReshareConfirm(oldStates[i], r5Msgs)
+		if err != nil || !ok {
+			t.Fatalf("ReshareConfirm[old %d] = %v, %v; want true", i, ok, err)
+		}
 	}
 
 	// Verify new saves: same pub key, valid data.
