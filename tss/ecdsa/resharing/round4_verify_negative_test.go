@@ -140,21 +140,26 @@ func TestReshareRound4ContextCancellation(t *testing.T) {
 func TestReshareRound4RejectsNilModProof(t *testing.T) {
 	fix := setupThroughRound3WithModProof(t)
 
-	// Clone the R2 messages and nil out party 1's ModProof.
-	msgs := copyR2Msg1Slice(fix.NewR2Msg1s)
-	clone := cloneDGRound2Message1(msgs[r4VictimIdx])
-	clone.Content.(*DGRound2Message1).ModProof = nil
-	msgs[r4VictimIdx] = clone
+	// Clone the R2 messages and nil out party 1's ModProof.  The
+	// failure must not depend on msg.From, so also try a nil From.
+	for _, nilFrom := range []bool{false, true} {
+		msgs := copyR2Msg1Slice(fix.NewR2Msg1s)
+		clone := cloneDGRound2Message1(msgs[r4VictimIdx])
+		clone.Content.(*DGRound2Message1).ModProof = nil
+		if nilFrom {
+			clone.From = nil
+		}
+		msgs[r4VictimIdx] = clone
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
-	if err == nil {
-		t.Fatal("expected error for nil ModProof, got nil")
+		_, err := ReshareRound4(context.Background(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
+		if err == nil {
+			t.Fatalf("nilFrom=%v: expected error for nil ModProof, got nil", nilFrom)
+		}
+		if !strings.Contains(err.Error(), "proof verification failed") {
+			t.Fatalf("nilFrom=%v: expected 'proof verification failed', got: %v", nilFrom, err)
+		}
+		requireCulprit(t, err, r4VictimIdx)
 	}
-	if !strings.Contains(err.Error(), "proof verification failed") {
-		t.Fatalf("expected 'proof verification failed', got: %v", err)
-	}
-	requireCulprit(t, err, r4VictimIdx)
-	t.Logf("correctly rejected nil ModProof: %v", err)
 }
 
 // TestReshareRound4RejectsV0NotECDSAPub mutates the new party's stored
