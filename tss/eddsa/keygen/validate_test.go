@@ -146,7 +146,10 @@ func TestBuildLocalSaveDataSubset(t *testing.T) {
 
 	// Take subset of 2 parties
 	subset := tss.SortPartyIDs(tss.UnSortedPartyIDs{pIDs[0], pIDs[1]})
-	subData := BuildLocalSaveDataSubset(*fullSave, subset)
+	subData, err := BuildLocalSaveDataSubset(*fullSave, subset)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(subData.Ks) != 2 {
 		t.Fatalf("subset Ks: want 2, got %d", len(subData.Ks))
 	}

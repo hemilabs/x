@@ -6,11 +6,12 @@
 package keygen
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
 	"github.com/hemilabs/x/tss/v3/tss"
 )
 
@@ -51,34 +52,58 @@ func (saveData LocalPartySaveData) ValidateSaveData() error {
 	if ownIdx == -1 {
 		return errors.New("ValidateSaveData: ShareID not found in Ks")
 	}
-	if saveData.Xi.Sign() == 0 {
-		return errors.New("ValidateSaveData: Xi is zero")
-	}
 	ec := saveData.BigXj[ownIdx].Curve()
+	if saveData.Xi.Sign() <= 0 || saveData.Xi.Cmp(ec.Params().N) >= 0 {
+		return errors.New("ValidateSaveData: Xi is not in [1, q)")
+	}
 	xiG := crypto.ScalarBaseMult(ec, saveData.Xi)
 	if !xiG.Equals(saveData.BigXj[ownIdx]) {
 		return errors.New("ValidateSaveData: Feldman VSS check failed: Xi·G != BigXj[ownIndex]")
+	}
+	// The public shares must interpolate to the group key.
+	pub, err := vss.InterpolateAtZero(ec, saveData.Ks, saveData.BigXj)
+	if err != nil {
+		return fmt.Errorf("ValidateSaveData: %w", err)
+	}
+	if !pub.Equals(saveData.EDDSAPub) {
+		return errors.New("ValidateSaveData: BigXj does not interpolate to EDDSAPub")
 	}
 	return nil
 }
 
 // BuildLocalSaveDataSubset re-creates the LocalPartySaveData for only
-// the given signing parties.
-func BuildLocalSaveDataSubset(sourceData LocalPartySaveData, sortedIDs tss.SortedPartyIDs) LocalPartySaveData {
+// the given signing parties.  It returns an error if a party is not in
+// the save data.  Keys are matched by value, so an encoding with
+// leading zero bytes matches.  The secrets are copied, so the result
+// does not share them with sourceData.
+func BuildLocalSaveDataSubset(sourceData LocalPartySaveData, sortedIDs tss.SortedPartyIDs) (LocalPartySaveData, error) {
 	keysToIndices := make(map[string]int, len(sourceData.Ks))
 	for j, kj := range sourceData.Ks {
-		keysToIndices[hex.EncodeToString(kj.Bytes())] = j
+		if kj != nil {
+			keysToIndices[kj.String()] = j
+		}
 	}
 	newData := NewLocalPartySaveData(sortedIDs.Len())
-	newData.LocalSecrets = sourceData.LocalSecrets
+	newData.LocalSecrets = LocalSecrets{
+		Xi:      cloneInt(sourceData.Xi),
+		ShareID: cloneInt(sourceData.ShareID),
+	}
 	newData.EDDSAPub = sourceData.EDDSAPub
 	for j, id := range sortedIDs {
-		savedIdx, ok := keysToIndices[hex.EncodeToString(id.Key)]
+		savedIdx, ok := keysToIndices[id.KeyInt().String()]
 		if !ok {
-			panic("BuildLocalSaveDataSubset: unable to find a signer party in the local save data")
+			return LocalPartySaveData{}, fmt.Errorf("BuildLocalSaveDataSubset: party %v is not in the local save data", id)
 		}
 		newData.Ks[j] = sourceData.Ks[savedIdx]
 		newData.BigXj[j] = sourceData.BigXj[savedIdx]
 	}
-	return newData
+	return newData, nil
+}
+
+// cloneInt returns a copy of x, or nil for a nil x.
+func cloneInt(x *big.Int) *big.Int {
+	if x == nil {
+		return nil
+	}
+	return new(big.Int).Set(x)
 }

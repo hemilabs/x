@@ -212,3 +212,40 @@ func evaluatePolynomial(ec elliptic.Curve, threshold int, v []*big.Int, id *big.
 	}
 	return
 }
+
+// InterpolateAtZero returns P(0) for the points P(ks[j]) = points[j]
+// by Lagrange interpolation over all the points.  If the points lie on
+// a polynomial of degree threshold or less, this is the group key.
+func InterpolateAtZero(ec elliptic.Curve, ks []*big.Int, points []*crypto.ECPoint) (*crypto.ECPoint, error) {
+	if len(ks) == 0 || len(ks) != len(points) {
+		return nil, errors.New("InterpolateAtZero: bad input length")
+	}
+	modQ := common.ModInt(ec.Params().N)
+	var sum *crypto.ECPoint
+	for j := range ks {
+		coef := big.NewInt(1)
+		for k := range ks {
+			if k == j {
+				continue
+			}
+			inv := modQ.ModInverse(modQ.Sub(ks[k], ks[j]))
+			if inv == nil {
+				return nil, fmt.Errorf("InterpolateAtZero: keys %d and %d collide", j, k)
+			}
+			coef = modQ.Mul(coef, modQ.Mul(ks[k], inv))
+		}
+		if coef.Sign() == 0 || points[j] == nil {
+			return nil, fmt.Errorf("InterpolateAtZero: bad share %d", j)
+		}
+		term := points[j].ScalarMult(coef)
+		if sum == nil {
+			sum = term
+			continue
+		}
+		var err error
+		if sum, err = sum.Add(term); err != nil {
+			return nil, fmt.Errorf("InterpolateAtZero: %w", err)
+		}
+	}
+	return sum, nil
+}

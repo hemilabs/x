@@ -24,14 +24,22 @@ func UpdatePublicKeyAndAdjustBigXj(keyDerivationDelta *big.Int, keys []keygen.Lo
 	if keyDerivationDelta.Sign() == 0 {
 		return errors.New("UpdatePublicKeyAndAdjustBigXj: keyDerivationDelta is zero")
 	}
-	var err error
 	gDelta := crypto.ScalarBaseMult(ec, keyDerivationDelta)
+	childPk, err := crypto.NewECPoint(ec, extendedChildPk.X, extendedChildPk.Y)
+	if err != nil {
+		common.Logger.Errorf("error creating new extended child public key")
+		return err
+	}
+	// The child key must be the parent key plus delta*G.  Otherwise
+	// the adjusted BigXj do not belong to the child key.
 	for k := range keys {
-		keys[k].ECDSAPub, err = crypto.NewECPoint(ec, extendedChildPk.X, extendedChildPk.Y)
-		if err != nil {
-			common.Logger.Errorf("error creating new extended child public key")
-			return err
+		want, err := keys[k].ECDSAPub.Add(gDelta)
+		if err != nil || !want.Equals(childPk) {
+			return errors.New("UpdatePublicKeyAndAdjustBigXj: child key is not ECDSAPub + delta*G")
 		}
+	}
+	for k := range keys {
+		keys[k].ECDSAPub = childPk
 		// Suppose X_j has shamir shares X_j0,     X_j1,     ..., X_jn
 		// So X_j + D has shamir shares  X_j0 + D, X_j1 + D, ..., X_jn + D
 		for j := range keys[k].BigXj {
