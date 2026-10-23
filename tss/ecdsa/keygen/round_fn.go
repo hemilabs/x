@@ -179,8 +179,10 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	// collisions (e.g., Party A's PaillierN == Party B's NTilde) that separate
 	// maps would miss. Such a collision lets A forge range proofs against B.
 	modulusMap := make(map[string]struct{}, len(r1Msgs)*2)
-	dlnProof1FailCulprits := make([]*tss.PartyID, len(r1Msgs))
-	dlnProof2FailCulprits := make([]*tss.PartyID, len(r1Msgs))
+	// One failure flag per slot and proof, so that two goroutines never
+	// write the same element.  The flag does not depend on msg.From.
+	dlnProof1Failed := make([]bool, len(r1Msgs))
+	dlnProof2Failed := make([]bool, len(r1Msgs))
 	wg := new(sync.WaitGroup)
 	for j, msg := range r1Msgs {
 		r1msg := msg.Content.(*KGRound1Message)
@@ -254,13 +256,13 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
 			dlnVerifier.VerifyDLNProof(r1msg.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof1FailCulprits[_j] = params.Parties().IDs()[_j]
+					dlnProof1Failed[_j] = true
 				}
 				wg.Done()
 			})
 			dlnVerifier.VerifyDLNProof(r1msg.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof2FailCulprits[_j] = params.Parties().IDs()[_j]
+					dlnProof2Failed[_j] = true
 				}
 				wg.Done()
 			})
@@ -270,11 +272,9 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, culprits := range [][]*tss.PartyID{dlnProof1FailCulprits, dlnProof2FailCulprits} {
-		for _, culprit := range culprits {
-			if culprit != nil {
-				return nil, tss.NewError(errors.New("dln proof verification failed"), TaskName, 2, params.PartyID(), culprit)
-			}
+	for j := range r1Msgs {
+		if dlnProof1Failed[j] || dlnProof2Failed[j] {
+			return nil, tss.NewError(errors.New("dln proof verification failed"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
 		}
 	}
 
