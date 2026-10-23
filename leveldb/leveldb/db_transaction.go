@@ -298,6 +298,11 @@ func (db *DB) OpenTransaction() (*Transaction, error) {
 	if err := db.ok(); err != nil {
 		return nil, err
 	}
+	// The journal can hold a failed record with a sequence number that
+	// a transaction would reuse, so fail-stop here too.
+	if err := db.journalFailed(); err != nil {
+		return nil, err
+	}
 
 	// The write happen synchronously.
 	select {

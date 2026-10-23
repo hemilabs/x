@@ -454,11 +454,12 @@ func (s *session) newManifest(rec *sessionRecord, v *version) (err error) {
 	if err != nil {
 		return
 	}
-	if !s.o.GetNoSync() {
-		err = writer.Sync()
-		if err != nil {
-			return
-		}
+	// Sync the new MANIFEST even with NoSync.  SetMeta always syncs
+	// CURRENT, so after a power loss CURRENT must not point at a
+	// MANIFEST that is not on disk.
+	err = writer.Sync()
+	if err != nil {
+		return
 	}
 	err = s.stor.SetMeta(fd)
 	return
