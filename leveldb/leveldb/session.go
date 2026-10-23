@@ -50,7 +50,12 @@ type session struct {
 
 	manifest       *journal.Writer
 	manifestWriter storage.Writer
-	manifestFd     storage.FileDesc
+	// manifestUnknown is set when a MANIFEST record write failed.  The
+	// record can be partly or fully in the file, so the next commit
+	// writes a fresh MANIFEST from the in-memory version.  Commits are
+	// serialized, so no lock is needed.
+	manifestUnknown bool
+	manifestFd      storage.FileDesc
 
 	stCompPtrs  []internalKey // compaction pointers; need external synchronization
 	stVersion   *version      // current version
@@ -226,11 +231,17 @@ func (s *session) commit(r *sessionRecord, trivial bool) (err error) {
 	if s.manifest == nil {
 		// manifest journal writer not yet created, create one
 		err = s.newManifest(r, nv)
-	} else if s.manifest.Size() >= s.o.GetMaxManifestFileSize() {
+	} else if s.manifestUnknown || s.manifest.Size() >= s.o.GetMaxManifestFileSize() {
 		// pass nil sessionRecord to avoid over-reference table file
 		err = s.newManifest(nil, nv)
+		if err == nil {
+			s.manifestUnknown = false
+		}
 	} else {
 		err = s.flushManifest(r)
+		if err != nil {
+			s.manifestUnknown = true
+		}
 	}
 
 	// finally, apply new version if no error rise

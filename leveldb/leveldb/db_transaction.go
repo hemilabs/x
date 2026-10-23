@@ -29,6 +29,11 @@ type Transaction struct {
 	rec       sessionRecord
 	stats     cStatStaging
 	closed    bool
+
+	// commitFailed is set when a MANIFEST commit failed.  The record
+	// can already be in the MANIFEST, so Discard first writes a fresh
+	// MANIFEST without it.
+	commitFailed bool
 }
 
 // Get gets the value for the given key. It returns ErrNotFound if the
@@ -221,6 +226,7 @@ func (tr *Transaction) Commit() error {
 				case <-time.After(time.Second):
 				case <-tr.db.closeC:
 					tr.db.logf("transaction@commit exiting")
+					tr.commitFailed = true
 					tr.db.compCommitLk.Unlock()
 					return cerr
 				}
@@ -232,8 +238,11 @@ func (tr *Transaction) Commit() error {
 		}
 		tr.stats.stopTimer()
 		if cerr != nil {
-			// Return error, lets user decide either to retry or discard
-			// transaction.
+			// Release compCommitLk, or a retry and the next compaction
+			// commit block forever.  Return error, lets user decide
+			// either to retry or discard transaction.
+			tr.commitFailed = true
+			tr.db.compCommitLk.Unlock()
 			return cerr
 		}
 
@@ -254,6 +263,20 @@ func (tr *Transaction) Commit() error {
 }
 
 func (tr *Transaction) discard() {
+	// A failed MANIFEST commit can have written the record.  Write a
+	// fresh MANIFEST from the current version, which does not have the
+	// record, before the tables are removed.  If that fails too, keep
+	// the tables: the next Open removes the tables that no version
+	// references.
+	if tr.commitFailed {
+		tr.db.compCommitLk.Lock()
+		err := tr.db.s.commit(&sessionRecord{}, false)
+		tr.db.compCommitLk.Unlock()
+		if err != nil {
+			tr.db.logf("transaction@discard keeps %d tables, MANIFEST rewrite failed: %v", len(tr.tables), err)
+			return
+		}
+	}
 	// Discard transaction.
 	for _, t := range tr.tables {
 		tr.db.logf("transaction@discard @%d", t.fd.Num)
@@ -317,15 +340,18 @@ func (db *DB) OpenTransaction() (*Transaction, error) {
 		panic("leveldb: has open transaction")
 	}
 
-	// Flush current memdb.
+	// Flush current memdb.  Release the write lock on each error
+	// return, or every later write and Close block.
 	if db.mem != nil && db.mem.Len() != 0 {
 		if _, err := db.rotateMem(0, true); err != nil {
+			<-db.writeLockC
 			return nil, err
 		}
 	}
 
 	// Wait compaction when certain threshold reached.
 	if err := db.waitCompaction(); err != nil {
+		<-db.writeLockC
 		return nil, err
 	}
 
@@ -334,8 +360,19 @@ func (db *DB) OpenTransaction() (*Transaction, error) {
 		seq: db.seq,
 		mem: db.mpoolGet(0),
 	}
-	tr.mem.incref()
+	// Check closeC in the same section that sets db.tr.  Close closes
+	// closeC before it reads db.tr, so either Close sees this
+	// transaction and discards it, or this sees the close.
 	db.trMu.Lock()
+	select {
+	case <-db.closeC:
+		db.trMu.Unlock()
+		db.mpoolPut(tr.mem.DB) // return the unused memdb
+		<-db.writeLockC
+		return nil, ErrClosed
+	default:
+	}
+	tr.mem.incref()
 	db.tr = tr
 	db.trMu.Unlock()
 	return tr, nil
