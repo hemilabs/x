@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"sync"
 	"sync/atomic"
 
 	"github.com/hemilabs/x/leveldb/leveldb/cache"
@@ -348,6 +349,11 @@ type tOps struct {
 	fileCache    *cache.Cache
 	blockCache   *cache.Cache
 	blockBuffer  *util.BufferPool
+
+	// readMu is held for reading while a call uses a table reader from
+	// the file cache.  close takes it for writing, so the force close of
+	// the file cache waits for the reads in flight.
+	readMu sync.RWMutex
 }
 
 // Creates an empty table and returns table writer.
@@ -429,6 +435,8 @@ func (t *tOps) open(f *tFile) (ch *cache.Handle, err error) {
 // Finds key/value pair whose key is greater than or equal to the
 // given key.
 func (t *tOps) find(f *tFile, key []byte, ro *opt.ReadOptions) (rkey, rvalue []byte, err error) {
+	t.readMu.RLock()
+	defer t.readMu.RUnlock()
 	ch, err := t.open(f)
 	if err != nil {
 		return nil, nil, err
@@ -439,6 +447,8 @@ func (t *tOps) find(f *tFile, key []byte, ro *opt.ReadOptions) (rkey, rvalue []b
 
 // Finds key that is greater than or equal to the given key.
 func (t *tOps) findKey(f *tFile, key []byte, ro *opt.ReadOptions) (rkey []byte, err error) {
+	t.readMu.RLock()
+	defer t.readMu.RUnlock()
 	ch, err := t.open(f)
 	if err != nil {
 		return nil, err
@@ -449,6 +459,8 @@ func (t *tOps) findKey(f *tFile, key []byte, ro *opt.ReadOptions) (rkey []byte, 
 
 // Returns approximate offset of the given key.
 func (t *tOps) offsetOf(f *tFile, key []byte) (offset int64, err error) {
+	t.readMu.RLock()
+	defer t.readMu.RUnlock()
 	ch, err := t.open(f)
 	if err != nil {
 		return
@@ -459,6 +471,8 @@ func (t *tOps) offsetOf(f *tFile, key []byte) (offset int64, err error) {
 
 // Creates an iterator from the given table.
 func (t *tOps) newIterator(f *tFile, slice *util.Range, ro *opt.ReadOptions) iterator.Iterator {
+	t.readMu.RLock()
+	defer t.readMu.RUnlock()
 	ch, err := t.open(f)
 	if err != nil {
 		return iterator.NewEmptyIterator(err)
@@ -488,6 +502,8 @@ func (t *tOps) remove(fd storage.FileDesc) {
 // Closes the table ops instance. It will close all tables,
 // regadless still used or not.
 func (t *tOps) close() {
+	t.readMu.Lock()
+	defer t.readMu.Unlock()
 	t.fileCache.Close(true)
 	if t.blockCache != nil {
 		t.blockCache.Close(false)

@@ -423,8 +423,13 @@ func (r *Cache) delete(n *Node) bool {
 
 // GetStats returns cache statistics.
 func (r *Cache) GetStats() Stats {
+	// Close sets mHead to nil.
+	var buckets int
+	if h := (*mHead)(atomic.LoadPointer(&r.mHead)); h != nil {
+		buckets = len(h.buckets)
+	}
 	return Stats{
-		Buckets:     len((*mHead)(atomic.LoadPointer(&r.mHead)).buckets),
+		Buckets:     buckets,
 		Nodes:       atomic.LoadInt64(&r.statNodes),
 		Size:        atomic.LoadInt64(&r.statSize),
 		GrowCount:   atomic.LoadInt32(&r.statGrow),

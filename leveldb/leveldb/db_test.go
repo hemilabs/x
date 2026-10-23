@@ -2994,3 +2994,37 @@ func TestDB_GracefulClose(t *testing.T) {
 	iter.Release()
 	closeWait.Wait()
 }
+
+// TestDB_GetDuringClose runs Get against Close.  Get must return a
+// value or an error, and must not panic.
+func TestDB_GetDuringClose(t *testing.T) {
+	for range 30 {
+		db, err := Open(storage.NewMemStorage(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < 100; i++ {
+			if err := db.Put([]byte(fmt.Sprintf("k%03d", i)), []byte("v"), nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := db.CompactRange(util.Range{}); err != nil {
+			t.Fatal(err)
+		}
+		// Read until Close stops the reads, so reads are in flight
+		// while Close runs.
+		var wg sync.WaitGroup
+		for g := 0; g < 8; g++ {
+			wg.Go(func() {
+				for i := 0; ; i++ {
+					if _, err := db.Get([]byte(fmt.Sprintf("k%03d", i%100)), nil); err != nil && err != ErrNotFound {
+						return
+					}
+				}
+			})
+		}
+		time.Sleep(time.Millisecond)
+		_ = db.Close()
+		wg.Wait()
+	}
+}
