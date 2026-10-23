@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/hemilabs/x/tss/v3/common"
 	"github.com/hemilabs/x/tss/v3/crypto"
@@ -615,4 +616,36 @@ func TestFacProofVerifyNonInvertibleT(test *testing.T) {
 			test.Fatal("Verify should return false for non-invertible t")
 		}
 	}()
+}
+
+// TestFacProofVerifyRejectsOversizedExponents makes W1, W2, Sigma and
+// V very large, one at a time.  Verify must reject each one before it
+// starts the slow exponentiations.
+func TestFacProofVerifyRejectsOversizedExponents(test *testing.T) {
+	ec := tss.EC()
+	N0p := common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)
+	N0q := common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)
+	N0 := new(big.Int).Mul(N0p, N0q)
+	primes := [2]*big.Int{common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits), common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)}
+	NCap, s, t, err := crypto.GenerateNTildei(rand.Reader, primes)
+	if err != nil {
+		test.Fatal(err)
+	}
+	proof, err := NewProof(Session, ec, N0, NCap, s, t, N0p, N0q, rand.Reader)
+	if err != nil {
+		test.Fatal(err)
+	}
+
+	huge := new(big.Int).Lsh(big.NewInt(1), 1<<22) // 4 Mbit
+	for _, field := range []string{"W1", "W2", "Sigma", "V"} {
+		bad := *proof
+		reflect.ValueOf(&bad).Elem().FieldByName(field).Set(reflect.ValueOf(huge))
+		start := time.Now()
+		if bad.Verify(Session, ec, N0, NCap, s, t) {
+			test.Fatalf("%s: oversized proof must not verify", field)
+		}
+		if d := time.Since(start); d > 100*time.Millisecond {
+			test.Fatalf("%s: Verify took %v, want a fast reject", field, d)
+		}
+	}
 }
