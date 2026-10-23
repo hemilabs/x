@@ -123,8 +123,8 @@ func TestUnFlattenECPoints(t *testing.T) {
 }
 
 func TestS256EcpointJsonSerialization(t *testing.T) {
+	// secp256k1 is registered at init.
 	ec := btcec.S256()
-	tss.RegisterCurve("secp256k1", ec)
 
 	pubKeyBytes, err := hex.DecodeString("03935336acb03b2b801d8f8ac5e92c56c4f6e93319901fdfffba9d340a874e2879")
 	if err != nil {
@@ -162,8 +162,8 @@ func TestS256EcpointJsonSerialization(t *testing.T) {
 }
 
 func TestEdwardsEcpointJsonSerialization(t *testing.T) {
+	// ed25519 is registered at init.
 	ec := edwards.Edwards()
-	tss.RegisterCurve("ed25519", ec)
 
 	pubKeyBytes, err := hex.DecodeString("ae1e5bf5f3d6bf58b5c222088671fcbe78b437e28fae944c793897b26091f249")
 	if err != nil {

@@ -6,7 +6,10 @@ package tss
 
 import (
 	"crypto/elliptic"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestEdwardsSingleton(t *testing.T) {
@@ -55,7 +58,10 @@ func TestSetCurveNilPanics(t *testing.T) {
 
 func TestRegisterCurveAndGet(t *testing.T) {
 	c := elliptic.P256()
-	RegisterCurve("test-p256", c)
+	// RegisterCurve panics on a second call, for example with -count=2.
+	if _, ok := GetCurveByName("test-p256"); !ok {
+		RegisterCurve("test-p256", c)
+	}
 
 	got, ok := GetCurveByName("test-p256")
 	if !ok || got != c {
@@ -104,4 +110,36 @@ func TestSameCurve(t *testing.T) {
 	if SameCurve(elliptic.P384(), S256()) {
 		t.Fatal("SameCurve with unregistered curve should be false")
 	}
+}
+
+// TestRegisterCurveRefusesOverwrite verifies that a registered name
+// cannot be replaced.
+func TestRegisterCurveRefusesOverwrite(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("RegisterCurve replaced secp256k1")
+		}
+	}()
+	RegisterCurve(Secp256k1, elliptic.P256())
+}
+
+// TestCurveRegistryConcurrent registers curves while other goroutines
+// read the registry.  The race detector must not report a race.
+func TestCurveRegistryConcurrent(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				_, _ = GetCurveName(S256())
+				_ = SameCurve(EC(), Edwards())
+			}
+		}()
+	}
+	// The registry keeps each entry, so register only a few.
+	for i := 0; i < 5; i++ {
+		RegisterCurve(CurveName(fmt.Sprintf("test-race-%d-%d", time.Now().UnixNano(), i)), elliptic.P256())
+	}
+	wg.Wait()
 }
