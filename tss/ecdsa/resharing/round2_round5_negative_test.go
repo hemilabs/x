@@ -6,6 +6,7 @@ package resharing
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"strings"
 	"testing"
@@ -797,8 +798,11 @@ func TestReshareRound2RejectsSSIDMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "ssid mismatch") {
 		t.Fatalf("expected 'ssid mismatch' error, got: %v", err)
 	}
-	requireCulprit(t, err, 1) // corrupted old party 1
-	t.Logf("correctly rejected SSID mismatch: %v", err)
+	// Slot 0 can be the wrong party, so the mismatch names no culprit.
+	tssErr := &tss.Error{}
+	if !errors.As(err, &tssErr) || len(tssErr.Culprits()) != 0 {
+		t.Fatalf("expected a *tss.Error with no culprits, got: %v", err)
+	}
 }
 
 // TestReshareRound2RejectsStalePreParams corrupts the new party's pre-params

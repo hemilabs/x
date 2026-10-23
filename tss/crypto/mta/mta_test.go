@@ -7,6 +7,7 @@ package mta_test
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -266,8 +267,14 @@ func TestAliceInitNilArgs(t *testing.T) {
 	ec := tss.S256()
 	_, _, err := mta.AliceInit(testSession, ec, nil, big.NewInt(1),
 		big.NewInt(1), big.NewInt(1), big.NewInt(1), rand.Reader)
-	if err == nil {
-		t.Fatal("expected error for nil pkA")
+	if !errors.Is(err, mta.ErrNilArgument) {
+		t.Fatalf("AliceInit error = %v, want ErrNilArgument", err)
+	}
+	_, _, _, _, err = mta.BobMid(testSession, testSession, ec, nil, nil,
+		big.NewInt(1), big.NewInt(1), big.NewInt(1), big.NewInt(1),
+		big.NewInt(1), big.NewInt(1), big.NewInt(1), big.NewInt(1), nil)
+	if !errors.Is(err, mta.ErrNilArgument) {
+		t.Fatalf("BobMid error = %v, want ErrNilArgument", err)
 	}
 }
 

@@ -145,19 +145,11 @@ func TestRound4RejectsBadPaillierProof(t *testing.T) {
 	if ok := isError(err, &tssErr); !ok {
 		t.Fatal("expected a *tss.Error with culprit information")
 	}
+	// Only party 1 failed a check.  A check that the cancellation
+	// stopped must not name its party.
 	culprits := tssErr.Culprits()
-	if len(culprits) == 0 {
-		t.Fatal("expected at least one culprit in the error")
-	}
-	foundCulprit := false
-	for _, c := range culprits {
-		if c.Index == corruptIdx {
-			foundCulprit = true
-			break
-		}
-	}
-	if !foundCulprit {
-		t.Fatalf("expected party %d as culprit, got culprits: %v", corruptIdx, culprits)
+	if len(culprits) != 1 || culprits[0].Index != corruptIdx {
+		t.Fatalf("expected only party %d as culprit, got culprits: %v", corruptIdx, culprits)
 	}
 }
 
@@ -198,19 +190,11 @@ func TestRound4RejectsAllNilPaillierProof(t *testing.T) {
 	if ok := isError(err, &tssErr); !ok {
 		t.Fatal("expected a *tss.Error with culprit information")
 	}
+	// Only party 1 failed a check.  A check that the cancellation
+	// stopped must not name its party.
 	culprits := tssErr.Culprits()
-	if len(culprits) == 0 {
-		t.Fatal("expected at least one culprit in the error")
-	}
-	foundCulprit := false
-	for _, c := range culprits {
-		if c.Index == corruptIdx {
-			foundCulprit = true
-			break
-		}
-	}
-	if !foundCulprit {
-		t.Fatalf("expected party %d as culprit, got culprits: %v", corruptIdx, culprits)
+	if len(culprits) != 1 || culprits[0].Index != corruptIdx {
+		t.Fatalf("expected only party %d as culprit, got culprits: %v", corruptIdx, culprits)
 	}
 }
 

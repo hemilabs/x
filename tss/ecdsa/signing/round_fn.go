@@ -6,7 +6,6 @@
 package signing
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"errors"
@@ -175,13 +174,12 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 	i := params.PartyID().Index
 
 	// ReceiverID check
-	myKey := params.PartyID().KeyInt().Bytes()
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
 		}
 		r1msg := r1p2p[j].Content.(*SignRound1Message1)
-		if !bytes.Equal(r1msg.ReceiverID, myKey) {
+		if !params.PartyID().KeyEquals(r1msg.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 2, params.PartyID(), Pj)
 		}
 	}
@@ -220,6 +218,11 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				rangeProofAliceJ, temp.gamma, r1msg.C,
 				key.NTildej[j], key.H1j[j], key.H2j[j],
 				key.NTildej[i], key.H1j[i], key.H2j[i], params.Rand())
+			if errors.Is(err, mta.ErrNilArgument) {
+				errsMid[j] = tss.NewError(err, TaskName, 2, params.PartyID())
+				gcancel()
+				return
+			}
 			if err != nil {
 				errsMid[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
 				gcancel()
@@ -252,6 +255,11 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				key.NTildej[j], key.H1j[j], key.H2j[j],
 				key.NTildej[i], key.H1j[i], key.H2j[i],
 				temp.bigWs[i], params.Rand())
+			if errors.Is(err, mta.ErrNilArgument) {
+				errsMidWC[j] = tss.NewError(err, TaskName, 2, params.PartyID())
+				gcancel()
+				return
+			}
 			if err != nil {
 				errsMidWC[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
 				gcancel()
@@ -298,13 +306,12 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 	i := params.PartyID().Index
 
 	// ReceiverID check
-	myKey := params.PartyID().KeyInt().Bytes()
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
 		}
 		r2msg := r2p2p[j].Content.(*SignRound2Message)
-		if !bytes.Equal(r2msg.ReceiverID, myKey) {
+		if !params.PartyID().KeyEquals(r2msg.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 3, params.PartyID(), Pj)
 		}
 	}
