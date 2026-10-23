@@ -2994,3 +2994,34 @@ func TestDB_GracefulClose(t *testing.T) {
 	iter.Release()
 	closeWait.Wait()
 }
+
+// TestDB_GetResultIsCopy changes the slice that Get returns, with and
+// without a buffer pool.  The next Get must return the stored value.
+func TestDB_GetResultIsCopy(t *testing.T) {
+	for _, disable := range []bool{false, true} {
+		db, err := Open(storage.NewMemStorage(), &opt.Options{DisableBufferPool: disable})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		if err := db.Put([]byte("k"), []byte("value"), nil); err != nil {
+			t.Fatal(err)
+		}
+		// Move the value from the memdb into a table and its cache.
+		if err := db.CompactRange(util.Range{}); err != nil {
+			t.Fatal(err)
+		}
+		v, err := db.Get([]byte("k"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		copy(v, "XXXXX")
+		v, err = db.Get([]byte("k"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(v) != "value" {
+			t.Fatalf("DisableBufferPool=%v: Get returned %q after a change to an earlier result", disable, v)
+		}
+	}
+}
