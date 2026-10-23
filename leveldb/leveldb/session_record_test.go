@@ -8,6 +8,8 @@ package leveldb
 
 import (
 	"bytes"
+	"encoding/binary"
+	"math"
 	"testing"
 )
 
@@ -59,4 +61,18 @@ func TestSessionRecord_EncodeDecode(t *testing.T) {
 	v.setNextFileNum(big + 200)
 	v.setSeqNum(uint64(big + 1000))
 	test()
+}
+
+// TestSessionRecordDecodeBadLengths verifies that a huge byte length
+// or level gives an error, without a huge allocation or a panic.
+func TestSessionRecordDecodeBadLengths(t *testing.T) {
+	for name, data := range map[string][]byte{
+		"comparer length": binary.AppendUvarint(binary.AppendUvarint(nil, recComparer), 1<<62),
+		"level":           binary.AppendUvarint(binary.AppendUvarint(nil, recAddTable), math.MaxUint64),
+	} {
+		rec := &sessionRecord{}
+		if err := rec.decode(bytes.NewReader(data)); err == nil {
+			t.Fatalf("%s: expected an error", name)
+		}
+	}
 }

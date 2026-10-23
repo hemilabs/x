@@ -158,9 +158,14 @@ type blockHandle struct {
 }
 
 func decodeBlockHandle(src []byte) (blockHandle, int) {
+	// binary.Uvarint returns a negative n on overflow, so check n
+	// before it is used as an index.
 	offset, n := binary.Uvarint(src)
+	if n <= 0 {
+		return blockHandle{}, 0
+	}
 	length, m := binary.Uvarint(src[n:])
-	if n == 0 || m == 0 {
+	if m <= 0 {
 		return blockHandle{}, 0
 	}
 	return blockHandle{offset, length}, n + m

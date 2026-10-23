@@ -57,12 +57,22 @@ type block struct {
 func (b *block) seek(cmp comparer.Comparer, rstart, rlimit int, key []byte) (index, offset int, err error) {
 	index = sort.Search(b.restartsLen-rstart-(b.restartsLen-rlimit), func(i int) bool {
 		offset := int(binary.LittleEndian.Uint32(b.data[b.restartsOffset+4*(rstart+i):]))
-		offset++                                    // shared always zero, since this is a restart point
-		v1, n1 := binary.Uvarint(b.data[offset:])   // key length
-		_, n2 := binary.Uvarint(b.data[offset+n1:]) // value length
-		m := offset + n1 + n2
-		return cmp.Compare(b.data[m:m+int(v1)], key) > 0
+		// entry checks every length against the block.
+		rkey, _, _, n, eErr := b.entry(offset)
+		if eErr != nil {
+			if err == nil {
+				err = &ErrCorrupted{Reason: "bad restart entry"}
+			}
+			return true
+		}
+		if n == 0 {
+			return true // empty block: the restart point is the end
+		}
+		return cmp.Compare(rkey, key) > 0
 	}) + rstart - 1
+	if err != nil {
+		return
+	}
 	if index < rstart {
 		// The smallest key is greater-than key sought.
 		index = rstart
@@ -88,15 +98,26 @@ func (b *block) entry(offset int) (key, value []byte, nShared, n int, err error)
 		}
 		return
 	}
-	v0, n0 := binary.Uvarint(b.data[offset:])       // Shared prefix length
-	v1, n1 := binary.Uvarint(b.data[offset+n0:])    // Key length
-	v2, n2 := binary.Uvarint(b.data[offset+n0+n1:]) // Value length
-	m := n0 + n1 + n2
-	n = m + int(v1) + int(v2)
-	if n0 <= 0 || n1 <= 0 || n2 <= 0 || offset+n > b.restartsOffset {
+	// Check each varint before the next one is read, and the lengths
+	// in uint64 against the bytes that are left.
+	v0, n0 := binary.Uvarint(b.data[offset:b.restartsOffset]) // Shared prefix length
+	if n0 <= 0 {
 		err = &ErrCorrupted{Reason: "entries corrupted"}
 		return
 	}
+	v1, n1 := binary.Uvarint(b.data[offset+n0 : b.restartsOffset]) // Key length
+	if n1 <= 0 {
+		err = &ErrCorrupted{Reason: "entries corrupted"}
+		return
+	}
+	v2, n2 := binary.Uvarint(b.data[offset+n0+n1 : b.restartsOffset]) // Value length
+	m := n0 + n1 + n2
+	left := uint64(b.restartsOffset - offset)
+	if n2 <= 0 || v1 > left || v2 > left-v1 || uint64(m) > left-v1-v2 || v0 > uint64(len(b.data)) {
+		err = &ErrCorrupted{Reason: "entries corrupted"}
+		return
+	}
+	n = m + int(v1) + int(v2)
 	key = b.data[offset+m : offset+m+int(v1)]
 	value = b.data[offset+m+int(v1) : offset+n]
 	nShared = int(v0)
@@ -265,6 +286,10 @@ func (i *blockIter) Next() bool {
 			i.dir = dirEOI
 			return false
 		}
+		if nShared > len(i.key) {
+			i.sErr(i.tr.newErrCorruptedBH(i.block.bh, "shared prefix too long"))
+			return false
+		}
 		i.key = append(i.key[:nShared], key...)
 		i.value = value
 		i.offset += n
@@ -283,6 +308,10 @@ func (i *blockIter) Next() bool {
 	}
 	if n == 0 {
 		i.dir = dirEOI
+		return false
+	}
+	if nShared > len(i.key) {
+		i.sErr(i.tr.newErrCorruptedBH(i.block.bh, "shared prefix too long"))
 		return false
 	}
 	i.key = append(i.key[:nShared], key...)
@@ -376,6 +405,10 @@ func (i *blockIter) Prev() bool {
 				i.prevKeys = append(i.prevKeys, i.key...)
 			}
 			i.value = value
+		}
+		if nShared > len(i.key) {
+			i.sErr(i.tr.newErrCorruptedBH(i.block.bh, "shared prefix too long"))
+			return false
 		}
 		i.key = append(i.key[:nShared], key...)
 		offset += n
@@ -514,6 +547,7 @@ type Reader struct {
 	filter         filter.Filter
 	verifyChecksum bool
 
+	size                      int64 // file size, to check block handles
 	dataEnd                   int64
 	metaBH, indexBH, filterBH blockHandle
 	indexBlock                *block
@@ -553,8 +587,18 @@ func (r *Reader) fixErrCorruptedBH(bh blockHandle, err error) error {
 }
 
 func (r *Reader) readRawBlock(bh blockHandle, verifyChecksum bool) ([]byte, error) {
+	// Check the handle against the file size before the allocation, in
+	// a form that cannot wrap.
+	if r.size < blockTrailerLen || bh.length > uint64(r.size-blockTrailerLen) ||
+		bh.offset > uint64(r.size-blockTrailerLen)-bh.length {
+		return nil, r.newErrCorruptedBH(bh, "block handle out of range")
+	}
 	data := r.bpool.Get(int(bh.length + blockTrailerLen))
-	if _, err := r.reader.ReadAt(data, int64(bh.offset)); err != nil && err != io.EOF {
+	if n, err := r.reader.ReadAt(data, int64(bh.offset)); err != nil && (err != io.EOF || n != len(data)) {
+		r.bpool.Put(data)
+		if err == io.EOF {
+			return nil, r.newErrCorruptedBH(bh, "short read")
+		}
 		return nil, err
 	}
 
@@ -577,6 +621,12 @@ func (r *Reader) readRawBlock(bh blockHandle, verifyChecksum bool) ([]byte, erro
 			r.bpool.Put(data)
 			return nil, r.newErrCorruptedBH(bh, err.Error())
 		}
+		// Snappy expands at most 64 bytes per 3-byte copy element, so a
+		// larger claimed length is corrupt.  Check before the allocation.
+		if uint64(decLen) > 22*bh.length+32 {
+			r.bpool.Put(data)
+			return nil, r.newErrCorruptedBH(bh, "snappy decoded length too large")
+		}
 		decData := r.bpool.Get(decLen)
 		decData, err = snappy.Decode(decData, data[:bh.length])
 		r.bpool.Put(data)
@@ -597,7 +647,23 @@ func (r *Reader) readBlock(bh blockHandle, verifyChecksum bool) (*block, error) 
 	if err != nil {
 		return nil, err
 	}
+	// Check the restart array before it is used to index the block.
+	if len(data) < 4 {
+		r.bpool.Put(data)
+		return nil, r.newErrCorruptedBH(bh, "block too small")
+	}
 	restartsLen := int(binary.LittleEndian.Uint32(data[len(data)-4:]))
+	if uint64(restartsLen)+1 > uint64(len(data)/4) {
+		r.bpool.Put(data)
+		return nil, r.newErrCorruptedBH(bh, "bad restart count")
+	}
+	restartsOffset := len(data) - (restartsLen+1)*4
+	for i := 0; i < restartsLen; i++ {
+		if int(binary.LittleEndian.Uint32(data[restartsOffset+4*i:])) > restartsOffset {
+			r.bpool.Put(data)
+			return nil, r.newErrCorruptedBH(bh, "bad restart offset")
+		}
+	}
 	b := &block{
 		bpool:          r.bpool,
 		bh:             bh,
@@ -1021,6 +1087,7 @@ func NewReader(f io.ReaderAt, size int64, fd storage.FileDesc, cache *cache.Name
 	}
 
 	r := &Reader{
+		size:           size,
 		fd:             fd,
 		reader:         f,
 		cache:          cache,
