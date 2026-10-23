@@ -161,3 +161,16 @@ func TestGenerateKeyPairSmallBits(t *testing.T) {
 		t.Fatal("expected non-nil keys")
 	}
 }
+
+// TestSmallPrimes verifies the local table of primes below 1000.
+func TestSmallPrimes(t *testing.T) {
+	if len(smallPrimes) != 168 || smallPrimes[0] != 2 || smallPrimes[167] != 997 {
+		t.Fatalf("smallPrimes: %d primes, first %d, last %d; want 168, 2, 997",
+			len(smallPrimes), smallPrimes[0], smallPrimes[len(smallPrimes)-1])
+	}
+	for _, p := range smallPrimes {
+		if !big.NewInt(p).ProbablyPrime(20) {
+			t.Fatalf("%d is not prime", p)
+		}
+	}
+}
