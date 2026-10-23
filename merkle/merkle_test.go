@@ -19,7 +19,7 @@ import (
 const (
 	leftVectorS  = "360f84035942243c6a36537ae2f8673485e6c04455a0a85a0db19690f2541480"
 	rightVectorS = "27042f4e6eca7d0b2a7ee4026df2ecfa51d3339e6d122aa099118ecd8563bad9"
-	rootVectorS  = "b0b3e798e388f85158a9eb6c5053b81e76aa77e7a780d21cebb8e127517227dc"
+	rootVectorS  = "a6834b8bdc1d09db298a42e9552271362d83dd0b0d1a00cde031a9df3d48f127"
 )
 
 var leftVector, rightVector, rootVector []byte
@@ -80,8 +80,13 @@ func TestMerkle(t *testing.T) {
 	digest([]byte("right"), &right)
 
 	// Note that we flip left and right because the digest of right is less
-	// than the digest of left.
-	b := concat(right, left)
+	// than the digest of left.  Leaves hash as sha256(0x00 || leaf) and
+	// nodes as sha256(0x01 || left || right).
+	lh := make([]byte, sha256.Size)
+	digest(concat([]byte{0x00}, left), &lh)
+	rh := make([]byte, sha256.Size)
+	digest(concat([]byte{0x00}, right), &rh)
+	b := concat([]byte{0x01}, concat(rh, lh))
 
 	merkleRoot := make([]byte, sha256.Size)
 	digest(b, &merkleRoot)
@@ -317,5 +322,28 @@ func TestVerifyAuthPathFlagEncoding(t *testing.T) {
 				t.Fatalf("%d/%d padding bit: got %v, want %v", count, find, err, ErrMalformed)
 			}
 		}
+	}
+}
+
+// TestAuthPathNodeAsLeaf presents an internal node as a leaf of a smaller
+// tree.  The branch must fail.
+func TestAuthPathNodeAsLeaf(t *testing.T) {
+	leaves := make([]*[sha256.Size]byte, 0, 4)
+	for i := range 4 {
+		leaves = append(leaves, &[sha256.Size]byte{byte(i + 1)})
+	}
+	mt := Sorted(leaves)
+	root := mt[len(mt)-1]
+
+	// The root is the hash of the two internal nodes mt[4] and mt[5].
+	// Claim that mt[4] is a leaf of a tree of two leaves.  Flags: the
+	// root is a parent of a match, mt[4] is a match, mt[5] is not.
+	mb := &Branch{
+		NumLeaves: 2,
+		Hashes:    [][sha256.Size]byte{*mt[4], *mt[5]},
+		Flags:     []byte{0x03},
+	}
+	if err := VerifyAuthPath(mb, root, mt[4]); !errors.Is(err, ErrRootMismatch) {
+		t.Fatalf("got %v, want %v", err, ErrRootMismatch)
 	}
 }
