@@ -17,7 +17,12 @@ import (
 	"sort"
 )
 
-var ErrEmpty = errors.New("empty merkle branch")
+var (
+	ErrEmpty        = errors.New("empty merkle branch")
+	ErrNoMatch      = errors.New("merkle branch matches no leaf")
+	ErrLeafNotFound = errors.New("leaf not proven by merkle branch")
+	ErrRootMismatch = errors.New("merkle root mismatch")
+)
 
 // XXX debate wrapping this in type and make the merkle tree opaque.
 // XXX this needs some encoding stuff as well.
@@ -234,7 +239,8 @@ type Branch struct {
 	Flags     []byte              // Bitmap of merkle tree
 }
 
-// AuthPath returns a Merkle tree authentication path.
+// AuthPath returns a Merkle tree authentication path for hash.  It returns
+// nil if hash is not a leaf.
 func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 	numLeaves := uint32(len(leaves))
 	if numLeaves == 0 {
@@ -246,12 +252,17 @@ func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 		allHashes:   leaves,
 	}
 
+	var found bool
 	for _, v := range ap.allHashes {
 		if v != nil && *v == *hash {
 			ap.matchedBits = append(ap.matchedBits, 0x01)
+			found = true
 		} else {
 			ap.matchedBits = append(ap.matchedBits, 0x00)
 		}
+	}
+	if !found {
+		return nil
 	}
 
 	// Calculate the number of merkle branches (height) in the tree.
@@ -325,10 +336,12 @@ func (m *merkleBranch) extract(height, pos uint32) (*[sha256.Size]byte, error) {
 	return concatDigests(left, left), nil
 }
 
-// VerifyAuthPath takes a Branch and ensures that it is a valid tree.
-func VerifyAuthPath(mb *Branch) (*[sha256.Size]byte, error) {
+// VerifyAuthPath verifies that the Branch proves leaf under root.  The root
+// and NumLeaves must come from a trusted source.  It proves membership only,
+// not the position of the leaf.
+func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 	if mb.NumLeaves == 0 || len(mb.Hashes) == 0 {
-		return nil, ErrEmpty
+		return ErrEmpty
 	}
 
 	m := &merkleBranch{
@@ -340,18 +353,37 @@ func VerifyAuthPath(mb *Branch) (*[sha256.Size]byte, error) {
 	height := uint32(math.Ceil(math.Log2(float64(mb.NumLeaves))))
 	merkleRoot, err := m.extract(height, 0)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Validate that we consumed all bits and bobs.
 	flagByte := int(m.bitsUsed / 8)
 	if flagByte+1 < len(mb.Flags) && mb.Flags[flagByte] > 1<<m.bitsUsed%8 {
-		return nil, fmt.Errorf("did not consume all flag bits")
+		return fmt.Errorf("did not consume all flag bits")
 	}
 
 	if m.hashUsed != uint32(len(mb.Hashes)) {
-		return nil, fmt.Errorf("did not consume all hashes")
+		return fmt.Errorf("did not consume all hashes")
 	}
 
-	return merkleRoot, nil
+	if *merkleRoot != *root {
+		return ErrRootMismatch
+	}
+
+	// The branch must prove the leaf, not only reach the root.
+	if len(m.hashes) == 0 {
+		return ErrNoMatch
+	}
+	found := false
+	for _, h := range m.hashes {
+		if h == *leaf {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ErrLeafNotFound
+	}
+
+	return nil
 }
