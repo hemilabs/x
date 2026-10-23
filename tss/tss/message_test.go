@@ -77,3 +77,61 @@ func TestPeerContextSetIDs(t *testing.T) {
 		t.Fatalf("after SetIDs: want 2, got %d", len(ctx.IDs()))
 	}
 }
+
+// testContent is a message body for the ValidateMsgs tests.
+type testContent struct{ ok bool }
+
+func (c *testContent) ValidateBasic() bool { return c != nil && c.ok }
+
+// otherContent is a message body of a different type.
+type otherContent struct{}
+
+func (c *otherContent) ValidateBasic() bool { return c != nil }
+
+// TestValidateMsgs verifies that ValidateMsgs returns an error that
+// names the bad slot, and that it does not panic.
+func TestValidateMsgs(t *testing.T) {
+	ids := GenerateTestPartyIDs(3)
+	good := func(j int) *Message { return &Message{From: ids[j], Content: &testContent{ok: true}} }
+	tests := []struct {
+		name    string
+		msgs    []*Message
+		self    int
+		culprit int // -1: no error; -2: error without a culprit
+	}{
+		{"valid", []*Message{good(0), good(1), good(2)}, -1, -1},
+		{"own slot empty", []*Message{good(0), nil, good(2)}, 1, -1},
+		{"missing", []*Message{good(0), nil, good(2)}, -1, 1},
+		{"nil content", []*Message{good(0), {From: ids[1]}, good(2)}, -1, 1},
+		{"wrong type", []*Message{good(0), {From: ids[1], Content: &otherContent{}}, good(2)}, -1, 1},
+		{"typed nil", []*Message{good(0), {From: ids[1], Content: (*testContent)(nil)}, good(2)}, -1, 1},
+		{"fails ValidateBasic", []*Message{good(0), {From: ids[1], Content: &testContent{}}, good(2)}, -1, 1},
+		{"nil From", []*Message{good(0), {Content: &testContent{ok: true}}, good(2)}, -1, 1},
+		{"From of another party", []*Message{good(0), {From: ids[2], Content: &testContent{ok: true}}, good(2)}, -1, 1},
+		{"short", []*Message{good(0), good(1)}, -1, -2},
+		{"long", []*Message{good(0), good(1), good(2), good(0)}, -1, -2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := ValidateMsgs[*testContent](tt.msgs, ids, tt.self)
+			switch {
+			case tt.culprit == -1 && err != nil:
+				t.Fatalf("unexpected error: %v", err)
+			case tt.culprit == -2 && (err == nil || len(c) != 0):
+				t.Fatalf("got %v, %v; want an error without a culprit", c, err)
+			case tt.culprit >= 0 && (err == nil || len(c) != 1 || c[0] != ids[tt.culprit]):
+				t.Fatalf("got %v, %v; want party %d", c, err, tt.culprit)
+			}
+		})
+	}
+}
+
+// TestMergeMsgsIgnoresLongSource verifies that a source longer than
+// the store does not panic.
+func TestMergeMsgsIgnoresLongSource(t *testing.T) {
+	dst := make([]*Message, 1)
+	MergeMsgs(dst, []*Message{{}, {}})
+	if dst[0] == nil {
+		t.Fatal("MergeMsgs must copy slot 0")
+	}
+}

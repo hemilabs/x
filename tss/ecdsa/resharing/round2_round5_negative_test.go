@@ -761,8 +761,8 @@ func TestReshareRound2RejectsNilECDSAPub(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nil ECDSAPub, got nil")
 	}
-	if !strings.Contains(err.Error(), "ecdsa pub nil") {
-		t.Fatalf("expected 'ecdsa pub nil' error, got: %v", err)
+	if !strings.Contains(err.Error(), "invalid message from party") {
+		t.Fatalf("expected 'invalid message from party' error, got: %v", err)
 	}
 	t.Logf("correctly rejected nil ECDSAPub: %v", err)
 }
@@ -931,5 +931,27 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	return &round2SetupFixture{
 		oldR1Msgs: oldR1Msgs,
 		newStates: newStates,
+	}
+}
+
+// TestReshareRound5RejectsBadP2PShape gives a new party a nil, a
+// compacted and a sparse round 4 P2P slice.  Round 5 must return an
+// error for each one and must not save a share without the checks.
+func TestReshareRound5RejectsBadP2PShape(t *testing.T) {
+	fix := buildReshareFixture(t)
+	const target = 0
+	full := fix.newR4P2P[target]
+	sparse := make([]*tss.Message, fix.n)
+	copy(sparse, full)
+	sparse[1] = nil
+	for name, msgs := range map[string][]*tss.Message{
+		"nil":       nil,
+		"compacted": {full[1], full[2]},
+		"sparse":    sparse,
+	} {
+		out, err := ReshareRound5(fix.newStates[target], msgs, fix.newR4Bcast)
+		if err == nil || out != nil {
+			t.Fatalf("%s: ReshareRound5 = %v, %v; want an error", name, out, err)
+		}
 	}
 }

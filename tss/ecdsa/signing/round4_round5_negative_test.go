@@ -129,10 +129,10 @@ func TestSignRound5RejectsNilZKProof(t *testing.T) {
 
 	_, err := SignRound5(f.States[0], r4)
 	if err == nil {
-		t.Fatal("expected 'bigGamma proof missing' error, but SignRound5 succeeded")
+		t.Fatal("expected 'invalid message from party 1' error, but SignRound5 succeeded")
 	}
-	if !strings.Contains(err.Error(), "bigGamma proof missing") {
-		t.Fatalf("expected error containing 'bigGamma proof missing', got: %v", err)
+	if !strings.Contains(err.Error(), "invalid message from party 1") {
+		t.Fatalf("expected error containing 'invalid message from party 1', got: %v", err)
 	}
 	requireCulprit(t, err, 1)
 }

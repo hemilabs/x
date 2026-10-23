@@ -22,7 +22,7 @@ type DGRound1Message struct {
 
 // ValidateBasic checks that required fields of DGRound1Message are non-nil.
 func (m *DGRound1Message) ValidateBasic() bool {
-	return m != nil && m.EDDSAPub != nil &&
+	return m != nil && m.EDDSAPub.ValidateBasic() &&
 		m.VCommitment != nil && m.VCommitment.Sign() > 0
 }
 

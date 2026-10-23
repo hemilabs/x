@@ -143,13 +143,13 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 		return &ReshareRoundOutput{}, nil
 	}
 
+	if c, err := tss.ValidateMsgs[*DGRound1Message](r1Msgs, params.OldParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 2, params.PartyID(), c...)
+	}
+
 	// Validate all old parties agree on the same EdDSA pub key.
 	for j, msg := range r1Msgs {
 		r1msg := msg.Content.(*DGRound1Message)
-		if !r1msg.ValidateBasic() {
-			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2,
-				params.PartyID(), msg.From)
-		}
 		candidate := r1msg.EDDSAPub
 		if state.save.EDDSAPub != nil && !candidate.Equals(state.save.EDDSAPub) {
 			return nil, tss.NewError(errors.New("eddsa pub key mismatch"), TaskName, 2,
@@ -211,6 +211,16 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 
 	if !params.IsNewCommittee() {
 		return &ReshareRoundOutput{}, nil
+	}
+
+	if c, err := tss.ValidateMsgs[*DGRound1Message](r1Msgs, params.OldParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
+	}
+	if c, err := tss.ValidateMsgs[*DGRound3Message1](r3p2p, params.OldParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
+	}
+	if c, err := tss.ValidateMsgs[*DGRound3Message2](r3bcast, params.OldParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
 	}
 
 	Pi := params.PartyID()

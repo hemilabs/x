@@ -176,6 +176,9 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 	if !params.IsNewCommittee() {
 		return out, nil
 	}
+	if c, err := tss.ValidateMsgs[*DGRound1Message](r1Msgs, params.OldParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 2, params.PartyID(), c...)
+	}
 
 	Pi := params.PartyID()
 	i := newIndex(params)
@@ -199,9 +202,6 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 	for j := range params.OldParties().IDs() {
 		r1msg := r1Msgs[j].Content.(*DGRound1Message)
 		candidate := r1msg.ECDSAPub
-		if candidate == nil {
-			return nil, fmt.Errorf("round 2: ecdsa pub nil from party %d", j)
-		}
 		if save.ECDSAPub != nil && !candidate.Equals(save.ECDSAPub) {
 			return nil, errors.New("ecdsa pub key mismatch from old committee")
 		}
@@ -312,6 +312,15 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 
 	if !params.IsNewCommittee() {
 		return out, nil
+	}
+	if c, err := tss.ValidateMsgs[*DGRound2Message1](r2NewMsgs, params.NewParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
+	}
+	if c, err := tss.ValidateMsgs[*DGRound3Message1](r3P2P, params.OldParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
+	}
+	if c, err := tss.ValidateMsgs[*DGRound3Message2](r3Bcast, params.OldParties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
 	}
 
 	dlnVerifier := keygen.NewDlnProofVerifier(params.Concurrency())
@@ -590,6 +599,10 @@ func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*Reshare
 	i := newIndex(params)
 
 	if params.IsNewCommittee() {
+		if c, err := tss.ValidateMsgs[*DGRound4Message1](r4P2P, params.NewParties().IDs(), i); err != nil {
+			return nil, tss.NewError(err, TaskName, 5, params.PartyID(), c...)
+		}
+
 		ContextI := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(i)))
 		save.BigXj = temp.newBigXjs
 		save.ShareID = Pi.KeyInt()

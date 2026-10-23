@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
 	"github.com/hemilabs/x/tss/v3/tss"
 )
 
@@ -67,6 +68,28 @@ func TestSignRound1RejectsMessageEqualToN(t *testing.T) {
 		t.Fatalf("unexpected error for msg == N+1: %v", err)
 	}
 	t.Logf("correctly rejected msg == N+1: %v", err)
+}
+
+// TestSignRound1RejectsBadMessageInput verifies that SignRound1 returns
+// an error, and does not panic later, for a nil message or a
+// fullBytesLen that cannot hold the message.
+func TestSignRound1RejectsBadMessageInput(t *testing.T) {
+	pIDs, peerCtx := setupPartyIDs()
+	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+	msg := new(big.Int).Lsh(big.NewInt(1), 255) // 32 bytes
+	for _, tc := range []struct {
+		name         string
+		msg          *big.Int
+		fullBytesLen int
+	}{
+		{"nil message", nil, 32},
+		{"negative fullBytesLen", msg, -1},
+		{"fullBytesLen too small", msg, 31},
+	} {
+		if _, _, err := SignRound1(params, keygen.LocalPartySaveData{}, tc.msg, nil, tc.fullBytesLen); err == nil {
+			t.Fatalf("%s: expected an error", tc.name)
+		}
+	}
 }
 
 // TestSignRound1RejectsKeyCountMismatch verifies that SignRound1 rejects
@@ -146,7 +169,7 @@ func TestSignRound2RejectsNilRangeProofAlice(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nil RangeProofAlice, got nil")
 	}
-	if !strings.Contains(err.Error(), "RangeProofAlice missing") {
+	if !strings.Contains(err.Error(), "invalid message from party 1") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	requireCulprit(t, err, 1)

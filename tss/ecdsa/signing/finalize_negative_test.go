@@ -26,7 +26,7 @@ func TestSignFinalizeRejectsNegativeSi(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for negative si, got nil")
 	}
-	if !strings.Contains(err.Error(), "outside [0, N)") {
+	if !strings.Contains(err.Error(), "invalid message from party") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 	t.Logf("correctly rejected negative si: %v", err)
