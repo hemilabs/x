@@ -933,3 +933,65 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 		newStates: newStates,
 	}
 }
+
+// TestReshareConfirmQuorum verifies that an old party may retire its
+// share only after min(2t+1, n) matching confirmations for this
+// ceremony, and that Round 5 does not touch the old share.
+func TestReshareConfirmQuorum(t *testing.T) {
+	fix := buildReshareFixture(t)
+	oldXi := new(big.Int).Set(fix.oldKeys[0].Xi)
+
+	r5 := make([]*tss.Message, fix.n)
+	for i := 0; i < fix.n; i++ {
+		out, err := ReshareRound5(fix.newStates[i], fix.newR4P2P[i], fix.newR4Bcast)
+		if err != nil {
+			t.Fatalf("ReshareRound5(new)[%d]: %v", i, err)
+		}
+		r5[i] = out.Messages[0]
+	}
+	if _, err := ReshareRound5(fix.oldStates[0], nil, fix.newR4Bcast); err != nil {
+		t.Fatalf("ReshareRound5(old): %v", err)
+	}
+	if fix.oldKeys[0].Xi.Cmp(oldXi) != 0 {
+		t.Fatal("Round 5 modified the old share")
+	}
+
+	stale := func(m *tss.Message) *tss.Message {
+		c := m.Content.(*DGRound5Message)
+		vcts := append([]*big.Int(nil), c.VCommitments...)
+		vcts[0] = new(big.Int).Add(vcts[0], big.NewInt(1))
+		return &tss.Message{From: m.From, Content: &DGRound5Message{
+			ECDSAPub: c.ECDSAPub, VCommitments: vcts, Digest: c.Digest,
+		}}
+	}
+	foreign := &tss.Message{From: r5[0].From, Content: r5[2].Content}
+
+	// The checks run in order: ReshareConfirm keeps earlier messages.
+	steps := []struct {
+		name string
+		msgs []*tss.Message
+		want bool
+	}{
+		{"none", []*tss.Message{nil, nil, nil}, false},
+		{"one", []*tss.Message{r5[0], nil, nil}, false},
+		{"stale commitments", []*tss.Message{nil, stale(r5[1]), nil}, false},
+		{"wrong sender", []*tss.Message{nil, nil, foreign}, false},
+		{"t+1", []*tss.Message{nil, r5[1], nil}, false},
+		{"2t+1", []*tss.Message{nil, nil, r5[2]}, true},
+	}
+	for _, s := range steps {
+		ok, err := ReshareConfirm(fix.oldStates[0], s.msgs)
+		if err != nil {
+			t.Fatalf("%s: %v", s.name, err)
+		}
+		if ok != s.want {
+			t.Fatalf("%s: ReshareConfirm = %v, want %v", s.name, ok, s.want)
+		}
+	}
+	if _, err := ReshareConfirm(fix.newStates[0], r5); err == nil {
+		t.Fatal("ReshareConfirm on a new-only party: want error")
+	}
+	if fix.oldKeys[0].Xi.Cmp(oldXi) != 0 {
+		t.Fatal("ReshareConfirm modified the old share")
+	}
+}

@@ -98,9 +98,10 @@ func TestEdDSAKeygenSignReshare(t *testing.T) {
 	}
 	t.Log("reshare complete, pub key preserved")
 
-	// Verify: old-only party (P0) had Xi zeroed.
-	if oldSaves[0].Xi.Sign() != 0 {
-		t.Fatal("P0 Xi not zeroed after reshare")
+	// The library never zeroes the old share.  ReshareConfirm
+	// returned true, so the caller can delete it now.
+	if oldSaves[0].Xi.Sign() == 0 {
+		t.Fatal("P0 Xi zeroed by the library")
 	}
 
 	// ------------------------------------------------------------------
@@ -326,8 +327,9 @@ func eddsaReshare(t *testing.T, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, new
 		}
 	}
 
-	// --- Round 5 (save) ---
+	// --- Round 5 (save + confirm to old committee) ---
 	newSaves := make([]keygen.LocalPartySaveData, newN)
+	r5Msgs := make([]*tss.Message, newN)
 	for idx := range entries {
 		pr := entries[idx].role
 		out, err := resharing.ReshareRound5(entries[idx].state, r4Msgs)
@@ -336,6 +338,19 @@ func eddsaReshare(t *testing.T, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, new
 		}
 		if pr.newIdx >= 0 {
 			newSaves[pr.newIdx] = *out.Save
+			r5Msgs[pr.newIdx] = out.Messages[0]
+		}
+	}
+
+	// --- Confirm: old parties may retire their old share ---
+	for idx := range entries {
+		pr := entries[idx].role
+		if pr.oldIdx < 0 {
+			continue
+		}
+		ok, err := resharing.ReshareConfirm(entries[idx].state, r5Msgs)
+		if err != nil || !ok {
+			t.Fatalf("ReshareConfirm[%s] = %v, %v", pr.pid.Id, ok, err)
 		}
 	}
 
