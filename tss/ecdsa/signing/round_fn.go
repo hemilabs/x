@@ -100,7 +100,11 @@ func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.
 	// trim the key data to only the signing parties.  This avoids
 	// requiring callers to call BuildLocalSaveDataSubset manually.
 	if len(key.Ks) > params.PartyCount() {
-		key = keygen.BuildLocalSaveDataSubset(key, params.Parties().IDs())
+		var err error
+		key, err = keygen.BuildLocalSaveDataSubset(key, params.Parties().IDs())
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	if len(key.Ks) != params.PartyCount() {
 		return nil, nil, fmt.Errorf("key count %d != party count %d after subset", len(key.Ks), params.PartyCount())

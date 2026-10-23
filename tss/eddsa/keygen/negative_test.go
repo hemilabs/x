@@ -199,6 +199,16 @@ func TestValidateSaveDataEdDSA(t *testing.T) {
 		t.Fatal("expected error for zero Xi")
 	}
 	bad = *out.Save
+	bad.Xi = new(big.Int).Set(tss.Edwards().Params().N)
+	if err := bad.ValidateSaveData(); err == nil {
+		t.Fatal("expected error for Xi = q")
+	}
+	bad = *out.Save
+	bad.EDDSAPub = bad.BigXj[1]
+	if err := bad.ValidateSaveData(); err == nil {
+		t.Fatal("expected error for a wrong EDDSAPub")
+	}
+	bad = *out.Save
 	bad.ShareID = nil
 	if err := bad.ValidateSaveData(); err == nil {
 		t.Fatal("expected error for nil ShareID")
@@ -224,19 +234,17 @@ func TestBuildLocalSaveDataSubsetEdDSA(t *testing.T) {
 	}
 
 	// Subset to 2-of-3
-	subset := BuildLocalSaveDataSubset(*out.Save, pIDs[:2])
+	subset, err := BuildLocalSaveDataSubset(*out.Save, pIDs[:2])
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(subset.Ks) != 2 {
 		t.Fatalf("expected 2 Ks, got %d", len(subset.Ks))
 	}
 
-	// Missing key should panic
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatal("expected panic for missing signer key")
-			}
-		}()
-		fakeIDs := tss.GenerateTestPartyIDs(1)
-		BuildLocalSaveDataSubset(*out.Save, fakeIDs)
-	}()
+	// A missing key gives an error.
+	fakeIDs := tss.GenerateTestPartyIDs(1)
+	if _, err := BuildLocalSaveDataSubset(*out.Save, fakeIDs); err == nil {
+		t.Fatal("expected an error for a missing signer key")
+	}
 }

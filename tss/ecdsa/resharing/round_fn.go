@@ -94,9 +94,18 @@ func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveDat
 	newPC := params.NewPartyCount()
 	input := key
 	if params.IsOldCommittee() {
-		input = keygen.BuildLocalSaveDataSubset(key, params.OldParties().IDs())
+		var err error
+		input, err = keygen.BuildLocalSaveDataSubset(key, params.OldParties().IDs())
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	save := keygen.NewLocalPartySaveData(newPC)
+	// Reject stale pre-params as keygen does, and do not drop them
+	// in silence.
+	if preParams.Validate() && !preParams.ValidateWithProof() {
+		return nil, nil, errors.New("preParams failed validation")
+	}
 	if preParams.ValidateWithProof() {
 		save.LocalPreParams = preParams
 	}

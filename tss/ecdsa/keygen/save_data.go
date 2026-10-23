@@ -6,13 +6,13 @@
 package keygen
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/hemilabs/x/tss/v3/crypto"
 	"github.com/hemilabs/x/tss/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
 	"github.com/hemilabs/x/tss/v3/tss"
 )
 
@@ -172,32 +172,65 @@ func (saveData LocalPartySaveData) ValidateSaveData() error {
 	// Feldman VSS invariant: Xi·G must equal BigXj[ownIndex].
 	// [FORK] Guard Xi=0: ScalarBaseMult(0) panics (identity point). A zero Xi means
 	// the party's secret share is trivially known.
-	if saveData.Xi.Sign() == 0 {
-		return errors.New("ValidateSaveData: Xi is zero")
-	}
 	ec := saveData.BigXj[ownIdx].Curve()
+	if saveData.Xi.Sign() <= 0 || saveData.Xi.Cmp(ec.Params().N) >= 0 {
+		return errors.New("ValidateSaveData: Xi is not in [1, q)")
+	}
 	xiG := crypto.ScalarBaseMult(ec, saveData.Xi)
 	if !xiG.Equals(saveData.BigXj[ownIdx]) {
 		return errors.New("ValidateSaveData: Feldman VSS check failed: Xi·G != BigXj[ownIndex]")
+	}
+
+	// The public shares must interpolate to the group key.
+	pub, err := vss.InterpolateAtZero(ec, saveData.Ks, saveData.BigXj)
+	if err != nil {
+		return fmt.Errorf("ValidateSaveData: %w", err)
+	}
+	if !pub.Equals(saveData.ECDSAPub) {
+		return errors.New("ValidateSaveData: BigXj does not interpolate to ECDSAPub")
+	}
+
+	// The own Paillier and Pedersen values must match the public ones.
+	if sk := saveData.PaillierSK; sk != nil && sk.N != nil &&
+		(saveData.PaillierPKs[ownIdx].N == nil || sk.N.Cmp(saveData.PaillierPKs[ownIdx].N) != 0) {
+		return errors.New("ValidateSaveData: PaillierSK does not match PaillierPKs[ownIndex]")
+	}
+	for _, p := range [][2]*big.Int{
+		{saveData.NTildei, saveData.NTildej[ownIdx]},
+		{saveData.H1i, saveData.H1j[ownIdx]},
+		{saveData.H2i, saveData.H2j[ownIdx]},
+	} {
+		if p[0] != nil && p[0].Cmp(p[1]) != 0 {
+			return errors.New("ValidateSaveData: own Pedersen values do not match")
+		}
 	}
 
 	return nil
 }
 
 // BuildLocalSaveDataSubset re-creates the LocalPartySaveData to contain data for only the list of signing parties.
-func BuildLocalSaveDataSubset(sourceData LocalPartySaveData, sortedIDs tss.SortedPartyIDs) LocalPartySaveData {
+// It returns an error if a party is not in the save data.  Keys are
+// matched by value, so an encoding with leading zero bytes matches.
+// The secrets are copied, so the result does not share them with
+// sourceData.
+func BuildLocalSaveDataSubset(sourceData LocalPartySaveData, sortedIDs tss.SortedPartyIDs) (LocalPartySaveData, error) {
 	keysToIndices := make(map[string]int, len(sourceData.Ks))
 	for j, kj := range sourceData.Ks {
-		keysToIndices[hex.EncodeToString(kj.Bytes())] = j
+		if kj != nil {
+			keysToIndices[kj.String()] = j
+		}
 	}
 	newData := NewLocalPartySaveData(sortedIDs.Len())
 	newData.LocalPreParams = sourceData.LocalPreParams
-	newData.LocalSecrets = sourceData.LocalSecrets
+	newData.LocalSecrets = LocalSecrets{
+		Xi:      cloneInt(sourceData.Xi),
+		ShareID: cloneInt(sourceData.ShareID),
+	}
 	newData.ECDSAPub = sourceData.ECDSAPub
 	for j, id := range sortedIDs {
-		savedIdx, ok := keysToIndices[hex.EncodeToString(id.Key)]
+		savedIdx, ok := keysToIndices[id.KeyInt().String()]
 		if !ok {
-			panic(errors.New("BuildLocalSaveDataSubset: unable to find a signer party in the local save data"))
+			return LocalPartySaveData{}, fmt.Errorf("BuildLocalSaveDataSubset: party %v is not in the local save data", id)
 		}
 		newData.Ks[j] = sourceData.Ks[savedIdx]
 		newData.NTildej[j] = sourceData.NTildej[savedIdx]
@@ -206,5 +239,13 @@ func BuildLocalSaveDataSubset(sourceData LocalPartySaveData, sortedIDs tss.Sorte
 		newData.BigXj[j] = sourceData.BigXj[savedIdx]
 		newData.PaillierPKs[j] = sourceData.PaillierPKs[savedIdx]
 	}
-	return newData
+	return newData, nil
+}
+
+// cloneInt returns a copy of x, or nil for a nil x.
+func cloneInt(x *big.Int) *big.Int {
+	if x == nil {
+		return nil
+	}
+	return new(big.Int).Set(x)
 }

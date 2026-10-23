@@ -188,6 +188,28 @@ based state machine entirely:
 
 ---
 
+## Save Data Subset and Validation
+
+**Problem:** `BuildLocalSaveDataSubset` panicked when a party was not
+in the save data.  It matched keys by their raw bytes, so a key with a
+leading zero byte did not match.  It also shared Xi with the source.
+`ValidateSaveData` accepted a wrong group key, an Xi out of range and
+a Paillier key of another party.  `UpdatePublicKeyAndAdjustBigXj`
+accepted any child key.  ReshareRound1 dropped stale pre-params in
+silence.
+
+**Fix:** The subset helper returns an error, matches keys by value and
+copies the secrets.  `ValidateSaveData` checks that Xi is in [1, q),
+that BigXj interpolates to the group key and that the own Paillier and
+Pedersen values match.  The child key must be ECDSAPub + delta*G.
+ReshareRound1 rejects stale pre-params as keygen does.
+
+**Where:** `ecdsa/keygen/save_data.go`, `eddsa/keygen/save_data.go`,
+`crypto/vss/feldman_vss.go`, `ecdsa/signing/key_derivation_util.go`,
+`ecdsa/resharing/round_fn.go`
+
+---
+
 ## Deferred Items
 
 Low-impact items carried from the v2 audit that don't affect
@@ -195,7 +217,6 @@ correctness or security in practice:
 
 1. MtA inverted lower-bound checks — don't reject honest proofs
 2. ProofIters=13 — matches GG18 spec
-3. BuildLocalSaveDataSubset panic — changing signature breaks callers
 4. NSquare() caching — performance optimization only
 5. MustGetRandomInt off-by-one — negligible for 256-bit
 6. Concurrent io.Reader — safe with crypto/rand.Reader
