@@ -8,6 +8,8 @@ package table
 
 import (
 	"bytes"
+	"encoding/binary"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -129,3 +131,64 @@ var _ = testutil.Defer(func() {
 		})
 	})
 })
+
+// TestDecodeLengthsNoPanic verifies that an overflowed block handle, a
+// block handle past the end of the file, a bad restart count and a bad
+// entry give errors and not panics.
+func TestDecodeLengthsNoPanic(t *testing.T) {
+	overflow := bytes.Repeat([]byte{0xff}, 11)
+	if _, n := decodeBlockHandle(overflow); n != 0 {
+		t.Fatal("decodeBlockHandle accepted an overflowed varint")
+	}
+
+	// A raw block: payload, type byte 0 and a checksum we do not check.
+	payload := []byte{0xff, 0xff, 0xff, 0x7f} // restart count 2^31-1
+	file := append(append(payload, 0), 0, 0, 0, 0)
+	r := &Reader{reader: bytes.NewReader(file), size: int64(len(file)), bpool: util.NewBufferPool(4096)}
+	if _, err := r.readRawBlock(blockHandle{offset: 1, length: uint64(len(file))}, false); err == nil {
+		t.Fatal("readRawBlock accepted a handle past the end of the file")
+	}
+	if _, err := r.readBlock(blockHandle{offset: 0, length: uint64(len(payload))}, false); err == nil {
+		t.Fatal("readBlock accepted a bad restart count")
+	}
+
+	b := &block{data: append(bytes.Repeat([]byte{0xff}, 10), 0x01), restartsOffset: 11}
+	if _, _, _, _, err := b.entry(0); err == nil {
+		t.Fatal("entry accepted a bad varint")
+	}
+}
+
+// TestDecodeBlockBoundsNoPanic covers the snappy length bound, a restart
+// offset past the entries, and a shared prefix longer than the key.
+func TestDecodeBlockBoundsNoPanic(t *testing.T) {
+	newReader := func(file []byte) *Reader {
+		return &Reader{reader: bytes.NewReader(file), size: int64(len(file)), bpool: util.NewBufferPool(4096)}
+	}
+
+	// Snappy block that claims a decoded length of 1 GiB.
+	snappyBlock := binary.AppendUvarint(nil, 1<<30)
+	file := append(append(append([]byte{}, snappyBlock...), blockTypeSnappyCompression), 0, 0, 0, 0)
+	if _, err := newReader(file).readRawBlock(blockHandle{length: uint64(len(snappyBlock))}, false); err == nil {
+		t.Fatal("readRawBlock accepted a snappy block that claims 1 GiB")
+	}
+
+	// One restart at offset 100 in a 9-byte block.
+	payload := []byte{0, 1, 0, 'k', 100, 0, 0, 0, 1, 0, 0, 0}
+	file = append(append(append([]byte{}, payload...), 0), 0, 0, 0, 0)
+	if _, err := newReader(file).readBlock(blockHandle{length: uint64(len(payload))}, false); err == nil {
+		t.Fatal("readBlock accepted a restart offset past the entries")
+	}
+
+	// The first entry shares 5 bytes with an empty previous key.
+	payload = []byte{5, 1, 0, 'k', 0, 0, 0, 0, 1, 0, 0, 0}
+	file = append(append(append([]byte{}, payload...), 0), 0, 0, 0, 0)
+	r := newReader(file)
+	b, err := r.readBlock(blockHandle{length: uint64(len(payload))}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := r.newBlockIter(b, nil, nil, false)
+	if it.First() || it.Error() == nil {
+		t.Fatal("the iterator accepted a shared prefix longer than the key")
+	}
+}

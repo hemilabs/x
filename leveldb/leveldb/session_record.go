@@ -8,8 +8,10 @@ package leveldb
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/hemilabs/x/leveldb/leveldb/errors"
@@ -233,16 +235,36 @@ func (p *sessionRecord) readBytes(field string, r byteReader) []byte {
 	if p.err != nil {
 		return nil
 	}
-	x := make([]byte, n)
-	_, p.err = io.ReadFull(r, x)
-	if p.err != nil {
-		if p.err == io.ErrUnexpectedEOF {
-			p.err = errors.NewErrCorrupted(storage.FileDesc{}, &ErrManifestCorrupted{field, "short read"})
+	if n > math.MaxInt64 {
+		p.err = errors.NewErrCorrupted(storage.FileDesc{}, &ErrManifestCorrupted{field, "invalid length"})
+		return nil
+	}
+	// Allocate the exact length for a normal field.  Do not allocate a
+	// large raw length up front: copy it, so memory grows only with the
+	// bytes that are present.
+	var x []byte
+	var err error
+	if n <= maxReadBytesAlloc {
+		x = make([]byte, n)
+		_, err = io.ReadFull(r, x)
+	} else {
+		var buf bytes.Buffer
+		_, err = io.CopyN(&buf, r, int64(n))
+		x = buf.Bytes()
+	}
+	if err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			err = errors.NewErrCorrupted(storage.FileDesc{}, &ErrManifestCorrupted{field, "short read"})
 		}
+		p.err = err
 		return nil
 	}
 	return x
 }
+
+// maxReadBytesAlloc is the largest MANIFEST byte field that readBytes
+// allocates before it reads the bytes.
+const maxReadBytesAlloc = 1 << 20
 
 func (p *sessionRecord) readLevel(field string, r io.ByteReader) int {
 	if p.err != nil {
@@ -252,8 +274,17 @@ func (p *sessionRecord) readLevel(field string, r io.ByteReader) int {
 	if p.err != nil {
 		return 0
 	}
+	// A real database has far fewer levels.  A larger value is corrupt
+	// and would grow the level slices without limit.
+	if x >= maxManifestLevel {
+		p.err = errors.NewErrCorrupted(storage.FileDesc{}, &ErrManifestCorrupted{field, "invalid level"})
+		return 0
+	}
 	return int(x)
 }
+
+// maxManifestLevel bounds the level numbers in a MANIFEST record.
+const maxManifestLevel = 64
 
 func (p *sessionRecord) decode(r io.Reader) error {
 	br, ok := r.(byteReader)
