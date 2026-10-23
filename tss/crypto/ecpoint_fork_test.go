@@ -5,6 +5,7 @@
 package crypto_test
 
 import (
+	"crypto/elliptic"
 	"encoding/binary"
 	"math/big"
 	"strings"
@@ -143,5 +144,32 @@ func TestGobDecodeRoundTrip(t *testing.T) {
 
 	if !original.Equals(decoded) {
 		t.Fatal("round-tripped point should equal original")
+	}
+}
+
+// TestECPointRejectsNonCanonical verifies that a point has one
+// encoding: a negative or out-of-range coordinate is rejected, and
+// GobDecode rejects trailing bytes.
+func TestECPointRejectsNonCanonical(t *testing.T) {
+	for _, ec := range []elliptic.Curve{tss.S256(), tss.Edwards()} {
+		g := crypto.ScalarBaseMult(ec, big.NewInt(5))
+		P := ec.Params().P
+		for name, xy := range map[string][2]*big.Int{
+			"negative x": {new(big.Int).Sub(g.X(), P), g.Y()},
+			"x + p":      {new(big.Int).Add(g.X(), P), g.Y()},
+			"negative y": {g.X(), new(big.Int).Sub(g.Y(), P)},
+		} {
+			if _, err := crypto.NewECPoint(ec, xy[0], xy[1]); err == nil {
+				t.Fatalf("%s: NewECPoint accepted a non-canonical point", name)
+			}
+		}
+	}
+	bz, err := crypto.ScalarBaseMult(tss.EC(), big.NewInt(5)).GobEncode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p crypto.ECPoint
+	if err := p.GobDecode(append(bz, 0)); err == nil {
+		t.Fatal("GobDecode accepted trailing bytes")
 	}
 }
