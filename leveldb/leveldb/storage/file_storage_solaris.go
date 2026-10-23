@@ -9,22 +9,55 @@
 package storage
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
+	"sync"
 	"syscall"
 )
 
+// An fcntl lock belongs to the process.  A second open of the same path
+// in this process gets the lock too, and its close drops the lock for
+// other processes.  lockedPaths refuses a second open, except a
+// read-only open next to other read-only opens.  The value is the
+// number of read-only opens, or -1 for a writable open.
+var (
+	lockedMu    sync.Mutex
+	lockedPaths = make(map[string]int)
+)
+
 type unixFileLock struct {
-	f *os.File
+	f    *os.File
+	path string
 }
 
 func (fl *unixFileLock) release() error {
-	if err := setFileLock(fl.f, false, false); err != nil {
-		return err
+	err := setFileLock(fl.f, false, false)
+	// Close before the path leaves the registry.  Any close of the file
+	// drops every lock that this process holds on it.
+	if cerr := fl.f.Close(); err == nil {
+		err = cerr
 	}
-	return fl.f.Close()
+	lockedMu.Lock()
+	if n := lockedPaths[fl.path]; n > 1 {
+		lockedPaths[fl.path] = n - 1
+	} else {
+		delete(lockedPaths, fl.path)
+	}
+	lockedMu.Unlock()
+	return err
 }
 
 func newFileLock(path string, readOnly bool) (fl fileLock, err error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	lockedMu.Lock()
+	defer lockedMu.Unlock()
+	if n, ok := lockedPaths[abs]; ok && (!readOnly || n < 0) {
+		return nil, errors.New("leveldb/storage: file already locked by this process")
+	}
 	var flag int
 	if readOnly {
 		flag = os.O_RDONLY
@@ -43,7 +76,12 @@ func newFileLock(path string, readOnly bool) (fl fileLock, err error) {
 		f.Close()
 		return
 	}
-	fl = &unixFileLock{f: f}
+	if readOnly {
+		lockedPaths[abs]++
+	} else {
+		lockedPaths[abs] = -1
+	}
+	fl = &unixFileLock{f: f, path: abs}
 	return
 }
 

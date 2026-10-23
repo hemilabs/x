@@ -2994,3 +2994,52 @@ func TestDB_GracefulClose(t *testing.T) {
 	iter.Release()
 	closeWait.Wait()
 }
+
+// TestDB_JournalSyncFailureIsSticky fails a journal fsync.  The write
+// must fail, every later write must fail until reopen, and the writes
+// acknowledged before the failure must be there after reopen.
+func TestDB_JournalSyncFailureIsSticky(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+	wo := &opt.WriteOptions{Sync: true}
+	for i := 0; i < 10; i++ {
+		if err := h.db.Put([]byte(fmt.Sprintf("k%02d", i)), []byte("v"), wo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeJournal, errors.New("journal sync error"))
+	if err := h.db.Put([]byte("bad"), []byte("v"), wo); err == nil {
+		t.Fatal("Put with a failed journal sync: expected an error")
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeJournal, nil)
+	if err := h.db.Put([]byte("later"), []byte("v"), wo); err == nil {
+		t.Fatal("Put after a journal failure: expected an error until reopen")
+	}
+	h.reopenDB()
+	for i := 0; i < 10; i++ {
+		if _, err := h.db.Get([]byte(fmt.Sprintf("k%02d", i)), nil); err != nil {
+			t.Fatalf("acknowledged write k%02d is missing after reopen: %v", i, err)
+		}
+	}
+	if _, err := h.db.Get([]byte("later"), nil); err != ErrNotFound {
+		t.Fatalf("rejected write is present after reopen: %v", err)
+	}
+	if err := h.db.Put([]byte("after"), []byte("v"), wo); err != nil {
+		t.Fatalf("Put after reopen: %v", err)
+	}
+}
+
+// TestDB_SnapshotStringAfterRelease verifies that String does not panic
+// after Release.
+func TestDB_SnapshotStringAfterRelease(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+	snap, err := h.db.GetSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap.Release()
+	if got := snap.String(); got != "leveldb.Snapshot{released}" {
+		t.Fatalf("String after Release = %q", got)
+	}
+}

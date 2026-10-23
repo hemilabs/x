@@ -7,6 +7,7 @@
 package leveldb
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +15,17 @@ import (
 	"github.com/hemilabs/x/leveldb/leveldb/opt"
 	"github.com/hemilabs/x/leveldb/leveldb/util"
 )
+
+// journalError wraps the latched journal failure for atomic.Value.
+type journalError struct{ err error }
+
+// journalFailed returns the latched journal failure, or nil.
+func (db *DB) journalFailed() error {
+	if v, ok := db.journalErr.Load().(journalError); ok {
+		return v.err
+	}
+	return nil
+}
 
 func (db *DB) writeJournal(batches []*Batch, seq uint64, sync bool) error {
 	wr, err := db.journal.Next()
@@ -152,6 +164,11 @@ func (db *DB) unlockWrite(overflow bool, merged int, err error) {
 
 // ourBatch is batch that we can modify.
 func (db *DB) writeLocked(batch, ourBatch *Batch, merge, sync bool) error {
+	if err := db.journalFailed(); err != nil {
+		db.unlockWrite(false, 0, err)
+		return err
+	}
+
 	// Try to flush memdb. This method would also trying to throttle writes
 	// if it is too fast and compaction cannot catch-up.
 	mdb, mdbFree, err := db.flush(batch.internalLen)
@@ -229,6 +246,9 @@ func (db *DB) writeLocked(batch, ourBatch *Batch, merge, sync bool) error {
 
 	// Write journal.
 	if err := db.writeJournal(batches, seq, sync); err != nil {
+		// Fail-stop, as C LevelDB does for a failed log sync.
+		err = fmt.Errorf("leveldb: journal write failed, reopen the DB: %w", err)
+		db.journalErr.CompareAndSwap(nil, journalError{err})
 		db.unlockWrite(overflow, merged, err)
 		return err
 	}
