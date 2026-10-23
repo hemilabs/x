@@ -6,6 +6,7 @@ package resharing
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/hemilabs/x/tss/v3/crypto"
@@ -163,5 +164,61 @@ func TestReshareRound2PubKeyMismatch(t *testing.T) {
 	_, err = ReshareRound2(st, badR1)
 	if err == nil {
 		t.Fatal("expected error for pub key mismatch")
+	}
+}
+
+// TestReshareRound4RejectsOtherSession replays the round 1 and round 3
+// messages of one attempt into a retry with another SSID nonce.  The
+// new party must reject them in Round 4.
+func TestReshareRound4RejectsOtherSession(t *testing.T) {
+	saves, oldPIDs := runKeygenForReshare(t)
+	newPIDs := tss.GenerateTestPartyIDs(3)
+	oldCtx := tss.NewPeerContext(oldPIDs)
+	newCtx := tss.NewPeerContext(newPIDs)
+	oldN, newN := len(oldPIDs), len(newPIDs)
+
+	// Attempt with nonce 1: old committee rounds 1 and 3.
+	r1 := make([]*tss.Message, oldN)
+	r3p2p := make([]*tss.Message, oldN)
+	r3bcast := make([]*tss.Message, oldN)
+	for i := 0; i < oldN; i++ {
+		params := tss.NewReSharingParameters(
+			tss.Edwards(), oldCtx, newCtx, oldPIDs[i], oldN, 1, newN, 1)
+		params.SetSSIDNonce(1)
+		st, out, err := ReshareRound1(params, &saves[i])
+		if err != nil {
+			t.Fatalf("ReshareRound1[%d]: %v", i, err)
+		}
+		r1[i] = out.Messages[0]
+		out, err = ReshareRound3(st, nil)
+		if err != nil {
+			t.Fatalf("ReshareRound3[%d]: %v", i, err)
+		}
+		for _, msg := range out.Messages {
+			switch msg.Content.(type) {
+			case *DGRound3Message1:
+				if msg.To[0].Index == 0 {
+					r3p2p[i] = msg
+				}
+			case *DGRound3Message2:
+				r3bcast[i] = msg
+			}
+		}
+	}
+
+	// Retry with nonce 2: new party 0 receives the old messages.
+	params := tss.NewReSharingParameters(
+		tss.Edwards(), oldCtx, newCtx, newPIDs[0], oldN, 1, newN, 1)
+	params.SetSSIDNonce(2)
+	st, _, err := ReshareRound1(params, nil)
+	if err != nil {
+		t.Fatalf("ReshareRound1 new: %v", err)
+	}
+	if _, err := ReshareRound2(st, r1); err != nil {
+		t.Fatalf("ReshareRound2 new: %v", err)
+	}
+	_, err = ReshareRound4(st, r1, r3p2p, r3bcast)
+	if err == nil || !strings.Contains(err.Error(), "not bound to this session") {
+		t.Fatalf("ReshareRound4 error = %v, want session mismatch", err)
 	}
 }
