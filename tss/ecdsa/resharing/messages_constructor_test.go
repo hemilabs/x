@@ -367,7 +367,7 @@ func TestNewDGRound4Message2Fields(t *testing.T) {
 	from := pIDs[3]
 	to := pIDs[:3]
 
-	msg := NewDGRound4Message2(to, from)
+	msg := NewDGRound4Message2(to, from, []byte{1})
 
 	// Envelope checks.
 	if msg.From != from {

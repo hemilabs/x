@@ -101,7 +101,7 @@ func TestValidateBasicKGRound2Message1(t *testing.T) {
 
 func TestValidateBasicKGRound2Message2(t *testing.T) {
 	// Happy path: exactly 2 elements (minimum valid).
-	if !(&KGRound2Message2{DeCommitment: cmt.HashDeCommitment{big.NewInt(1), big.NewInt(2)}}).ValidateBasic() {
+	if !(&KGRound2Message2{DeCommitment: cmt.HashDeCommitment{big.NewInt(1), big.NewInt(2)}, Echo: []byte{1}}).ValidateBasic() {
 		t.Fatal("valid 2-element decommitment should pass")
 	}
 
@@ -117,6 +117,7 @@ func TestValidateBasicKGRound2Message2(t *testing.T) {
 		{"empty struct", &KGRound2Message2{}},
 		{"nil decommitment", &KGRound2Message2{DeCommitment: nil}},
 		{"1-element decommitment", &KGRound2Message2{DeCommitment: cmt.HashDeCommitment{big.NewInt(1)}}},
+		{"missing echo", &KGRound2Message2{DeCommitment: cmt.HashDeCommitment{big.NewInt(1), big.NewInt(2)}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.msg.ValidateBasic() {
@@ -289,7 +290,7 @@ func TestNewKGRound2Message2Fields(t *testing.T) {
 
 	deC := cmt.HashDeCommitment{big.NewInt(10), big.NewInt(20), big.NewInt(30)}
 
-	msg := NewKGRound2Message2(from, deC, nil)
+	msg := NewKGRound2Message2(from, deC, nil, []byte{1})
 
 	// Envelope checks.
 	if msg.From != from {

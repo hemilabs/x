@@ -54,8 +54,8 @@ func TestValidateBasicAllResharingMessages(t *testing.T) {
 		},
 		{
 			"DGRound4Message2",
+			&DGRound4Message2{Echo: []byte{1}},
 			&DGRound4Message2{},
-			(*DGRound4Message2)(nil),
 		},
 	}
 

@@ -133,11 +133,28 @@ func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 	temp.ui = new(big.Int)
 
 	// Broadcast decommitment + proof.
-	r2msg2 := NewKGRound2Message2(params.PartyID(), temp.deCommitPolyG, pii)
+	temp.echo = round1Echo(temp.ssid, temp.kgRound1Messages)
+	r2msg2 := NewKGRound2Message2(params.PartyID(), temp.deCommitPolyG, pii, temp.echo)
 	temp.kgRound2Message2s[i] = r2msg2
 	msgs = append(msgs, r2msg2)
 
 	return &RoundOutput{Messages: msgs}, nil
+}
+
+// round1Echo hashes the round 1 commitments that this party received,
+// in party order.  Round 1 is a broadcast round, but the transport
+// may deliver different content to different parties.  The parties
+// compare their echoes in Round 3 so that all of them use the same
+// commitments.
+func round1Echo(ssid []byte, r1Msgs []*tss.Message) []byte {
+	list := make([]*big.Int, 0, 2+len(r1Msgs))
+	list = append(list,
+		new(big.Int).SetBytes([]byte("eddsa-keygen-echo")),
+		new(big.Int).SetBytes(ssid))
+	for _, msg := range r1Msgs {
+		list = append(list, msg.Content.(*KGRound1Message).Commitment)
+	}
+	return common.SHA512_256i(list...).Bytes()
 }
 
 // Round3 verifies all decommitments, shares, and Schnorr proofs,
@@ -148,6 +165,18 @@ func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, er
 	save := &state.save
 	n := params.PartyCount()
 	PIdx := params.PartyID().Index
+
+	// All parties must have received the same round 1 broadcasts.  A
+	// mismatch does not show who equivocated, so name no culprit.
+	for j := 0; j < n; j++ {
+		if j == PIdx {
+			continue
+		}
+		r2msg2 := r2bcast[j].Content.(*KGRound2Message2)
+		if !bytes.Equal(r2msg2.Echo, temp.echo) {
+			return nil, tss.NewError(errors.New("round 1 broadcast echo mismatch"), TaskName, 3, params.PartyID())
+		}
+	}
 
 	// Compute own Xi from shares.
 	xi := new(big.Int).Set(temp.shares[PIdx].Share)
