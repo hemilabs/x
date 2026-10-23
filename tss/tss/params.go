@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -203,13 +204,39 @@ func (params *Parameters) Rand() io.Reader {
 }
 
 // SetPartialKeyRand sets the randomness source for partial key generation.
+// The reader must never repeat its output.  The library serializes reads.
 func (params *Parameters) SetPartialKeyRand(rand io.Reader) {
-	params.partialKeyRand = rand
+	params.partialKeyRand = newLockedReader(rand)
 }
 
-// SetRand sets the randomness source for protocol operations.
+// SetRand sets the randomness source for protocol operations.  The
+// rounds read it from several goroutines at the same time, so the
+// library serializes the reads.  The reader must never repeat its
+// output.
 func (params *Parameters) SetRand(rand io.Reader) {
-	params.rand = rand
+	params.rand = newLockedReader(rand)
+}
+
+// [FORK] lockedReader serializes reads from a caller-supplied reader.
+// Upstream passes the reader to concurrent goroutines unguarded.
+type lockedReader struct {
+	mu sync.Mutex
+	r  io.Reader
+}
+
+// newLockedReader wraps r.  A nil r stays nil.
+func newLockedReader(r io.Reader) io.Reader {
+	if r == nil {
+		return nil
+	}
+	return &lockedReader{r: r}
+}
+
+// Read reads from the wrapped reader while it holds the lock.
+func (l *lockedReader) Read(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.r.Read(p)
 }
 
 // ----- //
