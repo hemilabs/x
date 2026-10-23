@@ -34,6 +34,14 @@ If the sorted flag is true we sort the incoming hashes array in order to always
 generate the same merkle tree regardless of input order.
 
 
+# Changes from dcrtime
+
+- `Tree` is removed.  `Sorted` builds a tree from sorted leaves, and
+  `Ordered` builds a tree in the order of the leaves.
+- `Root` is removed.  In dcrtime, `Root` takes leaves.  `TreeRoot` takes a
+  tree from `Sorted` or `Ordered` and returns its last element.  Code that
+  calls `Root` or `Tree` does not compile, so a port must choose.
+
 # Origin
 
 This package is a derivative of work originally available at

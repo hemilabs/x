@@ -163,9 +163,11 @@ func Ordered(hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
 	return tree(hashes, false)
 }
 
-// Root returns only the merkle root of an array of digests.
-func Root(tree []*[sha256.Size]byte) *[sha256.Size]byte {
-	if tree == nil {
+// TreeRoot returns the merkle root of a tree that Sorted or Ordered built.
+// It returns nil for an empty tree.  The argument is a tree, not a list of
+// leaves.
+func TreeRoot(tree []*[sha256.Size]byte) *[sha256.Size]byte {
+	if len(tree) == 0 {
 		return nil
 	}
 	return tree[len(tree)-1]
