@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -277,4 +278,44 @@ func FuzzVerifyAuthPath(f *testing.F) {
 		var root, leaf [sha256.Size]byte
 		_ = VerifyAuthPath(mb, &root, &leaf)
 	})
+}
+
+// TestVerifyAuthPathFlagEncoding checks that a branch with an extra flag
+// byte or a set padding bit fails.
+func TestVerifyAuthPathFlagEncoding(t *testing.T) {
+	for count := 1; count < 70; count++ {
+		leaves := make([]*[sha256.Size]byte, 0, count)
+		for i := range count {
+			leaves = append(leaves, &[sha256.Size]byte{byte(i)})
+		}
+		mt := Sorted(leaves)
+		root := mt[len(mt)-1]
+		for find := range count {
+			mb := AuthPath(leaves, leaves[find])
+
+			extra := *mb
+			extra.Flags = append(append([]byte{}, mb.Flags...), 0)
+			if err := VerifyAuthPath(&extra, root, leaves[find]); !errors.Is(err, ErrMalformed) {
+				t.Fatalf("%d/%d extra byte: got %v, want %v", count, find, err, ErrMalformed)
+			}
+
+			// Count the flag bits that the branch uses.
+			m := &merkleBranch{flags: mb.Flags, inHashes: mb.Hashes, numLeaves: mb.NumLeaves}
+			height := uint32(math.Ceil(math.Log2(float64(mb.NumLeaves))))
+			if _, err := m.extract(height, 0); err != nil {
+				t.Fatal(err)
+			}
+			rem := m.bitsUsed % 8
+			if rem == 0 {
+				continue // the last byte has no padding
+			}
+			padded := *mb
+			padded.Flags = append([]byte{}, mb.Flags...)
+			padded.Flags[len(padded.Flags)-1] |= 1 << rem
+			err := VerifyAuthPath(&padded, root, leaves[find])
+			if !errors.Is(err, ErrMalformed) {
+				t.Fatalf("%d/%d padding bit: got %v, want %v", count, find, err, ErrMalformed)
+			}
+		}
+	}
 }
