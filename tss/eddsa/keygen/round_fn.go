@@ -22,6 +22,10 @@ import (
 // getSSID computes the session ID for domain separation.
 func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]byte, error) {
 	ssidList := []*big.Int{
+		new(big.Int).SetBytes([]byte("eddsa-keygen")),
+		params.EC().Params().P, params.EC().Params().N,
+		params.EC().Params().B,
+		params.EC().Params().Gx, params.EC().Params().Gy,
 		temp.ssidNonce,
 		big.NewInt(int64(roundNumber)),
 		big.NewInt(int64(params.PartyCount())),
@@ -30,9 +34,11 @@ func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]by
 	for _, id := range params.Parties().IDs() {
 		ssidList = append(ssidList, id.KeyInt())
 	}
-	if id := params.CeremonyID(); len(id) > 0 {
-		ssidList = append(ssidList, new(big.Int).SetBytes(id))
+	cid, err := params.CeremonySSID()
+	if err != nil {
+		return nil, err
 	}
+	ssidList = append(ssidList, cid...)
 	ssid := common.SHA512_256i(ssidList...)
 	return ssid.Bytes(), nil
 }
@@ -40,6 +46,10 @@ func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]by
 // Round1 generates the VSS polynomial and broadcasts a commitment.
 // Returns the keygen state to pass to subsequent rounds.
 func Round1(params *tss.Parameters, preParams ...interface{}) (*KeygenState, *RoundOutput, error) {
+	// Fail before any work when the ceremony ID is missing.
+	if _, err := params.CeremonySSID(); err != nil {
+		return nil, nil, err
+	}
 	n := params.PartyCount()
 	Pi := params.PartyID()
 	i := Pi.Index

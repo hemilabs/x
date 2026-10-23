@@ -56,9 +56,11 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 	ssidList = append(ssidList, big.NewInt(int64(params.Threshold())))
 	ssidList = append(ssidList, big.NewInt(int64(params.NewThreshold())))
 	ssidList = append(ssidList, temp.ssidNonce)
-	if cid := params.CeremonyID(); len(cid) > 0 {
-		ssidList = append(ssidList, new(big.Int).SetBytes(cid))
+	cid, err := params.CeremonySSID()
+	if err != nil {
+		return nil, err
 	}
+	ssidList = append(ssidList, cid...)
 	return common.SHA512_256i(ssidList...).Bytes(), nil
 }
 
@@ -68,6 +70,10 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 //
 // New committee parties call this too but get a no-op (nil messages).
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
+	// Fail before any work when the ceremony ID is missing.
+	if _, err := params.CeremonySSID(); err != nil {
+		return nil, nil, err
+	}
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
 

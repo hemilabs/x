@@ -102,6 +102,7 @@ func TestBuildLocalSaveDataSubset(t *testing.T) {
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := Round1(params)
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
@@ -161,6 +162,7 @@ func TestExportR2BcastSelf(t *testing.T) {
 	pIDs := tss.GenerateTestPartyIDs(3)
 	peerCtx := tss.NewPeerContext(pIDs)
 	params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[0], 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	st, _, err := Round1(params)
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +170,7 @@ func TestExportR2BcastSelf(t *testing.T) {
 	r1 := make([]*tss.Message, 3)
 	for i := 0; i < 3; i++ {
 		p := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], 3, 1)
+		p.SetCeremonyID([]byte("test-ceremony"))
 		_, out, err := Round1(p)
 		if err != nil {
 			t.Fatal(err)

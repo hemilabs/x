@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"math/big"
@@ -162,11 +163,13 @@ func run() error {
 // -------------------------------------------------------------------
 
 func ecdsaKeygen(ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext, preParams []keygen.LocalPreParams) ([]keygen.LocalPartySaveData, error) {
+	ceremonyID := newCeremonyID()
 	// -- Round 1 --
 	states := make([]*keygen.KeygenState, n)
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID(ceremonyID)
 		st, out, err := keygen.Round1(ctx, params, preParams[i])
 		if err != nil {
 			return nil, fmt.Errorf("round1[%d]: %w", i, err)
@@ -239,6 +242,7 @@ func ecdsaKeygen(ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs,
 // -------------------------------------------------------------------
 
 func ecdsaSign(ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *tss.PeerContext, saves []keygen.LocalPartySaveData, m *big.Int) (*signing.SignatureData, error) {
+	ceremonyID := newCeremonyID()
 	// -- Round 1: P2P + broadcast --
 	states := make([]*signing.SigningState, n)
 	r1p2p := make([][]*tss.Message, n)
@@ -248,6 +252,7 @@ func ecdsaSign(ctx context.Context, n, threshold int, pIDs tss.SortedPartyIDs, p
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID(ceremonyID)
 		st, out, err := signing.SignRound1(params, saves[i], m, nil, 0)
 		if err != nil {
 			return nil, fmt.Errorf("signR1[%d]: %w", i, err)
@@ -341,6 +346,7 @@ func bcastRound(n int, states []*signing.SigningState, fn func(int) (*signing.Si
 // -------------------------------------------------------------------
 
 func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldPP, newPP []keygen.LocalPreParams, oldT, newT int) ([]keygen.LocalPartySaveData, error) {
+	ceremonyID := newCeremonyID()
 	oldN := len(oldPIDs)
 	newN := len(newPIDs)
 
@@ -375,6 +381,7 @@ func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldC
 		params := tss.NewReSharingParameters(
 			tss.S256(), oldCtx, newCtx, p.pid,
 			oldN, oldT, newN, newT)
+		params.SetCeremonyID(ceremonyID)
 		params.SetNoProofMod()
 		params.SetNoProofFac()
 		params.SetNoProofDLN()
@@ -504,4 +511,14 @@ func verifyECDSA(pub ecPoint, msg []byte, sig *signing.SignatureData) error {
 		return fmt.Errorf("ECDSA signature verification failed")
 	}
 	return nil
+}
+
+// newCeremonyID returns a fresh random ceremony ID.  All parties of one
+// ceremony must use the same ID, and each ceremony needs a new one.
+func newCeremonyID() []byte {
+	id := make([]byte, 32)
+	if _, err := rand.Read(id); err != nil {
+		panic(err)
+	}
+	return id
 }

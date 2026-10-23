@@ -34,15 +34,30 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 	ssidList = append(ssidList, big.NewInt(int64(params.Threshold())))
 	ssidList = append(ssidList, big.NewInt(int64(roundNumber)))
 	ssidList = append(ssidList, temp.ssidNonce)
-	if cid := params.CeremonyID(); len(cid) > 0 {
-		ssidList = append(ssidList, new(big.Int).SetBytes(cid))
+	cid, err := params.CeremonySSID()
+	if err != nil {
+		return nil, err
 	}
+	ssidList = append(ssidList, cid...)
+	// Bind the message, the key and the public shares, so that a
+	// commitment or proof from another signing session does not pass.
+	ssidList = append(ssidList, tss.SSIDOptional(temp.m)...)
+	ssidList = append(ssidList, big.NewInt(int64(temp.fullBytesLen)))
+	keyPoints, err := crypto.FlattenECPoints(append([]*crypto.ECPoint{key.EDDSAPub}, key.BigXj...))
+	if err != nil {
+		return nil, fmt.Errorf("flatten ec points: %w", err)
+	}
+	ssidList = append(ssidList, keyPoints...)
 	return common.SHA512_256i(ssidList...).Bytes(), nil
 }
 
 // SignRound1 initializes signing state and broadcasts a commitment
 // to the signing nonce Ri.
 func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.Int, fullBytesLen int) (*SigningState, *SignRoundOutput, error) {
+	// Fail before any work when the ceremony ID is missing.
+	if _, err := params.CeremonySSID(); err != nil {
+		return nil, nil, err
+	}
 	if key.Xi == nil || key.Xi.Sign() == 0 {
 		return nil, nil, errors.New("invalid key data: Xi is nil or zero")
 	}

@@ -22,6 +22,7 @@ func TestRoundFnEdDSAKeygenThreeParties(t *testing.T) {
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := Round1(params)
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)

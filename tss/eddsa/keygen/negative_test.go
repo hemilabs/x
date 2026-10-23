@@ -5,6 +5,7 @@
 package keygen
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -25,6 +26,7 @@ func runEdDSAKeygen(t *testing.T) (states []*KeygenState, r1 []*tss.Message, r2p
 	r1 = make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := Round1(params)
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
@@ -70,6 +72,7 @@ func TestRound2InvalidR1Message(t *testing.T) {
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := Round1(params)
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
@@ -239,4 +242,14 @@ func TestBuildLocalSaveDataSubsetEdDSA(t *testing.T) {
 		fakeIDs := tss.GenerateTestPartyIDs(1)
 		BuildLocalSaveDataSubset(*out.Save, fakeIDs)
 	}()
+}
+
+// TestRound1RequiresCeremonyID verifies that Round1 fails without a
+// ceremony ID.
+func TestRound1RequiresCeremonyID(t *testing.T) {
+	pIDs := tss.GenerateTestPartyIDs(3)
+	params := tss.NewParameters(tss.Edwards(), tss.NewPeerContext(pIDs), pIDs[0], 3, 1)
+	if _, _, err := Round1(params); !errors.Is(err, tss.ErrNoCeremonyID) {
+		t.Fatalf("Round1 error = %v, want ErrNoCeremonyID", err)
+	}
 }

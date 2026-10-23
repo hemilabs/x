@@ -18,22 +18,24 @@ import (
 	"github.com/hemilabs/x/tss/v3/tss"
 )
 
-// DGRound1Message is broadcast by old committee: ECDSA pub + VSS commitment + SSID.
+// DGRound1Message is broadcast by old committee: ECDSA pub + VSS
+// commitment + SSID + the hash of the old key that the SSID binds.
 type DGRound1Message struct {
 	ECDSAPub    *crypto.ECPoint
 	VCommitment *big.Int
 	SSID        []byte
+	KeyHash     []byte
 }
 
 // ValidateBasic checks that required fields of DGRound1Message are non-nil.
 func (m *DGRound1Message) ValidateBasic() bool {
 	return m != nil && m.ECDSAPub != nil &&
 		m.VCommitment != nil && m.VCommitment.Sign() > 0 &&
-		len(m.SSID) > 0
+		len(m.SSID) > 0 && len(m.KeyHash) > 0
 }
 
 // NewDGRound1Message constructs a *tss.Message with the given content.
-func NewDGRound1Message(to []*tss.PartyID, from *tss.PartyID, ecdsaPub *crypto.ECPoint, vct cmt.HashCommitment, ssid []byte) *tss.Message {
+func NewDGRound1Message(to []*tss.PartyID, from *tss.PartyID, ecdsaPub *crypto.ECPoint, vct cmt.HashCommitment, ssid, keyHash []byte) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		To:          to,
@@ -42,6 +44,7 @@ func NewDGRound1Message(to []*tss.PartyID, from *tss.PartyID, ecdsaPub *crypto.E
 			ECDSAPub:    ecdsaPub,
 			VCommitment: vct,
 			SSID:        ssid,
+			KeyHash:     keyHash,
 		},
 	}
 }

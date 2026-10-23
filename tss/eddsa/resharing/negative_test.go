@@ -26,6 +26,7 @@ func runKeygenForReshare(t *testing.T) ([]keygen.LocalPartySaveData, tss.SortedP
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(params)
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -88,6 +89,7 @@ func TestReshareRound2InvalidR1Message(t *testing.T) {
 	for i := 0; i < oldN; i++ {
 		params := tss.NewReSharingParameters(
 			tss.Edwards(), oldCtx, newCtx, oldPIDs[i], oldN, 1, newN, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := ReshareRound1(params, &saves[i])
 		if err != nil {
 			t.Fatalf("ReshareRound1[%d]: %v", i, err)
@@ -101,6 +103,7 @@ func TestReshareRound2InvalidR1Message(t *testing.T) {
 	// New committee party
 	params := tss.NewReSharingParameters(
 		tss.Edwards(), oldCtx, newCtx, newPIDs[0], oldN, 1, newN, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	st, _, err := ReshareRound1(params, nil)
 	if err != nil {
 		t.Fatalf("ReshareRound1 new: %v", err)
@@ -135,6 +138,7 @@ func TestReshareRound2PubKeyMismatch(t *testing.T) {
 	for i := 0; i < oldN; i++ {
 		params := tss.NewReSharingParameters(
 			tss.Edwards(), oldCtx, newCtx, oldPIDs[i], oldN, 1, newN, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		_, out, err := ReshareRound1(params, &saves[i])
 		if err != nil {
 			t.Fatalf("ReshareRound1[%d]: %v", i, err)
@@ -147,6 +151,7 @@ func TestReshareRound2PubKeyMismatch(t *testing.T) {
 	// New party
 	params := tss.NewReSharingParameters(
 		tss.Edwards(), oldCtx, newCtx, newPIDs[0], oldN, 1, newN, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	st, _, err := ReshareRound1(params, nil)
 	if err != nil {
 		t.Fatalf("ReshareRound1 new: %v", err)

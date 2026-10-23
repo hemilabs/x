@@ -7,6 +7,7 @@ package tss
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -190,5 +191,24 @@ func TestOldAndNewPartiesLength(t *testing.T) {
 	// Verify no aliasing with OldParties
 	if len(params.OldParties().IDs()) != 3 {
 		t.Fatal("OldAndNewParties corrupted OldParties")
+	}
+}
+
+// TestCeremonySSID verifies that a ceremony ID is required, that its
+// length is bound, and that an absent optional field differs from a
+// present one.
+func TestCeremonySSID(t *testing.T) {
+	pIDs := GenerateTestPartyIDs(2)
+	params := NewParameters(S256(), NewPeerContext(pIDs), pIDs[0], 2, 1)
+	if _, err := params.CeremonySSID(); !errors.Is(err, ErrNoCeremonyID) {
+		t.Fatalf("no ceremony ID: got %v, want ErrNoCeremonyID", err)
+	}
+	a := SSIDBytes([]byte{0x00, 0xab, 0xcd})
+	b := SSIDBytes([]byte{0xab, 0xcd})
+	if a[0].Cmp(b[0]) == 0 {
+		t.Fatal("00abcd and abcd give the same SSID entries")
+	}
+	if len(SSIDOptional(nil)) == len(SSIDOptional(big.NewInt(0))) {
+		t.Fatal("an absent field and a zero field give the same SSID entries")
 	}
 }

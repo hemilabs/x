@@ -8,8 +8,10 @@ package tss
 import (
 	"crypto/elliptic"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"runtime"
 	"time"
 )
@@ -156,9 +158,39 @@ func (params *Parameters) CeremonyID() []byte {
 // SetCeremonyID binds a ceremony identifier into the SSID hash.
 // This distinguishes concurrent ceremonies that share the same
 // parties, threshold, and curve.  The caller MUST set this before
-// starting any round.
+// starting any round; Round 1 returns ErrNoCeremonyID without it.
 func (params *Parameters) SetCeremonyID(id []byte) {
 	params.ceremonyID = id
+}
+
+// ErrNoCeremonyID reports a round 1 call without a ceremony ID.
+var ErrNoCeremonyID = errors.New("ceremony ID is required")
+
+// CeremonySSID returns the SSID entries for the ceremony ID.  Without
+// a ceremony ID, two ceremonies over the same inputs get the same
+// SSID, so it returns ErrNoCeremonyID.
+func (params *Parameters) CeremonySSID() ([]*big.Int, error) {
+	if len(params.ceremonyID) == 0 {
+		return nil, ErrNoCeremonyID
+	}
+	return SSIDBytes(params.ceremonyID), nil
+}
+
+// SSIDBytes returns the SSID entries for a byte field: its length and
+// its value.  The length keeps leading zero bytes, so 00abcd and abcd
+// give different SSIDs.
+func SSIDBytes(b []byte) []*big.Int {
+	return []*big.Int{big.NewInt(int64(len(b))), new(big.Int).SetBytes(b)}
+}
+
+// SSIDOptional returns the SSID entries for an optional integer: a
+// presence marker and the value.  An absent field cannot hash
+// the same as another field that is present.
+func SSIDOptional(v *big.Int) []*big.Int {
+	if v == nil {
+		return []*big.Int{big.NewInt(0)}
+	}
+	return []*big.Int{big.NewInt(1), v}
 }
 
 // NoProofDLN returns true if DLN proof verification is disabled.
