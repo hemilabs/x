@@ -29,6 +29,7 @@ import (
 	"github.com/hemilabs/x/leveldb/leveldb/errors"
 	"github.com/hemilabs/x/leveldb/leveldb/filter"
 	"github.com/hemilabs/x/leveldb/leveldb/iterator"
+	"github.com/hemilabs/x/leveldb/leveldb/journal"
 	"github.com/hemilabs/x/leveldb/leveldb/opt"
 	"github.com/hemilabs/x/leveldb/leveldb/storage"
 	"github.com/hemilabs/x/leveldb/leveldb/testutil"
@@ -2993,4 +2994,160 @@ func TestDB_GracefulClose(t *testing.T) {
 	}
 	iter.Release()
 	closeWait.Wait()
+}
+
+// manifestPath returns the path of the current MANIFEST in dir.
+func manifestPath(t *testing.T, dir string) string {
+	t.Helper()
+	cur, err := os.ReadFile(filepath.Join(dir, "CURRENT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, strings.TrimSpace(string(cur)))
+}
+
+// journalChunks returns the payload offsets of the chunks in a journal.
+func journalChunks(data []byte) []int {
+	const blockSize, headerSize = 32 * 1024, 7
+	var offs []int
+	for pos := 0; pos+headerSize <= len(data); {
+		if left := blockSize - pos%blockSize; left < headerSize {
+			pos += left
+			continue
+		}
+		n := int(binary.LittleEndian.Uint16(data[pos+4:]))
+		if n == 0 {
+			break
+		}
+		offs = append(offs, pos+headerSize)
+		pos += headerSize + n
+	}
+	return offs
+}
+
+// TestDB_CorruptManifestKeepsTables corrupts the MANIFEST record that
+// adds a table.  Open must fail and keep the table, so Recover can get
+// the keys back.  A torn last record must not stop Open.
+func TestDB_CorruptManifestKeepsTables(t *testing.T) {
+	dir := t.TempDir()
+	o := &opt.Options{WriteBuffer: 64 * 1024, DisableBlockCache: true}
+	db, err := OpenFile(dir, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := bytes.Repeat([]byte("v"), 1024)
+	for i := 0; i < 200; i++ {
+		if err := db.Put([]byte(fmt.Sprintf("k%03d", i)), value, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	m := manifestPath(t, dir)
+	data, err := os.ReadFile(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunks := journalChunks(data)
+	if len(chunks) < 2 {
+		t.Fatalf("MANIFEST has %d records, want a table record", len(chunks))
+	}
+
+	// A torn last record ends the log, and Open works.
+	torn := t.TempDir()
+	if err := os.CopyFS(torn, os.DirFS(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath(t, torn), append(append([]byte{}, data...), 0, 0, 0, 0, 0x40, 0, 1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if db, err := OpenFile(torn, o); err != nil {
+		t.Fatalf("Open with a torn last record: %v", err)
+	} else {
+		db.Close()
+	}
+
+	// A flipped byte in the record that adds a table must fail Open.
+	data[chunks[1]+1] ^= 0xff
+	if err := os.WriteFile(m, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenFile(dir, o); !errors.IsCorrupted(err) {
+		t.Fatalf("Open with a corrupt MANIFEST: got %v, want ErrCorrupted", err)
+	}
+	db, err = RecoverFile(dir, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for i := 0; i < 200; i++ {
+		if _, err := db.Get([]byte(fmt.Sprintf("k%03d", i)), nil); err != nil {
+			t.Fatalf("k%03d after Recover: %v", i, err)
+		}
+	}
+}
+
+// TestDB_TornManifestRecordNotApplied cuts the last MANIFEST record at a
+// block boundary.  Recovery must not apply the fields that the record
+// sets before the cut.
+func TestDB_TornManifestRecordNotApplied(t *testing.T) {
+	stor := storage.NewMemStorage()
+	defer stor.Close()
+	icmp := &iComparer{comparer.DefaultComparer}
+
+	buf := new(bytes.Buffer)
+	jw := journal.NewWriter(buf)
+	rec := &sessionRecord{}
+	rec.setComparer(icmp.uName())
+	rec.setJournalNum(5)
+	rec.setNextFileNum(10)
+	rec.setSeqNum(0)
+	w, _ := jw.Next()
+	if err := rec.encode(w); err != nil {
+		t.Fatal(err)
+	}
+	// The second record sets a new journal number, then adds enough
+	// tables to cross a block boundary.
+	rec = &sessionRecord{}
+	rec.setJournalNum(9)
+	key := makeInternalKey(nil, bytes.Repeat([]byte("k"), 100), 1, keyTypeVal)
+	for i := 0; i < 400; i++ {
+		rec.addTable(0, int64(i+1), 1, key, key)
+	}
+	w, _ = jw.Next()
+	if err := rec.encode(w); err != nil {
+		t.Fatal(err)
+	}
+	if err := jw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() <= 32*1024 {
+		t.Fatalf("MANIFEST is %d bytes, want more than one block", buf.Len())
+	}
+
+	fd := storage.FileDesc{Type: storage.TypeManifest, Num: 1}
+	mw, err := stor.Create(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mw.Write(buf.Bytes()[:32*1024]); err != nil {
+		t.Fatal(err)
+	}
+	mw.Close()
+	if err := stor.SetMeta(fd); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := newSession(stor, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.recover(); err != nil {
+		t.Fatal(err)
+	}
+	if s.stJournalNum != 5 {
+		t.Fatalf("journal number = %d, want 5", s.stJournalNum)
+	}
 }

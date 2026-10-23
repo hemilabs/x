@@ -143,6 +143,17 @@ type Reader struct {
 	last bool
 	// err is any accumulated error.
 	err error
+
+	// TornTailIsEOF makes a strict reader treat a last record that runs
+	// past the end of the file as the end of the journal.  A crash can
+	// leave such a record, or a tail of zero bytes.  Next returns io.EOF
+	// when the record starts past the end; a reader of a record whose
+	// later chunk is missing returns ErrTornTail.  Other corruption
+	// still returns an error.
+	TornTailIsEOF bool
+	// zeroTail is set when the rest of a block is zero.  The journal
+	// must then end; more data after it is corruption.
+	zeroTail bool
 	// buf is the buffer.
 	buf [blockSize]byte
 }
@@ -161,6 +172,35 @@ func NewReader(r io.Reader, dropper Dropper, strict, checksum bool) *Reader {
 }
 
 var errSkip = errors.New("leveldb/journal: skipped")
+
+// ErrTornTail is returned when the last record of a journal runs past
+// the end of the file, and TornTailIsEOF is set.  The record is not
+// complete, so the caller must not apply it.
+var ErrTornTail = errors.New("leveldb/journal: torn last record")
+
+// tornTail ends the journal at a torn last record.  If the record
+// started already (first is false), its reader returns ErrTornTail, so
+// the caller does not apply a partial record.
+func (r *Reader) tornTail(first bool) error {
+	r.i = r.n
+	r.j = r.n
+	if first {
+		r.err = io.EOF
+	} else {
+		r.err = ErrTornTail
+	}
+	return r.err
+}
+
+// allZero reports whether every byte of b is zero.
+func allZero(b []byte) bool {
+	for _, c := range b {
+		if c != 0 {
+			return false
+		}
+	}
+	return true
+}
 
 func (r *Reader) corrupt(n int, reason string, skip bool) error {
 	if r.dropper != nil {
@@ -183,6 +223,14 @@ func (r *Reader) nextChunk(first bool) error {
 			chunkType := r.buf[r.j+6]
 			unprocBlock := r.n - r.j
 			if checksum == 0 && length == 0 && chunkType == 0 {
+				// A crash can leave a zero-filled tail.  Accept it only
+				// if the rest of the block is zero and no data follows.
+				if r.TornTailIsEOF && allZero(r.buf[r.j:r.n]) {
+					r.i = r.n
+					r.j = r.n
+					r.zeroTail = true
+					continue
+				}
 				// Drop entire block.
 				r.i = r.n
 				r.j = r.n
@@ -200,6 +248,11 @@ func (r *Reader) nextChunk(first bool) error {
 				// Drop entire block.
 				r.i = r.n
 				r.j = r.n
+				if r.TornTailIsEOF && r.n < blockSize {
+					// The last block is short: the payload runs past
+					// the end of the file.
+					return r.tornTail(first)
+				}
 				return r.corrupt(unprocBlock, "chunk length overflows block", false)
 			} else if r.checksum && checksum != util.NewCRC(r.buf[r.i-1:r.j]).Value() {
 				// Drop entire block.
@@ -220,23 +273,33 @@ func (r *Reader) nextChunk(first bool) error {
 		// The last block.
 		if r.n < blockSize && r.n > 0 {
 			if !first {
+				if r.TornTailIsEOF {
+					return r.tornTail(first)
+				}
 				return r.corrupt(0, "missing chunk part", false)
 			}
 			r.err = io.EOF
 			return r.err
 		}
 
-		// Read block.
+		// Read block.  After a zero tail, more data is corruption.
 		n, err := io.ReadFull(r.r, r.buf[:])
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			return err
 		}
 		if n == 0 {
 			if !first {
+				if r.TornTailIsEOF {
+					return r.tornTail(first)
+				}
 				return r.corrupt(0, "missing chunk part", false)
 			}
 			r.err = io.EOF
 			return r.err
+		}
+		if r.zeroTail {
+			r.i, r.j, r.n = 0, 0, 0
+			return r.corrupt(n, "data after zero tail", false)
 		}
 		r.i, r.j, r.n = 0, 0, n
 	}
@@ -276,6 +339,7 @@ func (r *Reader) Reset(reader io.Reader, dropper Dropper, strict, checksum bool)
 	r.n = 0
 	r.last = true
 	r.err = nil
+	r.zeroTail = false
 	return err
 }
 
