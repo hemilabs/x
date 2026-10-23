@@ -168,7 +168,12 @@ func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveDat
 //
 // r1Msgs are DGRound1Message broadcasts from old committee.
 // Only new committee members produce output.
-func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(2); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params, save, temp := state.params, state.save, state.temp
 	tss.MergeMsgs(temp.dgRound1Messages, r1Msgs)
 	out := &ReshareRoundOutput{}
@@ -269,7 +274,12 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 // Only old committee members produce output.
 //
 // r2AckMsgs are DGRound2Message2 broadcasts from new committee.
-func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(3); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params, temp := state.params, state.temp
 	tss.MergeMsgs(temp.dgRound2Message2s, r2AckMsgs)
 	out := &ReshareRoundOutput{}
@@ -303,7 +313,12 @@ func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRound
 // r2NewMsgs are DGRound2Message1 broadcasts from new committee.
 // r3P2P[j] is old party j's DGRound3Message1 (P2P share).
 // r3Bcast[j] is old party j's DGRound3Message2 (decommitment).
-func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Message, r3P2P, r3Bcast []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Message, r3P2P, r3Bcast []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(4); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params, save, temp := state.params, state.save, state.temp
 	tss.MergeMsgs(temp.dgRound2Message1s, r2NewMsgs)
 	tss.MergeMsgs(temp.dgRound3Message1s, r3P2P)
@@ -580,7 +595,12 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 //
 // r4P2P[j] is new party j's DGRound4Message1 (P2P FacProof).
 // r4Bcast[j] is new party j's DGRound4Message2 (ACK broadcast).
-func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(5); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params, save, temp, input := state.params, state.save, state.temp, state.input
 	tss.MergeMsgs(temp.dgRound4Message1s, r4P2P)
 	tss.MergeMsgs(temp.dgRound4Message2s, r4Bcast)

@@ -16,6 +16,8 @@ import (
 // A single node may be in both the old and new committee; the
 // ReSharingParameters encode which roles this party plays.
 type ReshareState struct {
+	life tss.Lifecycle // round order and failure latch
+
 	params *tss.ReSharingParameters
 	input  *keygen.LocalPartySaveData // existing key (old committee)
 	save   *keygen.LocalPartySaveData // new key being built

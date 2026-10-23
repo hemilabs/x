@@ -162,7 +162,12 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 // r1Msgs must be indexed by party: r1Msgs[j] is party j's
 // KGRound1Message broadcast.  r1Msgs[i] (own message from Round1)
 // must be present.
-func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
+func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (_ *RoundOutput, rerr error) {
+	if err := state.life.Begin(2); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 	save := state.save
 	temp := state.temp
@@ -340,7 +345,12 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 // r2p2p[j] is party j's KGRound2Message1 (P2P, contains VSS share).
 // r2bcast[j] is party j's KGRound2Message2 (broadcast, contains
 // de-commitment and ModProof).
-func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, error) {
+func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Message) (_ *RoundOutput, rerr error) {
+	if err := state.life.Begin(3); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 	save := state.save
 	temp := state.temp
@@ -562,7 +572,12 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 //
 // r3Msgs[j] is party j's KGRound3Message broadcast containing the
 // Paillier proof.
-func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*RoundOutput, error) {
+func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (_ *RoundOutput, rerr error) {
+	if err := state.life.Begin(4); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 	save := state.save
 

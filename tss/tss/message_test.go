@@ -5,6 +5,7 @@
 package tss
 
 import (
+	"errors"
 	"math/big"
 	"strings"
 	"testing"
@@ -75,5 +76,49 @@ func TestPeerContextSetIDs(t *testing.T) {
 	ctx.SetIDs(ids2)
 	if len(ctx.IDs()) != 2 {
 		t.Fatalf("after SetIDs: want 2, got %d", len(ctx.IDs()))
+	}
+}
+
+// TestLifecycle verifies the round order and the failure latch.
+func TestLifecycle(t *testing.T) {
+	run := func(l *Lifecycle, round int, fail bool) (err error) {
+		if err := l.Begin(round); err != nil {
+			return err
+		}
+		defer l.End(&err, nil)
+		if fail {
+			return errors.New("round failed")
+		}
+		return nil
+	}
+	var l Lifecycle
+	if err := run(&l, 3, false); err == nil {
+		t.Fatal("round 3 before round 2: expected an error")
+	}
+	if err := run(&l, 2, false); err != nil {
+		t.Fatalf("round 2: %v", err)
+	}
+	if err := run(&l, 2, false); err == nil {
+		t.Fatal("repeated round 2: expected an error")
+	}
+	if err := run(&l, 3, true); err == nil {
+		t.Fatal("round 3 failure: expected an error")
+	}
+	if err := run(&l, 3, false); !errors.Is(err, ErrStateFailed) {
+		t.Fatalf("round 3 retry: got %v, want ErrStateFailed", err)
+	}
+
+	// A panic also marks the state failed and unlocks it.
+	var p Lifecycle
+	func() {
+		defer func() { _ = recover() }()
+		var err error
+		if p.Begin(2) == nil {
+			defer p.End(&err, nil)
+			panic("round panicked")
+		}
+	}()
+	if err := run(&p, 2, false); !errors.Is(err, ErrStateFailed) {
+		t.Fatalf("after a panic: got %v, want ErrStateFailed", err)
 	}
 }
