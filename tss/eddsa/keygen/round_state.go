@@ -11,6 +11,8 @@ import (
 
 // KeygenState holds mutable state across all keygen rounds for one party.
 type KeygenState struct {
+	life tss.Lifecycle // round order and failure latch
+
 	params *tss.Parameters
 	save   LocalPartySaveData
 	temp   localTempData

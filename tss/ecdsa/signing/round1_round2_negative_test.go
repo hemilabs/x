@@ -174,3 +174,13 @@ func TestSignRound2ContextCancellation(t *testing.T) {
 	}
 	t.Logf("correctly rejected cancelled context: %v", err)
 }
+
+// TestSignRound2RejectsReentry verifies that a second SignRound2 on
+// the same state fails.  It must not emit a second set of MtA
+// responses for the same gamma and w.
+func TestSignRound2RejectsReentry(t *testing.T) {
+	f := setupThroughRound2(t)
+	if _, err := SignRound2(context.Background(), f.States[0], f.R1P2P[0], f.R1Bcast); err == nil {
+		t.Fatal("repeated SignRound2: expected an error")
+	}
+}

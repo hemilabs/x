@@ -6,6 +6,7 @@ package signing
 
 import (
 	"crypto/sha256"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -177,6 +178,35 @@ func runToSignRound3(t *testing.T) ([]*SigningState, []*tss.Message, tss.SortedP
 		r2[i] = out.Messages[0]
 	}
 	return states, r2, pIDs
+}
+
+// TestSignRoundOrder verifies that a state rejects a repeated round, an
+// out-of-order round and any round after a failure.  A failure must
+// also wipe the nonce.
+func TestSignRoundOrder(t *testing.T) {
+	states, r2, _ := runToSignRound3(t)
+
+	if _, err := SignRound2(states[0], nil); err == nil {
+		t.Fatal("repeated SignRound2: expected an error")
+	}
+	if _, err := SignFinalize(states[0], nil); err == nil {
+		t.Fatal("SignFinalize before SignRound3: expected an error")
+	}
+
+	badR2 := make([]*tss.Message, 3)
+	copy(badR2, r2)
+	badContent := *r2[1].Content.(*SignRound2Message)
+	badContent.DeCommitment = nil
+	badR2[1] = &tss.Message{From: r2[1].From, Content: &badContent}
+	if _, err := SignRound3(states[0], badR2); err == nil {
+		t.Fatal("SignRound3 with a bad decommitment: expected an error")
+	}
+	if states[0].temp.ri.Sign() != 0 {
+		t.Fatal("failed SignRound3 did not wipe the nonce")
+	}
+	if _, err := SignRound3(states[0], r2); !errors.Is(err, tss.ErrStateFailed) {
+		t.Fatalf("SignRound3 retry: got %v, want ErrStateFailed", err)
+	}
 }
 
 func TestSignRound3BadDeCommitment(t *testing.T) {

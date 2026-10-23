@@ -14,6 +14,8 @@ import (
 // Opaque to the caller — pass between round functions without
 // reading or modifying.
 type KeygenState struct {
+	life tss.Lifecycle // round order and failure latch
+
 	params *tss.Parameters
 	save   *LocalPartySaveData
 	temp   *localTempData
