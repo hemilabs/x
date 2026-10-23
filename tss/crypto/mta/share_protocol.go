@@ -8,6 +8,7 @@ package mta
 import (
 	"crypto/elliptic"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 
@@ -16,13 +17,17 @@ import (
 	"github.com/hemilabs/x/tss/v3/crypto/paillier"
 )
 
+// ErrNilArgument reports a nil argument from the caller.  It is a local
+// failure and not a fault of the peer.
+var ErrNilArgument = errors.New("nil argument")
+
 // [FORK] Session parameter added for SSID domain separation (prevents cross-ceremony replay).
 // Upstream has no Session parameter; hashes are not ceremony-bound.
 func AliceInit(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, a, NTildeB, h1B, h2B *big.Int, rand io.Reader) (cA *big.Int, pf *RangeProofAlice, err error) {
 	// [FORK] Upstream does not validate parameters. Nil pkA or NTilde causes
 	// nil-pointer panics deep in proof construction.
 	if ec == nil || pkA == nil || a == nil || NTildeB == nil || h1B == nil || h2B == nil || rand == nil {
-		return nil, nil, errors.New("AliceInit received nil argument")
+		return nil, nil, fmt.Errorf("AliceInit: %w", ErrNilArgument)
 	}
 	cA, rA, err := pkA.EncryptAndReturnRandomness(rand, a)
 	if err != nil {
@@ -39,7 +44,7 @@ func AliceInit(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, a, NT
 func BobMid(AliceSession []byte, BobSession []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *RangeProofAlice, b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int, rand io.Reader) (beta, cB, betaPrm *big.Int, piB *ProofBob, err error) {
 	// [FORK] Nil parameter guard — upstream does not validate, leading to nil-pointer panics.
 	if ec == nil || pkA == nil || pf == nil || b == nil || cA == nil || rand == nil {
-		err = errors.New("BobMid received nil argument")
+		err = fmt.Errorf("BobMid: %w", ErrNilArgument)
 		return
 	}
 	if !pf.Verify(AliceSession, ec, pkA, NTildeB, h1B, h2B, cA) {
@@ -72,7 +77,7 @@ func BobMid(AliceSession []byte, BobSession []byte, ec elliptic.Curve, pkA *pail
 func BobMidWC(AliceSession []byte, BobSession []byte, ec elliptic.Curve, pkA *paillier.PublicKey, pf *RangeProofAlice, b, cA, NTildeA, h1A, h2A, NTildeB, h1B, h2B *big.Int, B *crypto.ECPoint, rand io.Reader) (beta, cB, betaPrm *big.Int, piB *ProofBobWC, err error) {
 	// [FORK] Nil parameter guard — upstream does not validate.
 	if ec == nil || pkA == nil || pf == nil || b == nil || cA == nil || B == nil || rand == nil {
-		err = errors.New("BobMidWC received nil argument")
+		err = fmt.Errorf("BobMidWC: %w", ErrNilArgument)
 		return
 	}
 	if !pf.Verify(AliceSession, ec, pkA, NTildeB, h1B, h2B, cA) {

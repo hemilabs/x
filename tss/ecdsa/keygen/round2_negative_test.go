@@ -121,6 +121,18 @@ const victimIdx = 1
 
 // --- Individual parameter validation tests ---
 
+// TestRound2CulpritIsSlotNotFrom puts a bad message in slot 1 with the
+// From of party 2.  The culprit must be the party of the slot.
+func TestRound2CulpritIsSlotNotFrom(t *testing.T) {
+	fix := setupRound1ForNegativeTests(t)
+	msgs := cloneR1Msgs(fix.allR1)
+	bad := cloneR1MsgContent(msgs[victimIdx])
+	bad.Content.(*KGRound1Message).PaillierPK.N = big.NewInt(1023)
+	bad.From = msgs[2].From
+	msgs[victimIdx] = bad
+	expectRound2Error(t, fix, msgs, "paillier modulus insufficient bits", victimIdx)
+}
+
 func TestRound2RejectsPaillierNInsufficientBits(t *testing.T) {
 	fix := setupRound1ForNegativeTests(t)
 	msgs := cloneR1Msgs(fix.allR1)

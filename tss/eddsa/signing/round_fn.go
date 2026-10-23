@@ -113,7 +113,7 @@ func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, e
 	for j, msg := range r1Msgs {
 		r1msg := msg.Content.(*SignRound1Message)
 		if !r1msg.ValidateBasic() {
-			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(), msg.From)
+			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
 		}
 		temp.cjs[j] = r1msg.Commitment
 	}
@@ -144,6 +144,7 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 
 	// Init R with own Ri = ri·G.
 	Rx, Ry := ec.ScalarBaseMult(temp.ri.Bytes())
+	temp.rjs = make([]*crypto.ECPoint, params.PartyCount())
 
 	// Verify each party's decommitment + proof, accumulate R.
 	for j, Pj := range params.Parties().IDs() {
@@ -172,6 +173,7 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 			return nil, tss.NewError(errors.New("schnorr proof verify failed"), TaskName, 3, params.PartyID(), Pj)
 		}
 
+		temp.rjs[j] = Rj
 		Rx, Ry = ec.Add(Rx, Ry, Rj.X(), Rj.Y())
 	}
 
@@ -201,6 +203,7 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 	var lambda [64]byte
 	h.Sum(lambda[:0])
 	lambdaReduced := scReduce(&lambda, N)
+	temp.lambda = lambdaReduced
 
 	// Compute si = lambda*wi + ri mod N.
 	localS := scMulAdd(lambdaReduced, temp.wi, temp.ri, N)
@@ -216,6 +219,29 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 	temp.signRound3Messages[i] = r3msg
 
 	return &SignRoundOutput{Messages: []*tss.Message{r3msg}}, nil
+}
+
+// badShares returns the parties whose s_j does not match their nonce
+// and key share: s_j*G must equal Rj + lambda*wj*G.  SignFinalize
+// calls it only after the signature fails.  Each party checks with
+// its own copy of BigXj, so it cannot block a valid signature.
+func badShares(state *SigningState, r3Msgs []*tss.Message) []*tss.PartyID {
+	params, temp := state.params, &state.temp
+	N := params.EC().Params().N
+	var culprits []*tss.PartyID
+	for j, Pj := range params.Parties().IDs() {
+		if j == params.PartyID().Index {
+			continue
+		}
+		sj := r3Msgs[j].Content.(*SignRound3Message).S
+		coef := PrepareForSigning(params.EC(), j, len(state.key.Ks), big.NewInt(1), state.key.Ks)
+		e := new(big.Int).Mod(new(big.Int).Mul(temp.lambda, coef), N)
+		want, err := temp.rjs[j].Add(state.key.BigXj[j].ScalarMult(e))
+		if err != nil || !crypto.ScalarBaseMult(params.EC(), sj).Equals(want) {
+			culprits = append(culprits, Pj)
+		}
+	}
+	return culprits
 }
 
 // SignFinalize sums partial signatures and verifies the EdDSA signature.
@@ -269,7 +295,8 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 		Y:     state.key.EDDSAPub.Y(),
 	}
 	if !decredEdwards.Verify(&pk, data.M, temp.r, sumS) {
-		return nil, fmt.Errorf("signature verification failed")
+		return nil, tss.NewError(errors.New("signature verification failed"),
+			TaskName, 4, params.PartyID(), badShares(state, r3Msgs)...)
 	}
 
 	return &SignRoundOutput{Signature: data}, nil

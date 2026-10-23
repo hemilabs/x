@@ -6,7 +6,6 @@
 package resharing
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -148,12 +147,13 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 		r1msg := msg.Content.(*DGRound1Message)
 		if !r1msg.ValidateBasic() {
 			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2,
-				params.PartyID(), msg.From)
+				params.PartyID(), params.OldParties().IDs()[j])
 		}
+		// A mismatch does not show which party is wrong, so name no culprit.
 		candidate := r1msg.EDDSAPub
 		if state.save.EDDSAPub != nil && !candidate.Equals(state.save.EDDSAPub) {
 			return nil, tss.NewError(errors.New("eddsa pub key mismatch"), TaskName, 2,
-				params.PartyID(), msg.From)
+				params.PartyID())
 		}
 		state.save.EDDSAPub = candidate
 		state.temp.dgRound1Messages[j] = msg
@@ -245,7 +245,7 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 
 		// Verify receiver binding + share.
 		r3msg1 := r3p2p[j].Content.(*DGRound3Message1)
-		if !bytes.Equal(r3msg1.ReceiverID, Pi.Key) {
+		if !Pi.KeyEquals(r3msg1.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"),
 				TaskName, 4, Pi, params.OldParties().IDs()[j])
 		}

@@ -515,3 +515,17 @@ func TestPartyIDStringFormatMultiParty(t *testing.T) {
 		}
 	}
 }
+
+// TestKeyEqualsIgnoresLeadingZeros verifies that a ReceiverID with a
+// leading zero byte matches the same key.
+func TestKeyEqualsIgnoresLeadingZeros(t *testing.T) {
+	pid := &PartyID{PartyIDData: &PartyIDData{Key: []byte{0x00, 0x01, 0x02}}}
+	for _, key := range [][]byte{{0x01, 0x02}, {0x00, 0x01, 0x02}} {
+		if !pid.KeyEquals(key) {
+			t.Fatalf("KeyEquals(%x) = false, want true", key)
+		}
+	}
+	if pid.KeyEquals([]byte{0x01, 0x03}) {
+		t.Fatal("KeyEquals of a different key = true, want false")
+	}
+}

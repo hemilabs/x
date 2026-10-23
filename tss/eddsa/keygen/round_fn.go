@@ -6,7 +6,6 @@
 package keygen
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -106,7 +105,7 @@ func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 		r1msg := r1Msgs[j].Content.(*KGRound1Message)
 		if !r1msg.ValidateBasic() {
 			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(),
-				r1Msgs[j].From)
+				params.Parties().IDs()[j])
 		}
 		temp.kgRound1Messages[j] = r1Msgs[j]
 	}
@@ -203,7 +202,7 @@ func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, er
 
 		// Receiver binding check.
 		r2msg1 := r2p2p[j].Content.(*KGRound2Message1)
-		if !bytes.Equal(r2msg1.ReceiverID, params.PartyID().Key) {
+		if !params.PartyID().KeyEquals(r2msg1.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 3, params.PartyID(), Pj)
 		}
 
