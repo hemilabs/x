@@ -204,8 +204,10 @@ func TestValidatePreParamsNilFields(t *testing.T) {
 	}
 }
 
-// validPreParams builds a minimal LocalPreParams that passes ValidateWithProof
-// using small safe primes. Sophie Germain primes: P=5, Q=11.
+// validPreParams builds a minimal LocalPreParams with the algebraic shape
+// that ValidateWithProof checks, using small safe primes.  It is too small
+// to pass the size checks, so tests use it only for nil-field cases.
+// Sophie Germain primes: P=5, Q=11.
 // Safe primes: safeP=2*5+1=11, safeQ=2*11+1=23. NTilde=11*23=253.
 // H1=4 (=2^2 mod 253), Alpha=3, H2=H1^Alpha mod NTilde=4^3 mod 253=64.
 // PaillierSK.P and PaillierSK.Q are set to dummy non-nil values (not used
@@ -230,7 +232,7 @@ func validPreParams() LocalPreParams {
 // --- ValidateWithProof: happy path ---
 
 func TestValidateWithProofHappyPath(t *testing.T) {
-	pp := validPreParams()
+	pp := loadTestPreParams(t, 1)[0]
 	if !pp.ValidateWithProof() {
 		t.Fatal("valid pre-params should pass ValidateWithProof")
 	}
@@ -390,5 +392,23 @@ func TestValidateHappyPath(t *testing.T) {
 	pp := validPreParams()
 	if !pp.Validate() {
 		t.Fatal("valid pre-params should pass Validate")
+	}
+}
+
+// TestValidateWithProofChecksBeta verifies that a wrong Beta or a wrong
+// Paillier factor fails.
+func TestValidateWithProofChecksBeta(t *testing.T) {
+	pp := loadTestPreParams(t, 1)[0]
+	bad := pp
+	bad.Beta = new(big.Int).Add(pp.Beta, big.NewInt(1))
+	if bad.ValidateWithProof() {
+		t.Fatal("ValidateWithProof accepted a wrong Beta")
+	}
+	sk := *pp.PaillierSK
+	sk.P = new(big.Int).Add(sk.P, big.NewInt(2))
+	bad = pp
+	bad.PaillierSK = &sk
+	if bad.ValidateWithProof() {
+		t.Fatal("ValidateWithProof accepted a wrong Paillier factor")
 	}
 }

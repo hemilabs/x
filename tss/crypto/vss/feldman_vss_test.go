@@ -138,12 +138,20 @@ func TestReconstruct(t *testing.T) {
 		t.Fatalf("expected nil, got %v", secret2)
 	}
 
-	secret3, err3 := shares[:threshold].ReConstruct(tss.EC())
+	// A degree-t polynomial needs t+1 shares, so t shares must fail.
+	if _, err := shares[:threshold].ReConstruct(tss.EC()); err == nil {
+		t.Fatal("expected error for exactly threshold shares")
+	}
+	if _, err := (Shares{}).ReConstruct(tss.EC()); err == nil {
+		t.Fatal("expected error for no shares")
+	}
+
+	secret3, err3 := shares[:threshold+1].ReConstruct(tss.EC())
 	if err3 != nil {
 		t.Fatal(err3)
 	}
-	if secret3 == nil {
-		t.Fatal("expected non-zero")
+	if secret3.Cmp(secret) != 0 {
+		t.Fatal("threshold+1 shares must give the secret")
 	}
 
 	secret4, err4 := shares[:num].ReConstruct(tss.EC())

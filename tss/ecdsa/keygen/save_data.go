@@ -105,7 +105,27 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 	}
 	// Verify H2 = H1^Alpha mod NTilde
 	expectedH2 := new(big.Int).Exp(preParams.H1i, preParams.Alpha, preParams.NTildei)
-	return expectedH2.Cmp(preParams.H2i) == 0
+	if expectedH2.Cmp(preParams.H2i) != 0 {
+		return false
+	}
+	// [FORK] Also verify H1 = H2^Beta, the sizes, that P, Q and the
+	// safe primes are prime, and that the Paillier key is N = P*Q of
+	// two primes.  The DLN proofs depend on all of these.
+	expectedH1 := new(big.Int).Exp(preParams.H2i, preParams.Beta, preParams.NTildei)
+	if expectedH1.Cmp(preParams.H1i) != 0 {
+		return false
+	}
+	sk := preParams.PaillierSK
+	if sk.N == nil || preParams.NTildei.BitLen() != paillierBitsLen || sk.N.BitLen() != paillierBitsLen ||
+		new(big.Int).Mul(sk.P, sk.Q).Cmp(sk.N) != 0 {
+		return false
+	}
+	for _, p := range []*big.Int{preParams.P, preParams.Q, safeP, safeQ, sk.P, sk.Q} {
+		if !p.ProbablyPrime(20) {
+			return false
+		}
+	}
+	return true
 }
 
 // [FORK] ValidateSaveData performs comprehensive validation of loaded ECDSA save data,
