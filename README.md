@@ -25,7 +25,17 @@ and [pull requests](https://github.com/hemilabs/x/pulls).
 
 This repository contains code under **multiple licenses**:
 
-- The default license for new code is the [MIT License](LICENSE).
-- Some modules may contain vendored code (typically in `internal/` packages) that retain its original license.
+| Module          | License                                  | Origin                         |
+|-----------------|------------------------------------------|--------------------------------|
+| `tss`           | MIT, with the Binance notice             | bnb-chain tss-lib              |
+| `leveldb`       | BSD 2-Clause                             | syndtr/goleveldb               |
+| `merkle`        | ISC                                      | decred dcrtime                 |
+| `eth-trie`      | LGPL-3.0 (which includes the GPL-3.0)    | go-ethereum `trie`, `triedb`   |
+| `tools/slacker` | MIT (the root [LICENSE](LICENSE))        | Hemi Labs                      |
 
-For more information, please see the `LICENSE` or `COPYING` files in each module.
+The default license for new code is the [MIT License](LICENSE).
+
+A binary that links `eth-trie` must obey the LGPL-3.0 conditions. See
+[eth-trie/README.md](eth-trie/README.md).
+
+For more information, see the `LICENSE` and `COPYING` files of each module.
