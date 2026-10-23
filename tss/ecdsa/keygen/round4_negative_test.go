@@ -41,6 +41,7 @@ func setupRound1Through3(t *testing.T) *fullKeygenFixture {
 	allR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()

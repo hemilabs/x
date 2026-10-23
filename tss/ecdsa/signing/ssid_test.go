@@ -32,6 +32,7 @@ func buildSigningSSIDFixture(t *testing.T, n, threshold int) (params *tss.Parame
 	sorted := tss.SortPartyIDs(ids)
 	peerCtx := tss.NewPeerContext(sorted)
 	params = tss.NewParameters(ec, peerCtx, sorted[0], n, threshold)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	save := keygen.NewLocalPartySaveData(n)
 	for i := 0; i < n; i++ {
@@ -269,6 +270,7 @@ func TestGetSigningSSIDDifferentPartyKeys(t *testing.T) {
 	sorted := tss.SortPartyIDs(ids)
 	peerCtx := tss.NewPeerContext(sorted)
 	params2 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 3, 1)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 
 	ssid2, err := getSigningSSID(params2, key, temp, 1)
 	if err != nil {
@@ -300,12 +302,14 @@ func TestGetSigningSSIDDifferentThreshold(t *testing.T) {
 	temp := &localTempData{ssidNonce: big.NewInt(0), m: big.NewInt(12345)}
 
 	params1 := tss.NewParameters(ec, peerCtx, sorted[0], 4, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	ssid1, err := getSigningSSID(params1, &save, temp, 1)
 	if err != nil {
 		t.Fatalf("threshold=1: %v", err)
 	}
 
 	params2 := tss.NewParameters(ec, peerCtx, sorted[0], 4, 2)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	ssid2, err := getSigningSSID(params2, &save, temp, 1)
 	if err != nil {
 		t.Fatalf("threshold=2: %v", err)
@@ -337,6 +341,7 @@ func TestGetSigningSSIDDifferentPartyCount(t *testing.T) {
 		tss.NewPartyID("2", "P", big.NewInt(103)),
 	})
 	params3 := tss.NewParameters(ec, tss.NewPeerContext(ids3), ids3[0], 3, 1)
+	params3.SetCeremonyID([]byte("test-ceremony"))
 	ssid3, err := getSigningSSID(params3, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("n=3: %v", err)
@@ -349,6 +354,7 @@ func TestGetSigningSSIDDifferentPartyCount(t *testing.T) {
 		tss.NewPartyID("3", "P", big.NewInt(104)),
 	})
 	params4 := tss.NewParameters(ec, tss.NewPeerContext(ids4), ids4[0], 4, 1)
+	params4.SetCeremonyID([]byte("test-ceremony"))
 	ssid4, err := getSigningSSID(params4, makeSave(4), temp, 1)
 	if err != nil {
 		t.Fatalf("n=4: %v", err)
@@ -385,4 +391,22 @@ func cloneLocalPartySaveData(src *keygen.LocalPartySaveData, n int) *keygen.Loca
 		dst.H2j[i] = new(big.Int).Set(src.H2j[i])
 	}
 	return &dst
+}
+
+// TestGetSigningSSIDBindsKeyDerivationDelta verifies that the BIP32
+// key derivation delta changes the SSID.
+func TestGetSigningSSIDBindsKeyDerivationDelta(t *testing.T) {
+	params, key, temp := buildSigningSSIDFixture(t, 3, 1)
+	base, err := getSigningSSID(params, key, temp, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	temp.keyDerivationDelta = big.NewInt(5)
+	withDelta, err := getSigningSSID(params, key, temp, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(base, withDelta) {
+		t.Fatal("key derivation delta does not change the SSID")
+	}
 }

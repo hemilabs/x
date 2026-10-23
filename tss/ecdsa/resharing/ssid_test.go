@@ -29,6 +29,7 @@ func buildTestResharingFixture(t *testing.T) (params *tss.ReSharingParameters, i
 
 	// Parameters from the perspective of old party 0.
 	params = tss.NewReSharingParameters(ec, oldCtx, newCtx, oldPIDs[0], 3, 1, 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	// Build minimal LocalPartySaveData with BigXj, NTildej, H1j, H2j.
 	n := 3
@@ -182,12 +183,14 @@ func TestGetReshareSSIDDifferentThresholds(t *testing.T) {
 	temp := &localTempData{ssidNonce: big.NewInt(1)}
 
 	params1 := tss.NewReSharingParameters(ec, oldCtx, newCtx, oldPIDs[0], 4, 1, 4, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	ssid1, err := getReshareSSID(params1, &save, temp, 1)
 	if err != nil {
 		t.Fatalf("getReshareSSID(threshold=1): %v", err)
 	}
 
 	params2 := tss.NewReSharingParameters(ec, oldCtx, newCtx, oldPIDs[0], 4, 2, 4, 2)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	ssid2, err := getReshareSSID(params2, &save, temp, 1)
 	if err != nil {
 		t.Fatalf("getReshareSSID(threshold=2): %v", err)
@@ -209,6 +212,7 @@ func TestOldIndexFindsCorrectIndex(t *testing.T) {
 
 	for i, pid := range oldPIDs {
 		params := tss.NewReSharingParameters(ec, oldCtx, newCtx, pid, 3, 1, 3, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		got := oldIndex(params)
 		if got != i {
 			t.Errorf("oldIndex for party %d: expected %d, got %d", i, i, got)
@@ -226,6 +230,7 @@ func TestOldIndexReturnsNegOneForNonMember(t *testing.T) {
 	// A party in the new committee should not be found in the old committee.
 	for _, pid := range newPIDs {
 		params := tss.NewReSharingParameters(ec, oldCtx, newCtx, pid, 3, 1, 3, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		got := oldIndex(params)
 		if got != -1 {
 			t.Errorf("oldIndex for new-committee party %v: expected -1, got %d", pid, got)
@@ -235,6 +240,7 @@ func TestOldIndexReturnsNegOneForNonMember(t *testing.T) {
 	// A completely unrelated party.
 	stranger := tss.NewPartyID("stranger", "stranger", big.NewInt(999999))
 	paramsStranger := tss.NewReSharingParameters(ec, oldCtx, newCtx, stranger, 3, 1, 3, 1)
+	paramsStranger.SetCeremonyID([]byte("test-ceremony"))
 	if got := oldIndex(paramsStranger); got != -1 {
 		t.Errorf("oldIndex for stranger party: expected -1, got %d", got)
 	}
@@ -249,6 +255,7 @@ func TestNewIndexFindsCorrectIndex(t *testing.T) {
 
 	for i, pid := range newPIDs {
 		params := tss.NewReSharingParameters(ec, oldCtx, newCtx, pid, 3, 1, 3, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		got := newIndex(params)
 		if got != i {
 			t.Errorf("newIndex for party %d: expected %d, got %d", i, i, got)
@@ -266,6 +273,7 @@ func TestNewIndexReturnsNegOneForNonMember(t *testing.T) {
 	// Old-committee parties should not be found in new committee.
 	for _, pid := range oldPIDs {
 		params := tss.NewReSharingParameters(ec, oldCtx, newCtx, pid, 3, 1, 3, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		got := newIndex(params)
 		if got != -1 {
 			t.Errorf("newIndex for old-committee party %v: expected -1, got %d", pid, got)
@@ -292,6 +300,7 @@ func TestOldAndNewIndexOverlappingParty(t *testing.T) {
 	newCtx := tss.NewPeerContext(newPIDs)
 
 	params := tss.NewReSharingParameters(ec, oldCtx, newCtx, sharedPID, 3, 1, 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	oi := oldIndex(params)
 	ni := newIndex(params)
@@ -411,6 +420,7 @@ func TestGetReshareSSIDDifferentOldPartyKeys(t *testing.T) {
 	oldPIDs1 := makeDeterministicPartyIDs(3, 100)
 	oldCtx1 := tss.NewPeerContext(oldPIDs1)
 	params1 := tss.NewReSharingParameters(ec, oldCtx1, newCtx, oldPIDs1[0], 3, 1, 3, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	ssid1, err := getReshareSSID(params1, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("old keys A: %v", err)
@@ -419,6 +429,7 @@ func TestGetReshareSSIDDifferentOldPartyKeys(t *testing.T) {
 	oldPIDs2 := makeDeterministicPartyIDs(3, 500) // different base → different keys
 	oldCtx2 := tss.NewPeerContext(oldPIDs2)
 	params2 := tss.NewReSharingParameters(ec, oldCtx2, newCtx, oldPIDs2[0], 3, 1, 3, 1)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	ssid2, err := getReshareSSID(params2, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("old keys B: %v", err)
@@ -451,6 +462,7 @@ func TestGetReshareSSIDDifferentNewPartyKeys(t *testing.T) {
 	newPIDs1 := makeDeterministicPartyIDs(3, 200)
 	newCtx1 := tss.NewPeerContext(newPIDs1)
 	params1 := tss.NewReSharingParameters(ec, oldCtx, newCtx1, oldPIDs[0], 3, 1, 3, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	ssid1, err := getReshareSSID(params1, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("new keys A: %v", err)
@@ -459,6 +471,7 @@ func TestGetReshareSSIDDifferentNewPartyKeys(t *testing.T) {
 	newPIDs2 := makeDeterministicPartyIDs(3, 600) // different base → different keys
 	newCtx2 := tss.NewPeerContext(newPIDs2)
 	params2 := tss.NewReSharingParameters(ec, oldCtx, newCtx2, oldPIDs[0], 3, 1, 3, 1)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	ssid2, err := getReshareSSID(params2, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("new keys B: %v", err)
@@ -492,6 +505,7 @@ func TestGetReshareSSIDDifferentPartyCount(t *testing.T) {
 	params3 := tss.NewReSharingParameters(ec,
 		tss.NewPeerContext(oldPIDs3), tss.NewPeerContext(newPIDs3),
 		oldPIDs3[0], 3, 1, 3, 1)
+	params3.SetCeremonyID([]byte("test-ceremony"))
 	ssid3, err := getReshareSSID(params3, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("3→3: %v", err)
@@ -502,6 +516,7 @@ func TestGetReshareSSIDDifferentPartyCount(t *testing.T) {
 	params4 := tss.NewReSharingParameters(ec,
 		tss.NewPeerContext(oldPIDs4), tss.NewPeerContext(newPIDs3),
 		oldPIDs4[0], 4, 1, 3, 1)
+	params4.SetCeremonyID([]byte("test-ceremony"))
 	ssid4, err := getReshareSSID(params4, makeSave(4), temp, 1)
 	if err != nil {
 		t.Fatalf("4→3: %v", err)

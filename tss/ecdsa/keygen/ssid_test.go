@@ -19,6 +19,7 @@ func makeSSIDTestParams(t *testing.T, n, threshold int) (*tss.Parameters, *local
 	pIDs := tss.GenerateTestPartyIDs(n)
 	peerCtx := tss.NewPeerContext(pIDs)
 	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], n, threshold)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	temp := &localTempData{
 		ssidNonce: new(big.Int).SetUint64(uint64(params.SSIDNonce())),
 	}
@@ -132,6 +133,7 @@ func TestGetSSIDIncludesAllPartyKeys(t *testing.T) {
 		sorted := tss.SortPartyIDs(ids)
 		peerCtx := tss.NewPeerContext(sorted)
 		params := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 3, 1)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		temp := &localTempData{
 			ssidNonce: new(big.Int).SetUint64(0),
 		}
@@ -202,6 +204,7 @@ func TestGetSSIDDifferentThreshold(t *testing.T) {
 	peerCtx := tss.NewPeerContext(sorted)
 
 	params1 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 4, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	temp1 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
 	ssid1, err := getSSID(params1, temp1, 1)
 	if err != nil {
@@ -209,6 +212,7 @@ func TestGetSSIDDifferentThreshold(t *testing.T) {
 	}
 
 	params2 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 4, 2)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	temp2 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
 	ssid2, err := getSSID(params2, temp2, 1)
 	if err != nil {
@@ -232,6 +236,7 @@ func TestGetSSIDDifferentPartyCount(t *testing.T) {
 	sorted3 := tss.SortPartyIDs(ids3)
 	peerCtx3 := tss.NewPeerContext(sorted3)
 	params3 := tss.NewParameters(tss.S256(), peerCtx3, sorted3[0], 3, 1)
+	params3.SetCeremonyID([]byte("test-ceremony"))
 	temp3 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
 	ssid3, err := getSSID(params3, temp3, 1)
 	if err != nil {
@@ -248,6 +253,7 @@ func TestGetSSIDDifferentPartyCount(t *testing.T) {
 	sorted4 := tss.SortPartyIDs(ids4)
 	peerCtx4 := tss.NewPeerContext(sorted4)
 	params4 := tss.NewParameters(tss.S256(), peerCtx4, sorted4[0], 4, 1)
+	params4.SetCeremonyID([]byte("test-ceremony"))
 	temp4 := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
 	ssid4, err := getSSID(params4, temp4, 1)
 	if err != nil {
@@ -274,12 +280,14 @@ func TestGetSSIDDifferentCurve(t *testing.T) {
 	temp := &localTempData{ssidNonce: new(big.Int).SetUint64(0)}
 
 	paramsS256 := tss.NewParameters(tss.S256(), peerCtx, sorted[0], 3, 1)
+	paramsS256.SetCeremonyID([]byte("test-ceremony"))
 	ssidS256, err := getSSID(paramsS256, temp, 1)
 	if err != nil {
 		t.Fatalf("S256: %v", err)
 	}
 
 	paramsEd := tss.NewParameters(tss.Edwards(), peerCtx, sorted[0], 3, 1)
+	paramsEd.SetCeremonyID([]byte("test-ceremony"))
 	ssidEd, err := getSSID(paramsEd, temp, 1)
 	if err != nil {
 		t.Fatalf("Edwards: %v", err)

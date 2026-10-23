@@ -24,7 +24,7 @@ func TestValidateBasicAllResharingMessages(t *testing.T) {
 	}{
 		{
 			"DGRound1Message",
-			&DGRound1Message{ECDSAPub: pt, VCommitment: big.NewInt(1), SSID: []byte("s")},
+			&DGRound1Message{ECDSAPub: pt, VCommitment: big.NewInt(1), SSID: []byte("s"), KeyHash: []byte("k")},
 			&DGRound1Message{},
 		},
 		{

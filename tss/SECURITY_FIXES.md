@@ -25,6 +25,15 @@ round number, caller-supplied nonce, and ceremony ID.  All encoded
 with length-prefixed big.Int (not ambiguous raw concatenation).  MtA
 uses per-party directional session IDs.
 
+The ceremony ID is required: Round 1 returns `tss.ErrNoCeremonyID`
+without it.  It is hashed with its length, so leading zero bytes
+count.  Optional fields carry a presence marker.  Signing binds the
+message, and ECDSA signing binds the key derivation delta.  EdDSA
+signing binds the key and the public shares.  In resharing, a party
+only in the new committee computes the SSID from its own parameters
+and the hash of the old key, and it does not copy the SSID of an old
+party.
+
 **Where:** `tss/params.go`, all `getSSID()`/`getSigningSSID()`/
 `getReshareSSID()` in `ecdsa/*/round_fn.go` and `eddsa/*/round_fn.go`
 

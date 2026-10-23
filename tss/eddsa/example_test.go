@@ -12,6 +12,7 @@
 package eddsa_test
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"math/big"
@@ -132,10 +133,12 @@ func verifyEdDSA(t *testing.T, pub ecPoint, msg []byte, sig *signing.SignatureDa
 
 func eddsaKeygen(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext) []keygen.LocalPartySaveData {
 	t.Helper()
+	ceremonyID := newCeremonyID()
 	states := make([]*keygen.KeygenState, n)
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), ctx, pIDs[i], n, threshold)
+		params.SetCeremonyID(ceremonyID)
 		st, out, err := keygen.Round1(params)
 		if err != nil {
 			t.Fatalf("keygen.Round1[%d]: %v", i, err)
@@ -180,10 +183,12 @@ func eddsaKeygen(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *t
 
 func eddsaSign(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, saves []keygen.LocalPartySaveData, m *big.Int) *signing.SignatureData {
 	t.Helper()
+	ceremonyID := newCeremonyID()
 	states := make([]*signing.SigningState, n)
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), ctx, pIDs[i], n, threshold)
+		params.SetCeremonyID(ceremonyID)
 		st, out, err := signing.SignRound1(params, saves[i], m, 0)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
@@ -216,6 +221,7 @@ func eddsaSign(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss
 
 func eddsaReshare(t *testing.T, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldT, newT int) []keygen.LocalPartySaveData {
 	t.Helper()
+	ceremonyID := newCeremonyID()
 
 	oldN := len(oldPIDs)
 	newN := len(newPIDs)
@@ -256,6 +262,7 @@ func eddsaReshare(t *testing.T, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, new
 	for idx, pr := range allParties {
 		params := tss.NewReSharingParameters(
 			tss.Edwards(), oldCtx, newCtx, pr.pid, oldN, oldT, newN, newT)
+		params.SetCeremonyID(ceremonyID)
 		var input *keygen.LocalPartySaveData
 		if pr.oldIdx >= 0 {
 			input = &oldSaves[pr.oldIdx]
@@ -340,4 +347,14 @@ func eddsaReshare(t *testing.T, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, new
 	}
 
 	return newSaves
+}
+
+// newCeremonyID returns a fresh random ceremony ID.  All parties of one
+// ceremony must use the same ID, and each ceremony needs a new one.
+func newCeremonyID() []byte {
+	id := make([]byte, 32)
+	if _, err := rand.Read(id); err != nil {
+		panic(err)
+	}
+	return id
 }
