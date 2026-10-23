@@ -68,6 +68,19 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 //
 // New committee parties call this too but get a no-op (nil messages).
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
+	// [FORK] Cut the key data down to the old committee that takes
+	// part, as ECDSA does.  Without it, Ks and the own index do not
+	// match the committee when only t+1 old holders take part.
+	if params.IsOldCommittee() {
+		if input == nil {
+			return nil, nil, errors.New("round 1: old committee party has no key")
+		}
+		subset, err := keygen.BuildLocalSaveDataSubset(*input, params.OldParties().IDs())
+		if err != nil {
+			return nil, nil, err
+		}
+		input = &subset
+	}
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
 
@@ -321,7 +334,9 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 }
 
 // ReshareRound5 finalizes the resharing.  New committee parties save
-// their new key material.  Old committee parties zero their old Xi.
+// their new key material.  Old committee parties zero the Xi in their
+// copy of the key.  The caller's key is a separate copy, so the caller
+// must retire the old share itself.
 func ReshareRound5(state *ReshareState, r4AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
 	if state.params.IsNewCommittee() {
 		state.save.BigXj = state.temp.newBigXjs
@@ -329,7 +344,7 @@ func ReshareRound5(state *ReshareState, r4AckMsgs []*tss.Message) (*ReshareRound
 		state.save.Xi = state.temp.newXi
 		state.save.Ks = state.temp.newKs
 	}
-	// Zero old Xi — including dual-committee parties.
+	// Zero the copy of the old Xi — including dual-committee parties.
 	if state.params.IsOldCommittee() {
 		state.input.Xi.SetInt64(0)
 	}
