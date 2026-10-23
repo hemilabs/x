@@ -6,6 +6,7 @@ package signing
 
 import (
 	"crypto/sha256"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -225,6 +226,34 @@ func TestSignRound3WrongProof(t *testing.T) {
 }
 
 // --- SignFinalize error paths ---
+
+// TestSignFinalizeBadSNamesCulprit sends a wrong s_j that is in range.
+// SignFinalize must name the party that sent it.
+func TestSignFinalizeBadSNamesCulprit(t *testing.T) {
+	states, r2, _ := runToSignRound3(t)
+
+	r3 := make([]*tss.Message, 3)
+	for i := 0; i < 3; i++ {
+		out, err := SignRound3(states[i], r2)
+		if err != nil {
+			t.Fatalf("SignRound3[%d]: %v", i, err)
+		}
+		r3[i] = out.Messages[0]
+	}
+	s := r3[1].Content.(*SignRound3Message).S
+	r3[1] = &tss.Message{From: r3[1].From, Content: &SignRound3Message{
+		S: new(big.Int).Mod(new(big.Int).Add(s, big.NewInt(1)), tss.Edwards().Params().N),
+	}}
+
+	_, err := SignFinalize(states[0], r3)
+	var tssErr *tss.Error
+	if !errors.As(err, &tssErr) {
+		t.Fatalf("SignFinalize error = %v, want *tss.Error", err)
+	}
+	if c := tssErr.Culprits(); len(c) != 1 || c[0].Index != 1 {
+		t.Fatalf("culprits = %v, want party 1", c)
+	}
+}
 
 func TestSignFinalizeOutOfRangeS(t *testing.T) {
 	states, r2, _ := runToSignRound3(t)
