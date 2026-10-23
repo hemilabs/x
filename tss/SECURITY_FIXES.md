@@ -4,7 +4,7 @@ Security fixes from the audit of upstream
 [binance/tss-lib](https://github.com/bnb-chain/tss-lib), implemented
 in the v3 channel-free round function architecture.
 
-76 fixes in production code across 24 files, all annotated with
+77 fixes in production code across 24 files, all annotated with
 `[FORK]` comments in source.  Grep for `[FORK]` to find them all.
 
 The v2 base had 260 annotations across 88 files — the difference is
@@ -188,6 +188,19 @@ based state machine entirely:
 
 ---
 
+## Serialized Random Readers
+
+**Problem:** `SetRand` and `SetPartialKeyRand` stored the caller's
+reader as is.  SignRound2 and keygen read it from several goroutines at
+the same time.  A reader with unsynchronized state, such as a seeded
+DRBG, could give the same bytes to two goroutines.
+
+**Fix:** The setters wrap the reader in a mutex-guarded reader.
+
+**Where:** `tss/params.go`
+
+---
+
 ## Deferred Items
 
 Low-impact items carried from the v2 audit that don't affect
@@ -198,7 +211,6 @@ correctness or security in practice:
 3. BuildLocalSaveDataSubset panic — changing signature breaks callers
 4. NSquare() caching — performance optimization only
 5. MustGetRandomInt off-by-one — negligible for 256-bit
-6. Concurrent io.Reader — safe with crypto/rand.Reader
 7. CKD only for secp256k1 — by design
 8. Commitment no domain separation — 256-bit nonce prevents collisions
 9. Threshold=0 accepted — VSS rejects downstream
