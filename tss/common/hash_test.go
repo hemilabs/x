@@ -126,13 +126,19 @@ func TestSHA512_256iNilElementHandled(t *testing.T) {
 	}
 }
 
-// TestSHA512_256iNegativeInput documents that big.Int.Bytes() drops the sign,
-// so SHA512_256i(-1) produces the same hash as SHA512_256i(1).
+// TestSHA512_256iNegativeInput verifies that the hash binds the sign.
+// A proof verifier that hashes x but uses -x must not get the same
+// challenge for both.
 func TestSHA512_256iNegativeInput(t *testing.T) {
-	hashPos := SHA512_256i(big.NewInt(1))
-	hashNeg := SHA512_256i(big.NewInt(-1))
-	if hashPos.Cmp(hashNeg) != 0 {
-		t.Fatal("SHA512_256i(-1) should equal SHA512_256i(1) because Bytes() drops sign")
+	tag := []byte("test-tag")
+	for _, v := range []int64{1, 5, 1 << 40} {
+		pos, neg := big.NewInt(v), big.NewInt(-v)
+		if SHA512_256i(pos).Cmp(SHA512_256i(neg)) == 0 {
+			t.Fatalf("SHA512_256i(%d) == SHA512_256i(%d)", v, -v)
+		}
+		if SHA512_256i_TAGGED(tag, pos).Cmp(SHA512_256i_TAGGED(tag, neg)) == 0 {
+			t.Fatalf("SHA512_256i_TAGGED(%d) == SHA512_256i_TAGGED(%d)", v, -v)
+		}
 	}
 }
 
