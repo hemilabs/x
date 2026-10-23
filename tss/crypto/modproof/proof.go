@@ -6,6 +6,7 @@
 package modproof
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -37,6 +38,22 @@ func isQuadraticResidue(X, N *big.Int) bool {
 }
 
 // NewProof generates a mod proof. Session provides SSID domain separation.
+// challenge derives the challenge y_i in Z_N.  [FORK] Upstream reduced
+// one 256-bit hash mod N, so the challenges covered only [0, 2^256).
+// This expands the hash in counter mode to 256 bits more than N and
+// then reduces it mod N.
+func challenge(Session []byte, N, W *big.Int, prev []*big.Int) *big.Int {
+	seed := common.SHA512_256i_TAGGED(Session, append([]*big.Int{W, N}, prev...)...).Bytes()
+	need := (N.BitLen() + 256 + 7) / 8
+	buf := make([]byte, 0, need+32)
+	for ctr := uint32(0); len(buf) < need; ctr++ {
+		var c [4]byte
+		binary.BigEndian.PutUint32(c[:], ctr)
+		buf = append(buf, common.SHA512_256(seed, c[:])...)
+	}
+	return new(big.Int).Mod(new(big.Int).SetBytes(buf[:need]), N)
+}
+
 func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, error) {
 	Phi := new(big.Int).Mul(new(big.Int).Sub(P, one), new(big.Int).Sub(Q, one))
 	// Fig 16.1
@@ -45,8 +62,7 @@ func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, erro
 	// Fig 16.2
 	Y := [Iterations]*big.Int{}
 	for i := range Y {
-		ei := common.SHA512_256i_TAGGED(Session, append([]*big.Int{W, N}, Y[:i]...)...)
-		Y[i] = common.RejectionSample(N, ei)
+		Y[i] = challenge(Session, N, W, Y[:i])
 	}
 
 	// Fig 16.3
@@ -175,8 +191,7 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 	modN := common.ModInt(N)
 	Y := [Iterations]*big.Int{}
 	for i := range Y {
-		ei := common.SHA512_256i_TAGGED(Session, append([]*big.Int{pf.W, N}, Y[:i]...)...)
-		Y[i] = common.RejectionSample(N, ei)
+		Y[i] = challenge(Session, N, pf.W, Y[:i])
 	}
 
 	// Fig 16. Verification

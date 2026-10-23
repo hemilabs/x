@@ -138,8 +138,8 @@ func TestProofVerify(t *testing.T) {
 	ki := common.MustGetRandomInt(rand.Reader, 256)                     // index
 	ui := common.GetRandomPositiveInt(rand.Reader, tss.EC().Params().N) // ECDSA private
 	yX, yY := tss.EC().ScalarBaseMult(ui.Bytes())                       // ECDSA public
-	proof := privateKey.Proof(ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
-	res, err := proof.Verify(publicKey.N, ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
+	proof := privateKey.Proof([]byte("session"), ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
+	res, err := proof.Verify([]byte("session"), publicKey.N, ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,10 +153,10 @@ func TestProofVerifyFail(t *testing.T) {
 	ki := common.MustGetRandomInt(rand.Reader, 256)                     // index
 	ui := common.GetRandomPositiveInt(rand.Reader, tss.EC().Params().N) // ECDSA private
 	yX, yY := tss.EC().ScalarBaseMult(ui.Bytes())                       // ECDSA public
-	proof := privateKey.Proof(ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
+	proof := privateKey.Proof([]byte("session"), ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
 	last := proof[len(proof)-1]
 	last.Sub(last, big.NewInt(1))
-	res, err := proof.Verify(publicKey.N, ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
+	res, err := proof.Verify([]byte("session"), publicKey.N, ki, crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestGenerateXs(t *testing.T) {
 	sY := common.MustGetRandomInt(rand.Reader, 256)
 	N := common.GetRandomPrimeInt(rand.Reader, 2048)
 
-	xs := GenerateXs(13, k, N, crypto.NewECPointNoCurveCheck(tss.EC(), sX, sY))
+	xs := GenerateXs(13, []byte("session"), k, N, crypto.NewECPointNoCurveCheck(tss.EC(), sX, sY))
 	if len(xs) != 13 {
 		t.Fatalf("got %v, want %v", len(xs), 13)
 	}
@@ -191,5 +191,23 @@ func TestGenerateXs(t *testing.T) {
 		if !common.IsNumberInMultiplicativeGroup(N, xi) {
 			t.Fatal("expected true")
 		}
+	}
+}
+
+// TestProofVerifyWrongSession verifies that a proof does not verify
+// under another session ID.
+func TestProofVerifyWrongSession(t *testing.T) {
+	setUp(t)
+	ki := common.MustGetRandomInt(rand.Reader, 256)
+	ui := common.GetRandomPositiveInt(rand.Reader, tss.EC().Params().N)
+	yX, yY := tss.EC().ScalarBaseMult(ui.Bytes())
+	pub := crypto.NewECPointNoCurveCheck(tss.EC(), yX, yY)
+	proof := privateKey.Proof([]byte("session-a"), ki, pub)
+	res, err := proof.Verify([]byte("session-b"), publicKey.N, ki, pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res {
+		t.Fatal("proof verified under another session")
 	}
 }

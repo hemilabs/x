@@ -100,9 +100,10 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 
 	// Paillier key and safe primes
 	var pp *LocalPreParams
-	if preParams.Validate() && !preParams.ValidateWithProof() {
+	validProof := preParams.Validate() && preParams.ValidateWithProof()
+	if preParams.Validate() && !validProof {
 		return nil, nil, errors.New("preParams failed validation (may be from older tss-lib version)")
-	} else if preParams.ValidateWithProof() {
+	} else if validProof {
 		pp = &preParams
 	} else {
 		ctx, cancel := context.WithTimeout(ctx, params.SafePrimeGenTimeout())
@@ -551,7 +552,7 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 
 	// BROADCAST paillier proof
 	ki := params.PartyID().KeyInt()
-	proof := save.PaillierSK.Proof(ki, ecdsaPubKey)
+	proof := save.PaillierSK.Proof(temp.ssid, ki, ecdsaPubKey)
 	r3msg := NewKGRound3Message(params.PartyID(), proof)
 
 	return &RoundOutput{Messages: []*tss.Message{r3msg}}, nil
@@ -589,7 +590,7 @@ func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*Ro
 				return
 			}
 			ppk := save.PaillierPKs[j]
-			verified, err := prf.Verify(ppk.N, PIDs[j], ecdsaPub)
+			verified, err := prf.Verify(state.temp.ssid, ppk.N, PIDs[j], ecdsaPub)
 			if err != nil {
 				common.Logger.Error(err)
 				gcancel()

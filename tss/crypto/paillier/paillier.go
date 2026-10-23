@@ -207,10 +207,10 @@ func (privateKey *PrivateKey) Decrypt(c *big.Int) (m *big.Int, err error) {
 // An efficient non-interactive statistical zero-knowledge proof system for quasi-safe prime products.
 // In: In Proc. of the 5th ACM Conference on Computer and Communications Security (CCS-98. Citeseer (1998)
 
-func (privateKey *PrivateKey) Proof(k *big.Int, ecdsaPub *crypto2.ECPoint) Proof {
+func (privateKey *PrivateKey) Proof(session []byte, k *big.Int, ecdsaPub *crypto2.ECPoint) Proof {
 	var pi Proof
 	iters := ProofIters
-	xs := GenerateXs(iters, k, privateKey.N, ecdsaPub)
+	xs := GenerateXs(iters, session, k, privateKey.N, ecdsaPub)
 	M := new(big.Int).ModInverse(privateKey.N, privateKey.PhiN)
 	// [FORK] Upstream does not check for nil ModInverse. If N is not coprime
 	// with PhiN (degenerate key), ModInverse returns nil and Exp panics.
@@ -223,7 +223,7 @@ func (privateKey *PrivateKey) Proof(k *big.Int, ecdsaPub *crypto2.ECPoint) Proof
 	return pi
 }
 
-func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error) {
+func (pf Proof) Verify(session []byte, pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error) {
 	// [FORK] Defense-in-depth: reject proofs with nil elements to prevent
 	// nil-pointer panics from degenerate keys or malformed messages.
 	// Upstream does not validate proof elements before use.
@@ -246,7 +246,7 @@ func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error)
 		ch <- true
 	}(pch)
 	go func(ch chan<- []*big.Int) {
-		ch <- GenerateXs(iters, k, pkN, ecdsaPub)
+		ch <- GenerateXs(iters, session, k, pkN, ecdsaPub)
 	}(xch)
 	for j := 0; j < 2; j++ {
 		select {
@@ -277,8 +277,9 @@ func L(u, N *big.Int) *big.Int {
 	return new(big.Int).Div(t, N)
 }
 
-// GenerateXs generates the challenges used in Paillier key Proof
-func GenerateXs(m int, k, N *big.Int, ecdsaPub *crypto2.ECPoint) []*big.Int {
+// GenerateXs generates the challenges used in Paillier key Proof.
+// [FORK] The session ID binds the challenges to the ceremony.
+func GenerateXs(m int, session []byte, k, N *big.Int, ecdsaPub *crypto2.ECPoint) []*big.Int {
 	var i, n int
 	ret := make([]*big.Int, m)
 	sX, sY := ecdsaPub.X(), ecdsaPub.Y()
@@ -296,7 +297,7 @@ func GenerateXs(m int, k, N *big.Int, ecdsaPub *crypto2.ECPoint) []*big.Int {
 		for j := 0; j < blocks; j++ {
 			go func(j int) {
 				jBz := []byte(strconv.Itoa(j))
-				hash := common.SHA512_256(ib, jBz, nb, kb, sXb, sYb, Nb)
+				hash := common.SHA512_256(session, ib, jBz, nb, kb, sXb, sYb, Nb)
 				chs[j] <- hash
 			}(j)
 		}
