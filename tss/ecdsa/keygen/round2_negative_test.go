@@ -453,3 +453,29 @@ func TestRound2RejectsOversizedNTilde(t *testing.T) {
 	msgs[victimIdx] = bad
 	expectRound2Error(t, fix, msgs, "NTildej insufficient bits", victimIdx)
 }
+
+// TestRound2RejectsNilDLNProofWithNilFrom sends a round 1 message with
+// no DLN proof and no sender, with proofs on.  Round2 must fail and
+// name the party of the slot.
+func TestRound2RejectsNilDLNProofWithNilFrom(t *testing.T) {
+	preParams := loadTestPreParams(t, negN)
+	pIDs := tss.GenerateTestPartyIDs(negN)
+	peerCtx := tss.NewPeerContext(pIDs)
+	states := make([]*KeygenState, negN)
+	r1 := make([]*tss.Message, negN)
+	for i := 0; i < negN; i++ {
+		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
+		st, out, err := Round1(context.Background(), params, preParams[i])
+		if err != nil {
+			t.Fatalf("Round1[%d]: %v", i, err)
+		}
+		states[i] = st
+		r1[i] = out.Messages[0]
+	}
+	bad := cloneR1MsgContent(r1[victimIdx])
+	bad.Content.(*KGRound1Message).DLNProof1 = nil
+	bad.From = nil
+	r1[victimIdx] = bad
+	fix := &round1Fixture{states: states, allR1: r1}
+	expectRound2Error(t, fix, r1, "dln proof verification failed", victimIdx)
+}

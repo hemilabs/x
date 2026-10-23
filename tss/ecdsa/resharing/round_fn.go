@@ -325,9 +325,11 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 	// collisions (e.g., Party A's PaillierN == Party B's NTilde) that separate
 	// maps would miss. Such a collision lets A forge range proofs against B.
 	modulusMap := make(map[string]struct{}, len(r2NewMsgs)*2)
-	paiProofCulprits := make([]*tss.PartyID, len(r2NewMsgs))
-	dlnProof1FailCulprits := make([]*tss.PartyID, len(r2NewMsgs))
-	dlnProof2FailCulprits := make([]*tss.PartyID, len(r2NewMsgs))
+	// One failure flag per slot and proof, so that two goroutines never
+	// write the same element.  The flag does not depend on msg.From.
+	paiProofFailed := make([]bool, len(r2NewMsgs))
+	dlnProof1Failed := make([]bool, len(r2NewMsgs))
+	dlnProof2Failed := make([]bool, len(r2NewMsgs))
 	wg := new(sync.WaitGroup)
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
@@ -400,7 +402,7 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 			nTasks = 3
 		}
 		wg.Add(nTasks)
-		go func(j int, msg *tss.Message, r2msg1 *DGRound2Message1) {
+		go func(j int, r2msg1 *DGRound2Message1) {
 			defer wg.Done()
 			if gctx.Err() != nil {
 				return
@@ -410,29 +412,29 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 			}
 			modProof := r2msg1.ModProof
 			if modProof == nil {
-				paiProofCulprits[j] = params.NewParties().IDs()[j]
+				paiProofFailed[j] = true
 				gcancel()
 				return
 			}
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
 			if ok := modProof.Verify(ContextJ, paiPK.N); !ok {
-				paiProofCulprits[j] = params.NewParties().IDs()[j]
+				paiProofFailed[j] = true
 				gcancel()
 			}
-		}(j, msg, r2msg1)
+		}(j, r2msg1)
 		if !params.NoProofDLN() {
 			_j := j
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
 			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof1FailCulprits[_j] = params.NewParties().IDs()[_j]
+					dlnProof1Failed[_j] = true
 					gcancel()
 				}
 				wg.Done()
 			})
 			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof2FailCulprits[_j] = params.NewParties().IDs()[_j]
+					dlnProof2Failed[_j] = true
 					gcancel()
 				}
 				wg.Done()
@@ -443,11 +445,9 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, culprits := range [][]*tss.PartyID{paiProofCulprits, dlnProof1FailCulprits, dlnProof2FailCulprits} {
-		for _, c := range culprits {
-			if c != nil {
-				return nil, tss.NewError(errors.New("proof verification failed"), TaskName, 4, Pi, c)
-			}
+	for j := range r2NewMsgs {
+		if paiProofFailed[j] || dlnProof1Failed[j] || dlnProof2Failed[j] {
+			return nil, tss.NewError(errors.New("proof verification failed"), TaskName, 4, Pi, params.NewParties().IDs()[j])
 		}
 	}
 
