@@ -22,6 +22,7 @@ var (
 	ErrNoMatch      = errors.New("merkle branch matches no leaf")
 	ErrLeafNotFound = errors.New("leaf not proven by merkle branch")
 	ErrRootMismatch = errors.New("merkle root mismatch")
+	ErrMalformed    = errors.New("malformed merkle branch")
 )
 
 // XXX debate wrapping this in type and make the merkle tree opaque.
@@ -31,18 +32,6 @@ type sortableSlice []*[sha256.Size]byte
 func (s sortableSlice) Len() int           { return len(s) }
 func (s sortableSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s sortableSlice) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
-
-// bytes2bits converts merkle tree bitmap into a byte array.
-func bytes2bits(b []byte) []byte {
-	bits := make([]byte, 0, len(b)*8)
-	for i := 0; i < len(b); i++ {
-		for j := uint(0); j < 8; j++ {
-			bits = append(bits, (b[i]>>j)&0x01)
-		}
-	}
-
-	return bits
-}
 
 // calcTreeWidth calculates the width of the tree at a given height.
 // calcTreeWidth calculates and returns the the number of nodes (width) or a
@@ -243,7 +232,7 @@ type Branch struct {
 // nil if hash is not a leaf.
 func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 	numLeaves := uint32(len(leaves))
-	if numLeaves == 0 {
+	if numLeaves == 0 || hash == nil {
 		return nil
 	}
 	ap := authPath{
@@ -301,14 +290,21 @@ type merkleBranch struct {
 	hashUsed  uint32
 	hashes    [][sha256.Size]byte
 	inHashes  [][sha256.Size]byte
-	bits      []byte
+	flags     []byte // bitmap, read LSB first in each byte
 }
 
 // extract recurses over the merkleBranch and returns the merkle root.
 func (m *merkleBranch) extract(height, pos uint32) (*[sha256.Size]byte, error) {
-	parentOfMatch := m.bits[m.bitsUsed]
+	// The branch comes from the prover, so it can be short.
+	if uint64(m.bitsUsed) >= uint64(len(m.flags))*8 {
+		return nil, fmt.Errorf("%w: out of flag bits", ErrMalformed)
+	}
+	parentOfMatch := (m.flags[m.bitsUsed/8] >> (m.bitsUsed % 8)) & 0x01
 	m.bitsUsed++
 	if height == 0 || parentOfMatch == 0 {
+		if int(m.hashUsed) >= len(m.inHashes) {
+			return nil, fmt.Errorf("%w: out of hashes", ErrMalformed)
+		}
 		hash := m.inHashes[m.hashUsed]
 		m.hashUsed++
 		if height == 0 && parentOfMatch == 1 {
@@ -327,7 +323,7 @@ func (m *merkleBranch) extract(height, pos uint32) (*[sha256.Size]byte, error) {
 			return nil, err
 		}
 		if *left == *right {
-			return nil, fmt.Errorf("equivalent hashes")
+			return nil, fmt.Errorf("%w: equivalent hashes", ErrMalformed)
 		}
 
 		return concatDigests(left, right), nil
@@ -340,12 +336,21 @@ func (m *merkleBranch) extract(height, pos uint32) (*[sha256.Size]byte, error) {
 // and NumLeaves must come from a trusted source.  It proves membership only,
 // not the position of the leaf.
 func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
-	if mb.NumLeaves == 0 || len(mb.Hashes) == 0 {
+	if mb == nil || mb.NumLeaves == 0 || len(mb.Hashes) == 0 {
 		return ErrEmpty
+	}
+	if root == nil || leaf == nil {
+		return fmt.Errorf("%w: nil root or leaf", ErrMalformed)
+	}
+
+	// The hashes cover subtrees that each hold a leaf, so there are at
+	// most NumLeaves of them.
+	if uint64(len(mb.Hashes)) > uint64(mb.NumLeaves) {
+		return fmt.Errorf("%w: more hashes than leaves", ErrMalformed)
 	}
 
 	m := &merkleBranch{
-		bits:      bytes2bits(mb.Flags),
+		flags:     mb.Flags,
 		inHashes:  mb.Hashes,
 		numLeaves: mb.NumLeaves,
 	}
@@ -359,11 +364,11 @@ func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 	// Validate that we consumed all bits and bobs.
 	flagByte := int(m.bitsUsed / 8)
 	if flagByte+1 < len(mb.Flags) && mb.Flags[flagByte] > 1<<m.bitsUsed%8 {
-		return fmt.Errorf("did not consume all flag bits")
+		return fmt.Errorf("%w: did not consume all flag bits", ErrMalformed)
 	}
 
 	if m.hashUsed != uint32(len(mb.Hashes)) {
-		return fmt.Errorf("did not consume all hashes")
+		return fmt.Errorf("%w: did not consume all hashes", ErrMalformed)
 	}
 
 	if *merkleRoot != *root {
