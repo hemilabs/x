@@ -366,6 +366,12 @@ type Cache struct {
 	cacher Cacher
 	closed bool
 
+	// relMu guards closed and mHead when a node loses its last
+	// reference.  This can occur inside a call that holds mu for
+	// reading, for example when Get evicts.  A second RLock of mu then
+	// deadlocks against a waiting Close.  Close takes relMu after mu.
+	relMu sync.RWMutex
+
 	statNodes  int64
 	statSize   int64
 	statGrow   int32
@@ -641,11 +647,13 @@ func (r *Cache) Close(force bool) {
 	var head *mHead
 	// Hold RW-lock to make sure no more in-flight operations.
 	r.mu.Lock()
+	r.relMu.Lock()
 	if !r.closed {
 		r.closed = true
 		head = (*mHead)(atomic.LoadPointer(&r.mHead))
 		atomic.StorePointer(&r.mHead, nil)
 	}
+	r.relMu.Unlock()
 	r.mu.Unlock()
 
 	if head != nil {
@@ -746,14 +754,14 @@ func (n *Node) unRefInternal(updateStat bool) {
 
 func (n *Node) unRefExternal() {
 	if atomic.AddInt32(&n.ref, -1) == 0 {
-		n.r.mu.RLock()
+		n.r.relMu.RLock()
 		if n.r.closed {
 			n.callFinalizer()
 		} else {
 			n.r.delete(n)
 			atomic.AddInt64(&n.r.statDel, 1)
 		}
-		n.r.mu.RUnlock()
+		n.r.relMu.RUnlock()
 	}
 }
 
