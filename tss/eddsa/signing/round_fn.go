@@ -41,8 +41,8 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 }
 
 // SignRound1 initializes signing state and broadcasts a commitment
-// to the signing nonce Ri.
-func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.Int, fullBytesLen int) (*SigningState, *SignRoundOutput, error) {
+// to the signing nonce Ri.  msg is the exact byte string to sign.
+func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg []byte) (*SigningState, *SignRoundOutput, error) {
 	if key.Xi == nil || key.Xi.Sign() == 0 {
 		return nil, nil, errors.New("invalid key data: Xi is nil or zero")
 	}
@@ -59,9 +59,8 @@ func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.
 			signRound2Messages: make([]*tss.Message, n),
 			signRound3Messages: make([]*tss.Message, n),
 		},
-		cjs:          make([]*big.Int, n),
-		m:            msg,
-		fullBytesLen: fullBytesLen,
+		cjs: make([]*big.Int, n),
+		m:   append([]byte(nil), msg...),
 	}
 
 	temp.ssidNonce = new(big.Int).SetUint64(uint64(params.SSIDNonce()))
@@ -190,13 +189,7 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 	h := sha512.New()
 	h.Write(encodedR[:])
 	h.Write(encodedPubKey[:])
-	if temp.fullBytesLen == 0 {
-		h.Write(temp.m.Bytes())
-	} else {
-		mBytes := make([]byte, temp.fullBytesLen)
-		temp.m.FillBytes(mBytes)
-		h.Write(mBytes)
-	}
+	h.Write(temp.m)
 
 	var lambda [64]byte
 	h.Sum(lambda[:0])
@@ -254,13 +247,7 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 	data.Signature = append(bigIntToEncodedBytes(temp.r)[:], encodedSumS[:]...)
 	data.R = temp.r.Bytes()
 	data.S = sumS.Bytes()
-	if temp.fullBytesLen == 0 {
-		data.M = temp.m.Bytes()
-	} else {
-		mBytes := make([]byte, temp.fullBytesLen)
-		temp.m.FillBytes(mBytes)
-		data.M = mBytes
-	}
+	data.M = append([]byte(nil), temp.m...)
 
 	// Verify.
 	pk := decredEdwards.PublicKey{

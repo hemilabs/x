@@ -80,7 +80,7 @@ func TestSignRound1NilXi(t *testing.T) {
 
 	bad := saves[0]
 	bad.Xi = nil
-	_, _, err := SignRound1(params, bad, big.NewInt(42), 0)
+	_, _, err := SignRound1(params, bad, []byte{42})
 	if err == nil {
 		t.Fatal("expected error for nil Xi")
 	}
@@ -93,7 +93,7 @@ func TestSignRound1NilEDDSAPub(t *testing.T) {
 
 	bad := saves[0]
 	bad.EDDSAPub = nil
-	_, _, err := SignRound1(params, bad, big.NewInt(42), 0)
+	_, _, err := SignRound1(params, bad, []byte{42})
 	if err == nil {
 		t.Fatal("expected error for nil EDDSAPub")
 	}
@@ -106,7 +106,7 @@ func TestSignRound1WrongKeyCount(t *testing.T) {
 
 	bad := saves[0]
 	bad.Ks = bad.Ks[:1] // wrong count
-	_, _, err := SignRound1(params, bad, big.NewInt(42), 0)
+	_, _, err := SignRound1(params, bad, []byte{42})
 	if err == nil {
 		t.Fatal("expected error for wrong key count")
 	}
@@ -119,13 +119,13 @@ func TestSignRound2InvalidR1(t *testing.T) {
 	peerCtx := tss.NewPeerContext(pIDs)
 
 	msg := sha256.Sum256([]byte("test"))
-	m := new(big.Int).SetBytes(msg[:])
+	m := msg[:]
 
 	states := make([]*SigningState, 3)
 	r1 := make([]*tss.Message, 3)
 	for i := 0; i < 3; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], 3, 1)
-		st, out, err := SignRound1(params, saves[i], m, 0)
+		st, out, err := SignRound1(params, saves[i], m)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
 		}
@@ -154,13 +154,13 @@ func runToSignRound3(t *testing.T) ([]*SigningState, []*tss.Message, tss.SortedP
 	saves, pIDs := runEdDSAKeygen(t)
 	peerCtx := tss.NewPeerContext(pIDs)
 	msg := sha256.Sum256([]byte("test"))
-	m := new(big.Int).SetBytes(msg[:])
+	m := msg[:]
 
 	states := make([]*SigningState, 3)
 	r1 := make([]*tss.Message, 3)
 	for i := 0; i < 3; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], 3, 1)
-		st, out, err := SignRound1(params, saves[i], m, 0)
+		st, out, err := SignRound1(params, saves[i], m)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
 		}
