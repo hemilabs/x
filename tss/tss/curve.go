@@ -8,7 +8,9 @@ package tss
 import (
 	"crypto/elliptic"
 	"errors"
+	"fmt"
 	"reflect"
+	"sync"
 
 	s256k1 "github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
@@ -22,7 +24,10 @@ const (
 	Ed25519   CurveName = "ed25519"
 )
 
+// [FORK] mu guards ec and registry.  Upstream has no lock, so a
+// RegisterCurve or SetCurve during a ceremony races with the readers.
 var (
+	mu       sync.RWMutex
 	ec       elliptic.Curve
 	registry map[CurveName]elliptic.Curve
 )
@@ -36,13 +41,22 @@ func init() {
 	registry[Ed25519] = edwardsCurve
 }
 
-// RegisterCurve adds a named curve to the global registry.
+// RegisterCurve adds a named curve to the global registry.  It panics
+// if the name is already registered, so that a later call cannot
+// replace a curve that is in use.
 func RegisterCurve(name CurveName, curve elliptic.Curve) {
+	mu.Lock()
+	defer mu.Unlock()
+	if _, exist := registry[name]; exist {
+		panic(fmt.Errorf("RegisterCurve: curve %q is already registered", name))
+	}
 	registry[name] = curve
 }
 
 // return curve, exist(bool)
 func GetCurveByName(name CurveName) (elliptic.Curve, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
 	if val, exist := registry[name]; exist {
 		return val, true
 	}
@@ -52,6 +66,8 @@ func GetCurveByName(name CurveName) (elliptic.Curve, bool) {
 
 // return name, exist(bool)
 func GetCurveName(curve elliptic.Curve) (CurveName, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
 	for name, e := range registry {
 		if reflect.TypeOf(curve) == reflect.TypeOf(e) {
 			return name, true
@@ -74,6 +90,8 @@ func SameCurve(lhs, rhs elliptic.Curve) bool {
 
 // EC returns the current elliptic curve in use. The default is secp256k1
 func EC() elliptic.Curve {
+	mu.RLock()
+	defer mu.RUnlock()
 	return ec
 }
 
@@ -83,6 +101,8 @@ func SetCurve(curve elliptic.Curve) {
 	if curve == nil {
 		panic(errors.New("SetCurve received a nil curve"))
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	ec = curve
 }
 
