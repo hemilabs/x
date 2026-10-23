@@ -126,8 +126,7 @@ r3out, _ := keygen.Round3(state, r2p2p, r2bcast)
 ```go
 import "github.com/hemilabs/x/tss-lib/v3/eddsa/signing"
 
-m := new(big.Int).SetBytes(msgHash[:])
-sigState, r1out, _ := signing.SignRound1(params, keyShare, m, 0)
+sigState, r1out, _ := signing.SignRound1(params, keyShare, msgHash[:])
 r2out, _ := signing.SignRound2(sigState, r1)
 r3out, _ := signing.SignRound3(sigState, r2)
 finalOut, _ := signing.SignFinalize(sigState, r3)

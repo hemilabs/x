@@ -29,10 +29,9 @@ type localTempData struct {
 	cjs      []*big.Int
 
 	// round 3
-	si           *big.Int
-	r            *big.Int
-	m            *big.Int
-	fullBytesLen int
+	si *big.Int
+	r  *big.Int
+	m  []byte
 }
 
 type localMessageStore struct {
