@@ -75,3 +75,22 @@ func TestUpdatePublicKeyAndAdjustBigXjZeroDelta(t *testing.T) {
 		t.Fatal("expected error for zero delta")
 	}
 }
+
+// TestUpdatePublicKeyAndAdjustBigXjRejectsWrongChild verifies that a
+// child key that is not ECDSAPub + delta*G is rejected, and that the
+// keys do not change.
+func TestUpdatePublicKeyAndAdjustBigXjRejectsWrongChild(t *testing.T) {
+	ec := tss.S256()
+	pub := crypto.ScalarBaseMult(ec, big.NewInt(42))
+	save := keygen.LocalPartySaveData{ECDSAPub: pub, BigXj: []*crypto.ECPoint{pub}}
+	wrong := crypto.ScalarBaseMult(ec, big.NewInt(99))
+	extPub := &ecdsa.PublicKey{Curve: ec, X: wrong.X(), Y: wrong.Y()}
+
+	keys := []keygen.LocalPartySaveData{save}
+	if err := UpdatePublicKeyAndAdjustBigXj(big.NewInt(7), keys, extPub, ec); err == nil {
+		t.Fatal("expected an error for a wrong child key")
+	}
+	if !keys[0].ECDSAPub.Equals(pub) || !keys[0].BigXj[0].Equals(pub) {
+		t.Fatal("a rejected call changed the keys")
+	}
+}

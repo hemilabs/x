@@ -114,3 +114,32 @@ func TestCreateReconstructSuccess(t *testing.T) {
 		t.Fatal("reconstructed secret doesn't match original")
 	}
 }
+
+// TestInterpolateAtZero verifies the value at zero, and that bad input
+// gives an error and not a panic.
+func TestInterpolateAtZero(t *testing.T) {
+	ec := tss.EC()
+	// P(x) = 5 + 3x, so P(0)*G = 5*G.
+	ks := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(4)}
+	pts := make([]*crypto.ECPoint, len(ks))
+	for i, k := range ks {
+		pts[i] = crypto.ScalarBaseMult(ec, new(big.Int).Add(big.NewInt(5), new(big.Int).Mul(big.NewInt(3), k)))
+	}
+	got, err := InterpolateAtZero(ec, ks, pts)
+	if err != nil || !got.Equals(crypto.ScalarBaseMult(ec, big.NewInt(5))) {
+		t.Fatalf("InterpolateAtZero = %v, %v; want 5*G", got, err)
+	}
+	for name, in := range map[string]struct {
+		ks  []*big.Int
+		pts []*crypto.ECPoint
+	}{
+		"length":    {ks[:2], pts},
+		"collision": {[]*big.Int{big.NewInt(1), big.NewInt(1)}, pts[:2]},
+		"zero key":  {[]*big.Int{big.NewInt(0), big.NewInt(1)}, pts[:2]},
+		"nil point": {ks[:2], []*crypto.ECPoint{pts[0], nil}},
+	} {
+		if _, err := InterpolateAtZero(ec, in.ks, in.pts); err == nil {
+			t.Fatalf("%s: expected an error", name)
+		}
+	}
+}
