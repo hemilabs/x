@@ -192,3 +192,53 @@ func TestOldAndNewPartiesLength(t *testing.T) {
 		t.Fatal("OldAndNewParties corrupted OldParties")
 	}
 }
+
+// TestCheckSelfAndConcurrency verifies that a bad own PartyID or party
+// count gives an error, and that a low concurrency is stored as 1.
+func TestCheckSelfAndConcurrency(t *testing.T) {
+	pIDs := GenerateTestPartyIDs(3)
+	ctx := NewPeerContext(pIDs)
+	if err := NewParameters(S256(), ctx, pIDs[1], 3, 1).CheckSelf(); err != nil {
+		t.Fatalf("valid parameters: %v", err)
+	}
+	stray := NewPartyID("x", "x", big.NewInt(99))
+	stray.Index = 1
+	for name, p := range map[string]*Parameters{
+		"index -1":    NewParameters(S256(), ctx, NewPartyID("y", "y", big.NewInt(98)), 3, 1),
+		"wrong count": NewParameters(S256(), ctx, pIDs[1], 4, 1),
+		"not in list": NewParameters(S256(), ctx, stray, 3, 1),
+	} {
+		if err := p.CheckSelf(); err == nil {
+			t.Fatalf("%s: expected an error", name)
+		}
+	}
+	p := NewParameters(S256(), ctx, pIDs[0], 3, 1)
+	p.SetConcurrency(0)
+	if p.Concurrency() != 1 {
+		t.Fatalf("SetConcurrency(0): got %d, want 1", p.Concurrency())
+	}
+}
+
+// TestCheckCommittees verifies the reshare committee checks: a count
+// that does not match the list, a party in neither committee, and a
+// party in both committees.
+func TestCheckCommittees(t *testing.T) {
+	oldIDs, newIDs := GenerateTestPartyIDs(3), GenerateTestPartyIDs(3)
+	oldCtx, newCtx := NewPeerContext(oldIDs), NewPeerContext(newIDs)
+	if err := NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 3, 1).CheckCommittees(); err != nil {
+		t.Fatalf("old party: %v", err)
+	}
+	if err := NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 2, 1).CheckCommittees(); err == nil {
+		t.Fatal("wrong new count: expected an error")
+	}
+	stranger := NewPartyID("s", "s", big.NewInt(12345))
+	if err := NewReSharingParameters(S256(), oldCtx, newCtx, stranger, 3, 1, 3, 1).CheckCommittees(); err == nil {
+		t.Fatal("party in neither committee: expected an error")
+	}
+	// A party in both committees has a separate PartyID copy for each.
+	both := NewPartyID(oldIDs[1].Id, oldIDs[1].Moniker, oldIDs[1].KeyInt())
+	dualNew := SortPartyIDs(UnSortedPartyIDs{both, newIDs[0], newIDs[1]})
+	if err := NewReSharingParameters(S256(), oldCtx, NewPeerContext(dualNew), oldIDs[1], 3, 1, 3, 1).CheckCommittees(); err != nil {
+		t.Fatalf("party in both committees: %v", err)
+	}
+}

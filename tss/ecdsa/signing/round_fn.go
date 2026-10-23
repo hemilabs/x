@@ -62,6 +62,9 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 // keyDerivationDelta is optional HD derivation delta (nil for no derivation).
 // fullBytesLen is the byte length for message padding (0 for default).
 func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.Int, keyDerivationDelta *big.Int, fullBytesLen int) (*SigningState, *SignRoundOutput, error) {
+	if err := params.CheckSelf(); err != nil {
+		return nil, nil, err
+	}
 	n := params.PartyCount()
 	temp := &localTempData{
 		localMessageStore: localMessageStore{

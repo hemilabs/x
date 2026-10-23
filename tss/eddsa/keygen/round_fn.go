@@ -40,6 +40,9 @@ func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]by
 // Round1 generates the VSS polynomial and broadcasts a commitment.
 // Returns the keygen state to pass to subsequent rounds.
 func Round1(params *tss.Parameters, preParams ...interface{}) (*KeygenState, *RoundOutput, error) {
+	if err := params.CheckSelf(); err != nil {
+		return nil, nil, err
+	}
 	n := params.PartyCount()
 	Pi := params.PartyID()
 	i := Pi.Index

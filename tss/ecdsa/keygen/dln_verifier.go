@@ -6,7 +6,6 @@
 package keygen
 
 import (
-	"errors"
 	"math/big"
 
 	"github.com/hemilabs/x/tss/v3/crypto/dlnproof"
@@ -19,12 +18,10 @@ type DlnProofVerifier struct {
 }
 
 // NewDlnProofVerifier creates a verifier with the given concurrency.
+// A value below 1 is used as 1.
 func NewDlnProofVerifier(concurrency int) *DlnProofVerifier {
-	if concurrency == 0 {
-		panic(errors.New("NewDlnProofVerifier: concurrency level must not be zero"))
-	}
 	return &DlnProofVerifier{
-		semaphore: make(chan interface{}, concurrency),
+		semaphore: make(chan interface{}, max(concurrency, 1)),
 	}
 }
 

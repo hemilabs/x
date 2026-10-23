@@ -8,6 +8,7 @@ package tss
 import (
 	"crypto/elliptic"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -114,9 +115,36 @@ func (params *Parameters) SafePrimeGenTimeout() time.Duration {
 	return params.safePrimeGenTimeout
 }
 
-// The concurrency level must be >= 1.
+// SetConcurrency sets the concurrency level.  A value below 1 is
+// stored as 1.
 func (params *Parameters) SetConcurrency(concurrency int) {
-	params.concurrency = concurrency
+	params.concurrency = max(concurrency, 1)
+}
+
+// CheckSelf returns an error if the own PartyID is not in the party
+// list at its Index, or if the party count does not match the list.
+// The rounds index slices by these values.
+func (params *Parameters) CheckSelf() error {
+	pid, ids := params.PartyID(), params.Parties().IDs()
+	if !pid.ValidateBasic() || params.PartyCount() != len(ids) ||
+		pid.Index >= len(ids) || ids[pid.Index].KeyInt().Cmp(pid.KeyInt()) != 0 {
+		return errors.New("own PartyID does not match the party list")
+	}
+	return nil
+}
+
+// CheckCommittees returns an error if a committee count does not match
+// its party list, or if the own PartyID is in neither committee.
+func (rgParams *ReSharingParameters) CheckCommittees() error {
+	if rgParams.PartyID() == nil ||
+		rgParams.OldPartyCount() != len(rgParams.OldParties().IDs()) ||
+		rgParams.NewPartyCount() != len(rgParams.NewParties().IDs()) {
+		return errors.New("committee counts do not match the party lists")
+	}
+	if !rgParams.IsOldCommittee() && !rgParams.IsNewCommittee() {
+		return errors.New("own PartyID is in neither committee")
+	}
+	return nil
 }
 
 // SetSafePrimeGenTimeout sets the timeout for safe prime generation.
