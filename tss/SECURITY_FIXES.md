@@ -4,7 +4,7 @@ Security fixes from the audit of upstream
 [binance/tss-lib](https://github.com/bnb-chain/tss-lib), implemented
 in the v3 channel-free round function architecture.
 
-76 fixes in production code across 24 files, all annotated with
+77 fixes in production code across 24 files, all annotated with
 `[FORK]` comments in source.  Grep for `[FORK]` to find them all.
 
 The v2 base had 260 annotations across 88 files — the difference is
@@ -188,6 +188,22 @@ based state machine entirely:
 
 ---
 
+## Signed Hash Input
+
+**Problem:** `SHA512_256i` and `SHA512_256i_TAGGED` hashed
+`big.Int.Bytes()`, which drops the sign.  JSON and gob decoders can
+produce negative values from wire input, so x and -x gave the same
+Fiat-Shamir challenge.  A prover could choose the sign after the
+challenge.
+
+**Fix:** A negative input is followed by a different delimiter byte.
+Non-negative inputs keep their encoding, so honest hashes do not
+change.
+
+**Where:** `common/hash.go`
+
+---
+
 ## Deferred Items
 
 Low-impact items carried from the v2 audit that don't affect
@@ -202,4 +218,3 @@ correctness or security in practice:
 7. CKD only for secp256k1 — by design
 8. Commitment no domain separation — 256-bit nonce prevents collisions
 9. Threshold=0 accepted — VSS rejects downstream
-10. SHA512_256i sign-blindness — all callers pass non-negative

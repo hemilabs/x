@@ -15,7 +15,19 @@ import (
 
 const (
 	hashInputDelimiter = byte('$')
+	// [FORK] hashNegativeDelimiter replaces hashInputDelimiter after a negative
+	// input.  big.Int.Bytes() drops the sign, so without it x and -x hash
+	// the same.  Non-negative inputs keep their encoding.
+	hashNegativeDelimiter = byte('-')
 )
+
+// hashDelimiter returns the delimiter that follows n in the hash input.
+func hashDelimiter(n *big.Int) byte {
+	if n != nil && n.Sign() < 0 {
+		return hashNegativeDelimiter
+	}
+	return hashInputDelimiter
+}
 
 // SHA-512/256 is protected against length extension attacks and is more performant than SHA-256 on 64-bit architectures.
 // https://en.wikipedia.org/wiki/Template:Comparison_of_SHA_functions
@@ -83,8 +95,8 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 	data = append(data, inLenBz...)
 	for i := range in {
 		data = append(data, ptrs[i]...)
-		data = append(data, hashInputDelimiter) // safety delimiter
-		dataLen := make([]byte, 8)              // 64-bits
+		data = append(data, hashDelimiter(in[i])) // safety delimiter, binds the sign
+		dataLen := make([]byte, 8)                // 64-bits
 		binary.LittleEndian.PutUint64(dataLen, uint64(len(ptrs[i])))
 		data = append(data, dataLen...) // Security audit: length of each byte buffer should be added after
 		// each security delimiters in order to enforce proper domain separation
@@ -132,8 +144,8 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 	data = append(data, inLenBz...)
 	for i := range in {
 		data = append(data, ptrs[i]...)
-		data = append(data, hashInputDelimiter) // safety delimiter
-		dataLen := make([]byte, 8)              // 64-bits
+		data = append(data, hashDelimiter(in[i])) // safety delimiter, binds the sign
+		dataLen := make([]byte, 8)                // 64-bits
 		binary.LittleEndian.PutUint64(dataLen, uint64(len(ptrs[i])))
 		data = append(data, dataLen...) // Security audit: length of each byte buffer should be added after
 		// each security delimiters in order to enforce proper domain separation
