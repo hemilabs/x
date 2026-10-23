@@ -149,13 +149,17 @@ func (s *session) recover() (err error) {
 	defer reader.Close()
 
 	var (
-		// Options.
-		strict = s.o.GetStrict(opt.StrictManifest)
+		// The MANIFEST is always read strictly.  A skipped block or
+		// record drops version edits, and the janitor of the same Open
+		// then deletes the tables they reference.  Only a torn last
+		// record, as a crash can leave, ends the log.
+		strict = true
 
 		jr      = journal.NewReader(reader, dropper{s, fd}, strict, true)
 		rec     = &sessionRecord{}
 		staging = s.stVersion.newStaging()
 	)
+	jr.TornTailIsEOF = true
 	for {
 		var r io.Reader
 		r, err = jr.Next()
@@ -167,7 +171,17 @@ func (s *session) recover() (err error) {
 			return errors.SetFd(err, fd)
 		}
 
+		// decode sets the fields of rec one by one.  Keep a copy, so a
+		// torn record does not change rec.
+		prev := *rec
 		err = rec.decode(r)
+		if err == journal.ErrTornTail {
+			// The last record is not complete: a crash cut it.  Do not
+			// apply it, and end the log here.
+			*rec = prev
+			err = nil
+			break
+		}
 		if err == nil {
 			// save compact pointers
 			for _, r := range rec.compPtrs {

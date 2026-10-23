@@ -854,3 +854,69 @@ func TestCorrupt_MiddleChuckLengthOverflow(t *testing.T) {
 		t.Fatalf("last next: unexpected error: %v", err)
 	}
 }
+
+// TestTornTail checks the end of a strict journal with TornTailIsEOF.
+// A record cut at a block boundary must not read as complete.  A zero
+// tail ends the journal, and data after it is an error.
+func TestTornTail(t *testing.T) {
+	write := func(recs ...[]byte) []byte {
+		buf := new(bytes.Buffer)
+		w := NewWriter(buf)
+		for _, rec := range recs {
+			ww, err := w.Next()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ww.Write(rec); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return buf.Bytes()
+	}
+	// read returns the complete records and the final error.
+	read := func(data []byte) (n int, err error) {
+		r := NewReader(bytes.NewReader(data), nil, true, true)
+		r.TornTailIsEOF = true
+		for {
+			rr, err := r.Next()
+			if err != nil {
+				return n, err
+			}
+			if _, err := io.ReadAll(rr); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+
+	small := []byte("small")
+	big := bytes.Repeat([]byte("x"), 40000)
+
+	// The second block of the big record is missing.
+	data := write(small, big)
+	if n, err := read(data[:blockSize]); n != 1 || err != ErrTornTail {
+		t.Fatalf("cut record: got %d records, %v; want 1, ErrTornTail", n, err)
+	}
+
+	// A header that runs past the end is a torn tail at a record start.
+	data = write(small)
+	if n, err := read(append(data, 1, 2, 3)); n != 1 || err != io.EOF {
+		t.Fatalf("torn header: got %d records, %v; want 1, EOF", n, err)
+	}
+
+	// A zero tail ends the journal.
+	zero := append(append([]byte{}, data...), make([]byte, 100)...)
+	if n, err := read(zero); n != 1 || err != io.EOF {
+		t.Fatalf("zero tail: got %d records, %v; want 1, EOF", n, err)
+	}
+
+	// A zero tail that fills the block, then more data, is corrupt.
+	zero = append(append([]byte{}, data...), make([]byte, blockSize-len(data))...)
+	zero = append(zero, write(small)...)
+	if _, err := read(zero); err == nil || err == io.EOF {
+		t.Fatalf("data after zero tail: got %v, want corruption", err)
+	}
+}
