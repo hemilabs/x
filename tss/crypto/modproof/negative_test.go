@@ -78,3 +78,16 @@ func TestNewProofFromBytesTruncated(t *testing.T) {
 		t.Fatal("expected error for truncated bytes")
 	}
 }
+
+// TestVerifyEvenNNoPanic verifies that Verify returns false for an
+// even N.  big.Jacobi panics for an even modulus.
+func TestVerifyEvenNNoPanic(t *testing.T) {
+	pf := &ProofMod{W: big.NewInt(2), A: big.NewInt(1), B: big.NewInt(1)}
+	for i := range pf.X {
+		pf.X[i], pf.Z[i] = big.NewInt(1), big.NewInt(1)
+	}
+	N := new(big.Int).Lsh(big.NewInt(1), 2047) // even, 2048 bits
+	if pf.Verify([]byte("session"), N) {
+		t.Fatal("Verify accepted an even N")
+	}
+}

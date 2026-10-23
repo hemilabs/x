@@ -56,7 +56,7 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	if p == nil {
 		return false
 	}
-	if N == nil || N.Sign() != 1 {
+	if N == nil || N.Sign() != 1 || h1 == nil || h2 == nil {
 		return false
 	}
 	// [FORK] Reject undersized moduli — DLN proofs are only sound when N is the
@@ -82,7 +82,9 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	// oversized exponents before modular reduction.
 	maxBits := N.BitLen() + 2
 	for i := range p.T {
-		if p.T[i] == nil || p.T[i].BitLen() > maxBits {
+		// [FORK] An honest T[i] is not negative.  Exp with a negative
+		// exponent returns nil when h1 has no inverse mod N.
+		if p.T[i] == nil || p.T[i].Sign() < 0 || p.T[i].BitLen() > maxBits {
 			return false
 		}
 		a := new(big.Int).Mod(p.T[i], N)

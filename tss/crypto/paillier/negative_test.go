@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"math/big"
 	"testing"
+	"time"
 
 	crypto2 "github.com/hemilabs/x/tss/v3/crypto"
 	"github.com/hemilabs/x/tss/v3/tss"
@@ -159,5 +160,33 @@ func TestGenerateKeyPairSmallBits(t *testing.T) {
 	}
 	if sk == nil || pk == nil {
 		t.Fatal("expected non-nil keys")
+	}
+}
+
+// TestProofVerifyBadInputsReturns verifies that Verify returns an
+// error, and does not hang or panic, for an N of a bit length that is
+// not a multiple of 256 and for a nil k.
+func TestProofVerifyBadInputsReturns(t *testing.T) {
+	var pf Proof
+	for i := range pf {
+		pf[i] = big.NewInt(1)
+	}
+	pub := crypto2.ScalarBaseMult(tss.S256(), big.NewInt(1))
+	n2049 := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 2048), big.NewInt(1))
+	n2048 := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 2047), big.NewInt(1))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if ok, err := pf.Verify(n2049, big.NewInt(1), pub); ok || err == nil {
+			t.Errorf("2049-bit N: got %v, %v; want an error", ok, err)
+		}
+		if ok, err := pf.Verify(n2048, nil, pub); ok || err == nil {
+			t.Errorf("nil k: got %v, %v; want an error", ok, err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Verify did not return")
 	}
 }
