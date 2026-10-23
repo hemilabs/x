@@ -94,7 +94,10 @@ r2out, _ := resharing.ReshareRound2(state, r1Msgs)
 r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
 r4out, _ := resharing.ReshareRound4(ctx, state, r2Msgs, r3p2p, r3bcast)
 r5out, _ := resharing.ReshareRound5(state, r4p2p, r4bcast)
-// r5out.Save = new key share (new committee), old Xi zeroed
+// r5out.Save = new key share (new committee)
+// r5out.Messages = DGRound5Message confirmation to the old committee
+ok, _ := resharing.ReshareConfirm(state, r5Msgs) // old committee only
+// Keep the old share until ok is true, then delete it.
 ```
 
 ## EdDSA — Keygen / Sign / Reshare
@@ -150,7 +153,10 @@ r2out, _ := resharing.ReshareRound2(state, r1Msgs)
 r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
 r4out, _ := resharing.ReshareRound4(state, r1Msgs, r3p2p, r3bcast)
 r5out, _ := resharing.ReshareRound5(state, r4AckMsgs)
-// r5out.Save = new key share (new committee), old Xi zeroed
+// r5out.Save = new key share (new committee)
+// r5out.Messages = DGRound5Message confirmation to the old committee
+ok, _ := resharing.ReshareConfirm(state, r5Msgs) // old committee only
+// Keep the old share until ok is true, then delete it.
 ```
 
 ## Message Routing

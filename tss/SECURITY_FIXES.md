@@ -84,14 +84,15 @@ memory disclosure bug would leak signing nonces (enabling share
 recovery) or old Xi after resharing (enabling threshold reduction).
 
 **Fix:** Explicit zero after last use: ui after VSS, k/gamma/w/sigma
-after signing, ri/wi after EdDSA signing, old Xi after resharing
-(including dual-committee parties — v2 missed those).
+after signing, ri/wi after EdDSA signing.
+
+Resharing does not zero the old Xi.  The old share must stay until the
+new committee confirms a working sharing.  The caller deletes it when
+`ReshareConfirm` returns true.
 
 **Where:** `ecdsa/keygen/round_fn.go` (Round1), `ecdsa/signing/
-round_fn.go` (SignRound5), `ecdsa/resharing/round_fn.go`
-(ReshareRound5), `eddsa/keygen/round_fn.go` (Round2),
-`eddsa/signing/round_fn.go` (SignRound3), `eddsa/resharing/round_fn.go`
-(ReshareRound5)
+round_fn.go` (SignRound5), `eddsa/keygen/round_fn.go` (Round2),
+`eddsa/signing/round_fn.go` (SignRound3)
 
 ---
 

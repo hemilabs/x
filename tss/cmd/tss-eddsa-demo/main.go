@@ -113,12 +113,9 @@ func run() error {
 	if !newPubKey.Equals(pubKey) {
 		return fmt.Errorf("public key changed after reshare")
 	}
-	if saves[0].Xi.Sign() != 0 {
-		return fmt.Errorf("P0 Xi not zeroed after reshare")
-	}
 	fmt.Printf("  public key preserved: (%x, %x)\n",
 		newPubKey.X(), newPubKey.Y())
-	fmt.Println("  old P0 Xi zeroed:     OK")
+	fmt.Println("  old shares confirmed: OK")
 
 	// ================================================================
 	// SIGN AGAIN — with new committee
@@ -265,7 +262,8 @@ func eddsaSign(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, 
 // Round 2: new committee validates pub key consistency, ACKs old
 // Round 3: old committee sends P2P shares + decommitment to new
 // Round 4: new committee verifies shares and commitments, ACKs both
-// Round 5: new committee saves new key material, old zeros Xi
+// Round 5: new committee saves new key material, confirms to old
+// Confirm: old committee may retire Xi after min(2t+1, n) confirms
 // -------------------------------------------------------------------
 
 func eddsaReshare(oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldT, newT int) ([]keygen.LocalPartySaveData, error) {
@@ -371,8 +369,9 @@ func eddsaReshare(oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerC
 		}
 	}
 
-	// -- Round 5: save --
+	// -- Round 5: save + confirm to old committee --
 	newSaves := make([]keygen.LocalPartySaveData, newN)
+	r5Msgs := make([]*tss.Message, newN)
 	for _, p := range all {
 		out, err := resharing.ReshareRound5(p.state, r4Msgs)
 		if err != nil {
@@ -380,6 +379,21 @@ func eddsaReshare(oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerC
 		}
 		if p.newIdx >= 0 {
 			newSaves[p.newIdx] = *out.Save
+			r5Msgs[p.newIdx] = out.Messages[0]
+		}
+	}
+
+	// -- Confirm: old parties may retire their old share --
+	for _, p := range all {
+		if p.oldIdx < 0 {
+			continue
+		}
+		ok, err := resharing.ReshareConfirm(p.state, r5Msgs)
+		if err != nil {
+			return nil, fmt.Errorf("reshareConfirm[%s]: %w", p.pid.Id, err)
+		}
+		if !ok {
+			return nil, fmt.Errorf("reshareConfirm[%s]: no quorum", p.pid.Id)
 		}
 	}
 	return newSaves, nil

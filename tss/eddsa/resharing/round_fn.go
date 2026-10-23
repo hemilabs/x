@@ -78,6 +78,7 @@ func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySave
 			dgRound3Message1s: make([]*tss.Message, oldPC),
 			dgRound3Message2s: make([]*tss.Message, oldPC),
 			dgRound4Messages:  make([]*tss.Message, newPC),
+			dgRound5Messages:  make([]*tss.Message, newPC),
 		},
 	}
 	save := keygen.NewLocalPartySaveData(newPC)
@@ -120,6 +121,7 @@ func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySave
 	}
 	vCmt := commitments.NewHashCommitment(params.Rand(), flatVis...)
 
+	state.temp.VC = vCmt.C
 	state.temp.VD = vCmt.D
 	state.temp.NewShares = shares
 
@@ -158,6 +160,12 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 		state.save.EDDSAPub = candidate
 		state.temp.dgRound1Messages[j] = msg
 	}
+
+	ssid, err := getReshareSSID(params, &state.temp)
+	if err != nil {
+		return nil, fmt.Errorf("round 2 SSID: %w", err)
+	}
+	state.temp.ssid = ssid
 
 	Pi := params.PartyID()
 	i := newIndex(params)
@@ -321,18 +329,107 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 }
 
 // ReshareRound5 finalizes the resharing.  New committee parties save
-// their new key material.  Old committee parties zero their old Xi.
+// their new key material and send a DGRound5Message that confirms the
+// new sharing to the old committee.
+//
+// ReshareRound5 does not touch the old share.  Old parties must keep
+// it until ReshareConfirm returns true.  New parties must store the
+// new share durably before they send the confirmation.
 func ReshareRound5(state *ReshareState, r4AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
-	if state.params.IsNewCommittee() {
-		state.save.BigXj = state.temp.newBigXjs
-		state.save.ShareID = state.params.PartyID().KeyInt()
-		state.save.Xi = state.temp.newXi
-		state.save.Ks = state.temp.newKs
+	out := &ReshareRoundOutput{Save: state.save}
+	if !state.params.IsNewCommittee() {
+		return out, nil
 	}
-	// Zero old Xi — including dual-committee parties.
-	if state.params.IsOldCommittee() {
-		state.input.Xi.SetInt64(0)
-	}
+	params := state.params
+	state.save.BigXj = state.temp.newBigXjs
+	state.save.ShareID = params.PartyID().KeyInt()
+	state.save.Xi = state.temp.newXi
+	state.save.Ks = state.temp.newKs
 
-	return &ReshareRoundOutput{Save: state.save}, nil
+	vcts := make([]*big.Int, len(state.temp.dgRound1Messages))
+	for j, msg := range state.temp.dgRound1Messages {
+		vcts[j] = msg.Content.(*DGRound1Message).VCommitment
+	}
+	digest, err := confirmDigest(state.temp.ssid, state.save.EDDSAPub, vcts, state.save.BigXj)
+	if err != nil {
+		return nil, err
+	}
+	Pi := params.PartyID()
+	r5msg := NewDGRound5Message(params.OldParties().IDs().Exclude(Pi), Pi,
+		state.save.EDDSAPub, vcts, digest)
+	state.temp.dgRound5Messages[newIndex(params)] = r5msg
+	out.Messages = []*tss.Message{r5msg}
+
+	return out, nil
+}
+
+// confirmQuorum returns the number of matching confirmations that
+// old parties need before they retire their shares.  The digest is
+// public, so up to t corrupt new parties can copy it.  Out of 2t+1
+// confirmers at least t+1 are honest and hold working shares, and
+// they can sign without the corrupt parties.  A committee with fewer
+// than 2t+1 parties must confirm in full.
+func confirmQuorum(t, n int) int {
+	return min(2*t+1, n)
+}
+
+// confirmDigest binds a confirmation to the session, the group key,
+// the fresh round 1 commitments and the new public shares.
+func confirmDigest(ssid []byte, pub *crypto.ECPoint, vcts []*big.Int, bigXj []*crypto.ECPoint) ([]byte, error) {
+	flat, err := crypto.FlattenECPoints(append([]*crypto.ECPoint{pub}, bigXj...))
+	if err != nil {
+		return nil, fmt.Errorf("confirm digest: %w", err)
+	}
+	list := make([]*big.Int, 0, 2+len(vcts)+len(flat))
+	list = append(list,
+		new(big.Int).SetBytes([]byte("eddsa-resharing-confirm")),
+		new(big.Int).SetBytes(ssid))
+	list = append(list, vcts...)
+	list = append(list, flat...)
+	return common.SHA512_256i(list...).Bytes(), nil
+}
+
+// ReshareConfirm reports whether an old committee party may retire
+// its old share.  It returns true when confirmQuorum new parties
+// confirm the same sharing of the same key for this ceremony.
+//
+// r5Msgs[j] is new party j's DGRound5Message.  Missing, foreign or
+// stale confirmations are not counted.  ReshareConfirm does not
+// modify the old share; the caller deletes it when this returns true.
+func ReshareConfirm(state *ReshareState, r5Msgs []*tss.Message) (bool, error) {
+	params := state.params
+	if !params.IsOldCommittee() {
+		return false, errors.New("reshare confirm: not in old committee")
+	}
+	newIDs := params.NewParties().IDs()
+	if len(r5Msgs) != len(newIDs) {
+		return false, fmt.Errorf("reshare confirm: got %d messages, want %d",
+			len(r5Msgs), len(newIDs))
+	}
+	tss.MergeMsgs(state.temp.dgRound5Messages, r5Msgs)
+
+	i := oldIndex(params)
+	counts := make(map[string]int, len(newIDs))
+	for j, msg := range state.temp.dgRound5Messages {
+		if msg == nil || msg.From == nil ||
+			msg.From.KeyInt().Cmp(newIDs[j].KeyInt()) != 0 {
+			continue
+		}
+		c, ok := msg.Content.(*DGRound5Message)
+		if !ok || !c.ValidateBasic() || !c.EDDSAPub.Equals(state.input.EDDSAPub) {
+			continue
+		}
+		if len(c.VCommitments) != params.OldPartyCount() ||
+			c.VCommitments[i].Cmp(state.temp.VC) != 0 {
+			continue
+		}
+		counts[string(c.Digest)]++
+	}
+	quorum := confirmQuorum(params.NewThreshold(), params.NewPartyCount())
+	for _, n := range counts {
+		if n >= quorum {
+			return true, nil
+		}
+	}
+	return false, nil
 }
