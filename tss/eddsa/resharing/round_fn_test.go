@@ -7,6 +7,7 @@ package resharing
 import (
 	"crypto/sha256"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/edwards/v2"
@@ -132,6 +133,21 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 		if _, err := ReshareRound4(oldStates[i], nil, nil, nil); err != nil {
 			t.Fatalf("ReshareRound4[old %d]: %v", i, err)
 		}
+	}
+
+	// --- Equivocation: new party 1 echoes a different round 1 view ---
+	forged := make([]*tss.Message, oldN)
+	copy(forged, r1Msgs)
+	c := forged[2].Content.(*DGRound1Message)
+	forged[2] = &tss.Message{From: forged[2].From, Content: &DGRound1Message{
+		EDDSAPub: c.EDDSAPub, VCommitment: new(big.Int).Add(c.VCommitment, big.NewInt(1)),
+	}}
+	badR4 := make([]*tss.Message, newN)
+	copy(badR4, r4Msgs)
+	badR4[1] = &tss.Message{From: badR4[1].From, Content: &DGRound4Message{Echo: reshareEcho(forged)}}
+	if _, err := ReshareRound5(newStates[0], badR4); err == nil ||
+		!strings.Contains(err.Error(), "echo mismatch") {
+		t.Fatalf("ReshareRound5 with equivocated round 1: %v, want echo mismatch", err)
 	}
 
 	// --- Reshare Round 5 (save) ---

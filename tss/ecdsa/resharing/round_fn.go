@@ -567,12 +567,34 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		out.Messages = append(out.Messages, r4msg1)
 	}
 
-	// ACK to both committees
-	r4msg2 := NewDGRound4Message2(params.OldAndNewParties(), Pi)
+	// ACK to both committees, with the echo of the received broadcasts
+	temp.echo = reshareEcho(temp.ssid, temp.dgRound1Messages, temp.dgRound2Message1s)
+	r4msg2 := NewDGRound4Message2(params.OldAndNewParties(), Pi, temp.echo)
 	temp.dgRound4Message2s[i] = r4msg2
 	out.Messages = append(out.Messages, r4msg2)
 
 	return out, nil
+}
+
+// reshareEcho hashes the round 1 broadcasts from the old committee and
+// the round 2 broadcasts from the new committee that this party
+// received, in party order.  The transport may deliver different
+// broadcast content to different parties.  New parties compare their
+// echoes in Round 5 so that all of them use the same commitments and
+// Paillier and Pedersen parameters.
+func reshareEcho(ssid []byte, r1Msgs, r2Msgs []*tss.Message) []byte {
+	list := make([]*big.Int, 0, 2+len(r1Msgs)+4*len(r2Msgs))
+	list = append(list,
+		new(big.Int).SetBytes([]byte("ecdsa-resharing-echo")),
+		new(big.Int).SetBytes(ssid))
+	for _, msg := range r1Msgs {
+		list = append(list, msg.Content.(*DGRound1Message).VCommitment)
+	}
+	for _, msg := range r2Msgs {
+		r2msg1 := msg.Content.(*DGRound2Message1)
+		list = append(list, r2msg1.PaillierPK.N, r2msg1.NTilde, r2msg1.H1, r2msg1.H2)
+	}
+	return common.SHA512_256i(list...).Bytes()
 }
 
 // ReshareRound5 verifies FacProofs and saves the new key share.
@@ -590,6 +612,18 @@ func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*Reshare
 	i := newIndex(params)
 
 	if params.IsNewCommittee() {
+		// All new parties must have received the same broadcasts.  A
+		// mismatch does not show who equivocated, so name no culprit.
+		for j, msg := range r4Bcast {
+			if j == i {
+				continue
+			}
+			r4msg2 := msg.Content.(*DGRound4Message2)
+			if !bytes.Equal(r4msg2.Echo, temp.echo) {
+				return nil, tss.NewError(errors.New("broadcast echo mismatch"), TaskName, 5, Pi)
+			}
+		}
+
 		ContextI := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(i)))
 		save.BigXj = temp.newBigXjs
 		save.ShareID = Pi.KeyInt()

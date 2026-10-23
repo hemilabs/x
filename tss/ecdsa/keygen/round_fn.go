@@ -325,11 +325,30 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 			return nil, fmt.Errorf("round 2 mod proof: %w", err)
 		}
 	}
-	r2msg2 := NewKGRound2Message2(params.PartyID(), temp.deCommitPolyG, modProofObj)
+	temp.echo = round1Echo(temp.ssid, temp.kgRound1Messages)
+	r2msg2 := NewKGRound2Message2(params.PartyID(), temp.deCommitPolyG, modProofObj, temp.echo)
 	temp.kgRound2Message2s[i] = r2msg2
 	out.Messages = append(out.Messages, r2msg2)
 
 	return out, nil
+}
+
+// round1Echo hashes the round 1 broadcasts that this party received,
+// in party order.  Round 1 is a broadcast round, but the transport
+// may deliver different content to different parties.  The parties
+// compare their echoes in Round 3 so that all of them use the same
+// commitments and Paillier and Pedersen parameters.
+func round1Echo(ssid []byte, r1Msgs []*tss.Message) []byte {
+	list := make([]*big.Int, 0, 2+5*len(r1Msgs))
+	list = append(list,
+		new(big.Int).SetBytes([]byte("ecdsa-keygen-echo")),
+		new(big.Int).SetBytes(ssid))
+	for _, msg := range r1Msgs {
+		r1msg := msg.Content.(*KGRound1Message)
+		list = append(list, r1msg.Commitment, r1msg.PaillierPK.N,
+			r1msg.NTilde, r1msg.H1, r1msg.H2)
+	}
+	return common.SHA512_256i(list...).Bytes()
 }
 
 // Round3 validates round 2 messages (de-commitments, VSS shares,
@@ -350,6 +369,18 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 	// Store own messages
 	tss.MergeMsgs(temp.kgRound2Message1s, r2p2p)
 	tss.MergeMsgs(temp.kgRound2Message2s, r2bcast)
+
+	// All parties must have received the same round 1 broadcasts.  A
+	// mismatch does not show who equivocated, so name no culprit.
+	for j := range Ps {
+		if j == PIdx {
+			continue
+		}
+		r2msg2 := r2bcast[j].Content.(*KGRound2Message2)
+		if !bytes.Equal(r2msg2.Echo, temp.echo) {
+			return nil, tss.NewError(errors.New("round 1 broadcast echo mismatch"), TaskName, 3, params.PartyID())
+		}
+	}
 
 	// 1,9. calculate xi
 	xi := new(big.Int).Set(temp.shares[PIdx].Share)

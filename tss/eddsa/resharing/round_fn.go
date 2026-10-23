@@ -313,17 +313,49 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 	state.temp.newKs = newKs
 	state.temp.newBigXjs = newBigXjs
 
-	// ACK to both committees.
-	r4msg := NewDGRound4Message(params.OldAndNewParties(), Pi)
+	// ACK to both committees, with the echo of the received broadcasts.
+	state.temp.echo = reshareEcho(state.temp.dgRound1Messages)
+	r4msg := NewDGRound4Message(params.OldAndNewParties(), Pi, state.temp.echo)
 	state.temp.dgRound4Messages[i] = r4msg
 
 	return &ReshareRoundOutput{Messages: []*tss.Message{r4msg}}, nil
 }
 
-// ReshareRound5 finalizes the resharing.  New committee parties save
-// their new key material.  Old committee parties zero their old Xi.
+// reshareEcho hashes the round 1 commitments from the old committee
+// that this party received, in party order.  The transport may deliver
+// different broadcast content to different parties.  New parties
+// compare their echoes in Round 5 so that all of them use the same
+// commitments.
+func reshareEcho(r1Msgs []*tss.Message) []byte {
+	list := make([]*big.Int, 0, 1+len(r1Msgs))
+	list = append(list, new(big.Int).SetBytes([]byte("eddsa-resharing-echo")))
+	for _, msg := range r1Msgs {
+		list = append(list, msg.Content.(*DGRound1Message).VCommitment)
+	}
+	return common.SHA512_256i(list...).Bytes()
+}
+
+// ReshareRound5 finalizes the resharing.  New committee parties check
+// the round 4 echoes and save their new key material.  Old committee
+// parties zero their old Xi.
+//
+// r4AckMsgs[j] is new party j's DGRound4Message.
 func ReshareRound5(state *ReshareState, r4AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
 	if state.params.IsNewCommittee() {
+		// All new parties must have received the same broadcasts.  A
+		// mismatch does not show who equivocated, so name no culprit.
+		i := newIndex(state.params)
+		for j, msg := range r4AckMsgs {
+			if j == i {
+				continue
+			}
+			r4msg := msg.Content.(*DGRound4Message)
+			if !bytes.Equal(r4msg.Echo, state.temp.echo) {
+				return nil, tss.NewError(errors.New("broadcast echo mismatch"),
+					TaskName, 5, state.params.PartyID())
+			}
+		}
+
 		state.save.BigXj = state.temp.newBigXjs
 		state.save.ShareID = state.params.PartyID().KeyInt()
 		state.save.Xi = state.temp.newXi
