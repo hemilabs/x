@@ -58,7 +58,8 @@ func TestSignFinalizeRejectsOversizedSi(t *testing.T) {
 		r9 := CloneBcastSlice(f.R9Bcast, CloneR9BcastMsg)
 		r9[1].Content.(*SignRound9Message).S = new(big.Int).Add(N, big.NewInt(1))
 
-		_, err := SignFinalize(f.States[0], r9)
+		// The first sub-test failed states[0], so use another party.
+		_, err := SignFinalize(f.States[2], r9)
 		if err == nil {
 			t.Fatal("expected error for si > N, got nil")
 		}

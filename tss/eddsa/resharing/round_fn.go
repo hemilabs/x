@@ -136,7 +136,12 @@ func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySave
 // to the old committee.
 //
 // Old committee parties call this too but get a no-op.
-func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(2); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 
 	if !params.IsNewCommittee() {
@@ -172,7 +177,12 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 // VSS shares and broadcasts the decommitment to the new committee.
 //
 // New committee parties call this too but get a no-op.
-func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(3); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 
 	if !params.IsOldCommittee() {
@@ -206,7 +216,12 @@ func ReshareRound3(state *ReshareState, r2AckMsgs []*tss.Message) (*ReshareRound
 // BigXj, and sends an ACK to both committees.
 //
 // Old committee parties call this too but get a no-op.
-func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Message, r3bcast []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Message, r3bcast []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(4); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 
 	if !params.IsNewCommittee() {
@@ -322,7 +337,12 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 
 // ReshareRound5 finalizes the resharing.  New committee parties save
 // their new key material.  Old committee parties zero their old Xi.
-func ReshareRound5(state *ReshareState, r4AckMsgs []*tss.Message) (*ReshareRoundOutput, error) {
+func ReshareRound5(state *ReshareState, r4AckMsgs []*tss.Message) (_ *ReshareRoundOutput, rerr error) {
+	if err := state.life.Begin(5); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	if state.params.IsNewCommittee() {
 		state.save.BigXj = state.temp.newBigXjs
 		state.save.ShareID = state.params.PartyID().KeyInt()

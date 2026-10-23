@@ -167,7 +167,12 @@ func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.
 //
 // r1p2p[j] is party j's SignRound1Message1 (P2P).
 // r1bcast[j] is party j's SignRound1Message2 (broadcast).
-func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.Message) (*SignRoundOutput, error) {
+func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(2); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, key, temp := state.params, state.key, state.temp
 	tss.MergeMsgs(temp.signRound1Message1s, r1p2p)
 	tss.MergeMsgs(temp.signRound1Message2s, r1bcast)
@@ -288,7 +293,12 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 }
 
 // SignRound3 processes round 2 MtA responses and computes theta/sigma.
-func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) (*SignRoundOutput, error) {
+func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(3); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, key, temp := state.params, state.key, state.temp
 	tss.MergeMsgs(temp.signRound2Messages, r2p2p)
 
@@ -404,7 +414,12 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 }
 
 // SignRound4 computes thetaInverse and Schnorr proof for gamma.
-func SignRound4(state *SigningState, r3bcast []*tss.Message) (*SignRoundOutput, error) {
+func SignRound4(state *SigningState, r3bcast []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(4); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, temp := state.params, state.temp
 	tss.MergeMsgs(temp.signRound3Messages, r3bcast)
 
@@ -437,7 +452,12 @@ func SignRound4(state *SigningState, r3bcast []*tss.Message) (*SignRoundOutput, 
 }
 
 // SignRound5 verifies commitments, computes R, and produces blinding.
-func SignRound5(state *SigningState, r4bcast []*tss.Message) (*SignRoundOutput, error) {
+func SignRound5(state *SigningState, r4bcast []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(5); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, temp := state.params, state.temp
 	tss.MergeMsgs(temp.signRound4Messages, r4bcast)
 
@@ -527,7 +547,12 @@ func SignRound5(state *SigningState, r4bcast []*tss.Message) (*SignRoundOutput, 
 }
 
 // SignRound6 produces Schnorr proofs for the blinding values.
-func SignRound6(state *SigningState) (*SignRoundOutput, error) {
+func SignRound6(state *SigningState) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(6); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, temp := state.params, state.temp
 	i := params.PartyID().Index
 	ContextI := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(i)))
@@ -547,7 +572,12 @@ func SignRound6(state *SigningState) (*SignRoundOutput, error) {
 }
 
 // SignRound7 verifies blinding proofs, computes Ui/Ti, and commits.
-func SignRound7(state *SigningState, r5bcast, r6bcast []*tss.Message) (*SignRoundOutput, error) {
+func SignRound7(state *SigningState, r5bcast, r6bcast []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(7); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, key, temp := state.params, state.key, state.temp
 	tss.MergeMsgs(temp.signRound5Messages, r5bcast)
 	tss.MergeMsgs(temp.signRound6Messages, r6bcast)
@@ -630,7 +660,12 @@ func SignRound7(state *SigningState, r5bcast, r6bcast []*tss.Message) (*SignRoun
 }
 
 // SignRound8 decommits Ui/Ti.
-func SignRound8(state *SigningState) (*SignRoundOutput, error) {
+func SignRound8(state *SigningState) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(8); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, temp := state.params, state.temp
 	i := params.PartyID().Index
 	r8msg := NewSignRound8Message(params.PartyID(), temp.DTelda)
@@ -639,7 +674,12 @@ func SignRound8(state *SigningState) (*SignRoundOutput, error) {
 }
 
 // SignRound9 verifies Ui==Ti consistency and reveals si.
-func SignRound9(state *SigningState, r7bcast, r8bcast []*tss.Message) (*SignRoundOutput, error) {
+func SignRound9(state *SigningState, r7bcast, r8bcast []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(9); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, temp := state.params, state.temp
 	tss.MergeMsgs(temp.signRound7Messages, r7bcast)
 	tss.MergeMsgs(temp.signRound8Messages, r8bcast)
@@ -687,7 +727,12 @@ func SignRound9(state *SigningState, r7bcast, r8bcast []*tss.Message) (*SignRoun
 
 // SignFinalize collects partial signatures, aggregates S, normalizes,
 // and verifies the final ECDSA signature.
-func SignFinalize(state *SigningState, r9bcast []*tss.Message) (*SignRoundOutput, error) {
+func SignFinalize(state *SigningState, r9bcast []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(10); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params, key, temp, data := state.params, state.key, state.temp, state.data
 	tss.MergeMsgs(temp.signRound9Messages, r9bcast)
 

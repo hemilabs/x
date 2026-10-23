@@ -95,7 +95,12 @@ func Round1(params *tss.Parameters, preParams ...interface{}) (*KeygenState, *Ro
 }
 
 // Round2 sends P2P shares and broadcasts decommitment + Schnorr proof.
-func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
+func Round2(state *KeygenState, r1Msgs []*tss.Message) (_ *RoundOutput, rerr error) {
+	if err := state.life.Begin(2); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 	temp := &state.temp
 	n := params.PartyCount()
@@ -142,7 +147,12 @@ func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 
 // Round3 verifies all decommitments, shares, and Schnorr proofs,
 // then computes the distributed EdDSA public key and saves the result.
-func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, error) {
+func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (_ *RoundOutput, rerr error) {
+	if err := state.life.Begin(3); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, nil)
+
 	params := state.params
 	temp := &state.temp
 	save := &state.save
