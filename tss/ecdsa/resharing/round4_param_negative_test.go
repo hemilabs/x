@@ -40,7 +40,17 @@ func TestRound4RejectsPaillierNInsufficientBits(t *testing.T) {
 	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
 	bad.Content.(*DGRound2Message1).PaillierPK.N = big.NewInt(1023) // tiny
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "paillier N insufficient bits", r4VictimIdx)
+	expectRound4ParamError(t, fix, msgs, "paillier N is not 2048 bits", r4VictimIdx)
+}
+
+func TestRound4RejectsOversizedPaillierN(t *testing.T) {
+	fix := setupThroughRound3(t)
+	msgs := copyR2Msg1Slice(fix.NewR2Msg1s)
+	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
+	n := bad.Content.(*DGRound2Message1).PaillierPK.N
+	n.SetBit(n, 2048, 1) // 2049 bits
+	msgs[r4VictimIdx] = bad
+	expectRound4ParamError(t, fix, msgs, "paillier N is not 2048 bits", r4VictimIdx)
 }
 
 func TestRound4RejectsEvenPaillierN(t *testing.T) {
@@ -132,7 +142,17 @@ func TestRound4RejectsNTildeInsufficientBits(t *testing.T) {
 	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
 	bad.Content.(*DGRound2Message1).NTilde = big.NewInt(999) // tiny
 	msgs[r4VictimIdx] = bad
-	expectRound4ParamError(t, fix, msgs, "NTildej insufficient bits", r4VictimIdx)
+	expectRound4ParamError(t, fix, msgs, "NTildej is not 2048 bits", r4VictimIdx)
+}
+
+func TestRound4RejectsOversizedNTilde(t *testing.T) {
+	fix := setupThroughRound3(t)
+	msgs := copyR2Msg1Slice(fix.NewR2Msg1s)
+	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
+	nt := bad.Content.(*DGRound2Message1).NTilde
+	nt.SetBit(nt, 2048, 1) // 2049 bits
+	msgs[r4VictimIdx] = bad
+	expectRound4ParamError(t, fix, msgs, "NTildej is not 2048 bits", r4VictimIdx)
 }
 
 func TestRound4RejectsEvenNTilde(t *testing.T) {

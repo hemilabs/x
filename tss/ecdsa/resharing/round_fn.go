@@ -340,8 +340,8 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		if H1j.Cmp(reshareOne) == 0 || H2j.Cmp(reshareOne) == 0 {
 			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 4, Pi, msg.From)
 		}
-		if paiPK.N.BitLen() < resharePaiBitsLen {
-			return nil, tss.NewError(errors.New("paillier N insufficient bits"), TaskName, 4, Pi, msg.From)
+		if paiPK.N.BitLen() != resharePaiBitsLen {
+			return nil, tss.NewError(errors.New("paillier N is not 2048 bits"), TaskName, 4, Pi, msg.From)
 		}
 		if paiPK.N.Bit(0) == 0 {
 			return nil, tss.NewError(errors.New("even paillier N"), TaskName, 4, Pi, msg.From)
@@ -353,8 +353,8 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		if new(big.Int).Mul(sqrtN, sqrtN).Cmp(paiPK.N) == 0 {
 			return nil, tss.NewError(errors.New("perfect-square paillier N"), TaskName, 4, Pi, msg.From)
 		}
-		if NTildej.BitLen() < resharePaiBitsLen {
-			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 4, Pi, msg.From)
+		if NTildej.BitLen() != resharePaiBitsLen {
+			return nil, tss.NewError(errors.New("NTildej is not 2048 bits"), TaskName, 4, Pi, msg.From)
 		}
 		if NTildej.Bit(0) == 0 {
 			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 4, Pi, msg.From)
