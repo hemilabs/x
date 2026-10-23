@@ -97,7 +97,7 @@ func TestMerkle(t *testing.T) {
 
 	// Calculate merkle tree and root.
 	hashes := makeHashes(left, right)
-	merkleRoot2 := Root(Sorted(hashes))
+	merkleRoot2 := TreeRoot(Sorted(hashes))
 	if !bytes.Equal(merkleRoot, merkleRoot2[:]) {
 		t.Fatalf("unexpected merkle root got %x expected %x",
 			merkleRoot2[:], merkleRoot)
@@ -105,7 +105,7 @@ func TestMerkle(t *testing.T) {
 
 	// Flip input hashes and make sure we get the same answer.
 	hashes = makeHashes(right, left)
-	merkleRoot3 := Root(Sorted(hashes))
+	merkleRoot3 := TreeRoot(Sorted(hashes))
 	if !bytes.Equal(merkleRoot, merkleRoot3[:]) {
 		t.Fatalf("unexpected merkle root got %x expected %x",
 			merkleRoot3[:], merkleRoot)
@@ -198,5 +198,14 @@ func TestAuthPathEmpty(t *testing.T) {
 
 	if mb != nil {
 		t.Fatalf("Should have gotten nil")
+	}
+}
+
+func TestTreeRootEmpty(t *testing.T) {
+	if r := TreeRoot(nil); r != nil {
+		t.Fatalf("nil tree: got %x, want nil", *r)
+	}
+	if r := TreeRoot([]*[sha256.Size]byte{}); r != nil {
+		t.Fatalf("empty tree: got %x, want nil", *r)
 	}
 }
