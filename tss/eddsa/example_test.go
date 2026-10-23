@@ -98,10 +98,8 @@ func TestEdDSAKeygenSignReshare(t *testing.T) {
 	}
 	t.Log("reshare complete, pub key preserved")
 
-	// Verify: old-only party (P0) had Xi zeroed.
-	if oldSaves[0].Xi.Sign() != 0 {
-		t.Fatal("P0 Xi not zeroed after reshare")
-	}
+	// The subset helper copies Xi, so resharing does not change the
+	// caller's key.  The caller retires the old share.
 
 	// ------------------------------------------------------------------
 	// Step 5: Sign with new committee

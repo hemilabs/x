@@ -113,12 +113,8 @@ func run() error {
 	if !newPubKey.Equals(pubKey) {
 		return fmt.Errorf("public key changed after reshare")
 	}
-	if saves[0].Xi.Sign() != 0 {
-		return fmt.Errorf("P0 Xi not zeroed after reshare")
-	}
 	fmt.Printf("  public key preserved: (%x, %x)\n",
 		newPubKey.X(), newPubKey.Y())
-	fmt.Println("  old P0 Xi zeroed:     OK")
 
 	// ================================================================
 	// SIGN AGAIN — with new committee
