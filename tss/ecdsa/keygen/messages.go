@@ -102,26 +102,29 @@ func NewKGRound2Message1(to, from *tss.PartyID, share *vss.Share, proof *facproo
 }
 
 // KGRound2Message2 is broadcast by each party in keygen round 2.
-// Contains the decommitment and optional ModProof.
+// Contains the decommitment, optional ModProof and the echo of the
+// round 1 broadcasts that this party received.
 type KGRound2Message2 struct {
 	DeCommitment cmt.HashDeCommitment
 	ModProof     *modproof.ProofMod // nil in on-chain SNARK mode
+	Echo         []byte             // round1Echo of the received round 1 broadcasts
 }
 
 // ValidateBasic checks that the decommitment has at least 2
-// elements (blinding factor + payload).
+// elements (blinding factor + payload) and that the echo is set.
 func (m *KGRound2Message2) ValidateBasic() bool {
-	return m != nil && len(m.DeCommitment) >= 2
+	return m != nil && len(m.DeCommitment) >= 2 && len(m.Echo) > 0
 }
 
 // NewKGRound2Message2 constructs a round 2 broadcast message.
-func NewKGRound2Message2(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *modproof.ProofMod) *tss.Message {
+func NewKGRound2Message2(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *modproof.ProofMod, echo []byte) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
 		Content: &KGRound2Message2{
 			DeCommitment: deCommitment,
 			ModProof:     proof,
+			Echo:         echo,
 		},
 	}
 }

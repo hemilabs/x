@@ -124,6 +124,7 @@ func cloneBcastMsg(orig *tss.Message) *tss.Message {
 	cloned := &KGRound2Message2{
 		DeCommitment: dcmt,
 		ModProof:     content.ModProof,
+		Echo:         content.Echo,
 	}
 	return &tss.Message{
 		From:        orig.From,
@@ -337,5 +338,62 @@ func TestRound3RejectsContextCancellation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "context canceled") {
 		t.Fatalf("expected 'context canceled' error, got: %v", err)
+	}
+}
+
+// TestRound3RejectsEquivocatedRound1 has party 2 send a different
+// round 1 commitment to party 1.  Party 0 must abort in Round 3,
+// because party 1's echo does not match its own.
+func TestRound3RejectsEquivocatedRound1(t *testing.T) {
+	preParams := loadTestPreParams(t, negN)
+	pIDs := tss.GenerateTestPartyIDs(negN)
+	peerCtx := tss.NewPeerContext(pIDs)
+
+	states := make([]*KeygenState, negN)
+	r1 := make([]*tss.Message, negN)
+	for i := 0; i < negN; i++ {
+		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
+		params.SetNoProofDLN()
+		params.SetNoProofMod()
+		params.SetNoProofFac()
+		st, out, err := Round1(context.Background(), params, preParams[i])
+		if err != nil {
+			t.Fatalf("Round1[%d]: %v", i, err)
+		}
+		states[i] = st
+		r1[i] = out.Messages[0]
+	}
+	r1Party1 := make([]*tss.Message, negN)
+	copy(r1Party1, r1)
+	orig := r1[2].Content.(*KGRound1Message)
+	forged := *orig
+	forged.Commitment = new(big.Int).Add(orig.Commitment, big.NewInt(1))
+	r1Party1[2] = &tss.Message{From: r1[2].From, IsBroadcast: true, Content: &forged}
+
+	r2p2p := make([]*tss.Message, negN)
+	r2bcast := make([]*tss.Message, negN)
+	for i := 0; i < negN; i++ {
+		view := r1
+		if i == 1 {
+			view = r1Party1
+		}
+		out, err := Round2(context.Background(), states[i], view)
+		if err != nil {
+			t.Fatalf("Round2[%d]: %v", i, err)
+		}
+		for _, msg := range out.Messages {
+			if msg.To == nil {
+				r2bcast[i] = msg
+			} else if msg.To[0].Index == 0 {
+				r2p2p[i] = msg
+			}
+		}
+	}
+	r2p2p[0] = states[0].ExportR2P2PSelf()
+	r2bcast[0] = states[0].ExportR2BcastSelf()
+
+	_, err := Round3(context.Background(), states[0], r2p2p, r2bcast)
+	if err == nil || !strings.Contains(err.Error(), "echo mismatch") {
+		t.Fatalf("Round3 error = %v, want echo mismatch", err)
 	}
 }

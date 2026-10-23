@@ -31,6 +31,7 @@ type localTempData struct {
 	newXi     *big.Int
 	newKs     []*big.Int
 	newBigXjs []*crypto.ECPoint
+	echo      []byte // reshareEcho of the received round 1 broadcasts
 }
 
 type localMessageStore struct {
