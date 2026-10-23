@@ -133,14 +133,14 @@ func TestVerifyWithWrongKey(t *testing.T) {
 	ec := crypto2.ScalarBaseMult(tss.S256(), big.NewInt(1))
 	k := big.NewInt(42)
 
-	proof := sk1.Proof(k, ec)
+	proof := sk1.Proof([]byte("session"), k, ec)
 	// Verify with wrong key — should fail
-	ok, err := proof.Verify(pk2.N, k, ec)
+	ok, err := proof.Verify([]byte("session"), pk2.N, k, ec)
 	if err == nil && ok {
 		t.Fatal("proof from different key should fail verification")
 	}
 	// Verify with correct key — should pass
-	ok, err = proof.Verify(pk1.N, k, ec)
+	ok, err = proof.Verify([]byte("session"), pk1.N, k, ec)
 	if err != nil {
 		t.Fatalf("Verify error: %v", err)
 	}

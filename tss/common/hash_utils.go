@@ -15,8 +15,9 @@ import (
 // rejection sampling. The statistical distance from uniform is at most
 // (2^hashBits mod q) / 2^hashBits. For SHA-512/256 (256-bit output) and
 // secp256k1 (q ≈ 2^256), the bias is ≈ 2^-128 — within standard
-// Fiat-Shamir security bounds. For larger moduli (e.g., 2048-bit N in
-// ModProof), the bias is negligible.
+// Fiat-Shamir security bounds.  For a modulus larger than the hash,
+// the reduction does nothing, and the result covers only [0, 2^256).
+// Such callers must expand the hash first, as ModProof does.
 // [FORK] Upstream mutates eHash in-place (eHash.Mod(eHash, q)), which is an
 // aliasing bug: callers that retain a reference to eHash see it silently
 // modified. We allocate a new big.Int to avoid this side effect.

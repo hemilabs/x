@@ -134,7 +134,12 @@ func (share *Share) Verify(ec elliptic.Curve, threshold int, vs Vs) bool {
 }
 
 func (shares Shares) ReConstruct(ec elliptic.Curve) (secret *big.Int, err error) {
-	if shares != nil && shares[0].Threshold > len(shares) {
+	// [FORK] A degree-t polynomial needs t+1 shares.  Upstream accepted
+	// exactly t shares and returned a wrong secret with no error.
+	if len(shares) == 0 {
+		return nil, errors.New("ReConstruct: no shares")
+	}
+	if len(shares) < shares[0].Threshold+1 {
 		return nil, ErrNumSharesBelowThreshold
 	}
 	modN := common.ModInt(ec.Params().N)

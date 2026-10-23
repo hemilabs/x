@@ -12,6 +12,7 @@ import (
 
 	"github.com/hemilabs/x/tss/v3/common"
 	"github.com/hemilabs/x/tss/v3/crypto"
+	"github.com/hemilabs/x/tss/v3/tss"
 )
 
 type (
@@ -54,6 +55,15 @@ func NewZKProof(Session []byte, x *big.Int, X *crypto.ECPoint, rand io.Reader) (
 // NewZKProof verifies a new Schnorr ZK proof of knowledge of the discrete logarithm (GG18Spec Fig. 16)
 func (pf *ZKProof) Verify(Session []byte, X *crypto.ECPoint) bool {
 	if pf == nil || !pf.ValidateBasic() || X == nil || !X.ValidateBasic() {
+		return false
+	}
+	// [FORK] Reject the identity and, on Edwards, points outside the
+	// prime-order subgroup.  EightInvEight keeps exactly the points of
+	// the prime-order subgroup.  secp256k1 has cofactor 1.
+	if X.IsIdentity() {
+		return false
+	}
+	if name, _ := tss.GetCurveName(X.Curve()); name == tss.Ed25519 && !X.EightInvEight().Equals(X) {
 		return false
 	}
 	ec := X.Curve()
