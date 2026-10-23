@@ -550,3 +550,36 @@ func TestLRUCache_Close(t *testing.T) {
 	require.Equal(t, 3, relFuncCalled)
 	require.Equal(t, 1, delFuncCalled)
 }
+
+// TestGetEvictVsClose runs Get calls that evict against Close.  The
+// release of an evicted handle must not take the cache read lock again,
+// or it deadlocks against a waiting Close.
+func TestGetEvictVsClose(t *testing.T) {
+	for range 200 {
+		c := NewCache(NewLRU(1))
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			var wg sync.WaitGroup
+			for g := range 4 {
+				wg.Go(func() {
+					for i := uint64(g) << 32; ; i++ {
+						h := c.Get(0, i, func() (int, Value) { return 1, i })
+						if h == nil {
+							return
+						}
+						h.Release()
+					}
+				})
+			}
+			time.Sleep(time.Millisecond)
+			c.Close(false)
+			wg.Wait()
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("Get and Close deadlocked")
+		}
+	}
+}
