@@ -91,6 +91,11 @@ func (db *DB) newSnapshot() *Snapshot {
 }
 
 func (snap *Snapshot) String() string {
+	snap.mu.RLock()
+	defer snap.mu.RUnlock()
+	if snap.released {
+		return "leveldb.Snapshot{released}"
+	}
 	return fmt.Sprintf("leveldb.Snapshot{%d}", snap.elem.seq)
 }
 

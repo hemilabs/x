@@ -39,6 +39,11 @@ type DB struct {
 	inWritePaused          int32 // The indicator whether write operation is paused by compaction
 	aliveSnaps, aliveIters int32
 
+	// journalErr latches the first journal write or sync failure.  The
+	// record can already be in the journal, so later writes would reuse
+	// its sequence numbers.  Writes fail until the DB is reopened.
+	journalErr atomic.Value // journalError
+
 	// Compaction statistic
 	memComp       uint32 // The cumulative number of memory compaction
 	level0Comp    uint32 // The cumulative number of level0 compaction
