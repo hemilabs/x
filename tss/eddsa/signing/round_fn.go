@@ -109,6 +109,10 @@ func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, e
 	temp := &state.temp
 	i := params.PartyID().Index
 
+	if c, err := tss.ValidateMsgs[*SignRound1Message](r1Msgs, params.Parties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 2, params.PartyID(), c...)
+	}
+
 	// Store commitments.
 	for j, msg := range r1Msgs {
 		r1msg := msg.Content.(*SignRound1Message)
@@ -141,6 +145,10 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 	i := params.PartyID().Index
 	ec := params.EC()
 	N := ec.Params().N
+
+	if c, err := tss.ValidateMsgs[*SignRound2Message](r2Msgs, params.Parties().IDs(), i); err != nil {
+		return nil, tss.NewError(err, TaskName, 3, params.PartyID(), c...)
+	}
 
 	// Init R with own Ri = ri·G.
 	Rx, Ry := ec.ScalarBaseMult(temp.ri.Bytes())
@@ -223,6 +231,10 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 	params := state.params
 	temp := &state.temp
 	i := params.PartyID().Index
+
+	if c, err := tss.ValidateMsgs[*SignRound3Message](r3Msgs, params.Parties().IDs(), i); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
+	}
 
 	if temp.si == nil {
 		return nil, fmt.Errorf("si is nil: round 3 did not complete")

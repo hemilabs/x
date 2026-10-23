@@ -101,6 +101,10 @@ func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 	n := params.PartyCount()
 	i := params.PartyID().Index
 
+	if c, err := tss.ValidateMsgs[*KGRound1Message](r1Msgs, params.Parties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 2, params.PartyID(), c...)
+	}
+
 	// Store r1 commitments.
 	for j := 0; j < n; j++ {
 		r1msg := r1Msgs[j].Content.(*KGRound1Message)
@@ -148,6 +152,13 @@ func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, er
 	save := &state.save
 	n := params.PartyCount()
 	PIdx := params.PartyID().Index
+
+	if c, err := tss.ValidateMsgs[*KGRound2Message1](r2p2p, params.Parties().IDs(), PIdx); err != nil {
+		return nil, tss.NewError(err, TaskName, 3, params.PartyID(), c...)
+	}
+	if c, err := tss.ValidateMsgs[*KGRound2Message2](r2bcast, params.Parties().IDs(), PIdx); err != nil {
+		return nil, tss.NewError(err, TaskName, 3, params.PartyID(), c...)
+	}
 
 	// Compute own Xi from shares.
 	xi := new(big.Int).Set(temp.shares[PIdx].Share)

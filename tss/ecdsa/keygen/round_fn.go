@@ -167,6 +167,10 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	save := state.save
 	temp := state.temp
 
+	if c, err := tss.ValidateMsgs[*KGRound1Message](r1Msgs, params.Parties().IDs(), -1); err != nil {
+		return nil, tss.NewError(err, TaskName, 2, params.PartyID(), c...)
+	}
+
 	// Populate temp message store so validation code reads from it.
 	tss.MergeMsgs(temp.kgRound1Messages, r1Msgs)
 
@@ -346,6 +350,13 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 	temp := state.temp
 	Ps := params.Parties().IDs()
 	PIdx := params.PartyID().Index
+
+	if c, err := tss.ValidateMsgs[*KGRound2Message1](r2p2p, Ps, PIdx); err != nil {
+		return nil, tss.NewError(err, TaskName, 3, params.PartyID(), c...)
+	}
+	if c, err := tss.ValidateMsgs[*KGRound2Message2](r2bcast, Ps, PIdx); err != nil {
+		return nil, tss.NewError(err, TaskName, 3, params.PartyID(), c...)
+	}
 
 	// Store own messages
 	tss.MergeMsgs(temp.kgRound2Message1s, r2p2p)
@@ -565,6 +576,10 @@ func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Messa
 func Round4(ctx context.Context, state *KeygenState, r3Msgs []*tss.Message) (*RoundOutput, error) {
 	params := state.params
 	save := state.save
+
+	if c, err := tss.ValidateMsgs[*KGRound3Message](r3Msgs, params.Parties().IDs(), params.PartyID().Index); err != nil {
+		return nil, tss.NewError(err, TaskName, 4, params.PartyID(), c...)
+	}
 
 	i := params.PartyID().Index
 	Ps := params.Parties().IDs()

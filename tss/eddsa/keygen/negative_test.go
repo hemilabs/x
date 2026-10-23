@@ -5,6 +5,7 @@
 package keygen
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -89,6 +90,36 @@ func TestRound2InvalidR1Message(t *testing.T) {
 	_, err := Round2(states[0], r1Bad)
 	if err == nil {
 		t.Fatal("expected error for invalid round 1 message")
+	}
+}
+
+// TestRound2RejectsMalformedSlot gives Round2 a missing slot and a slot
+// with nil content.  Round2 must return an error that names the slot
+// and must not panic.
+func TestRound2RejectsMalformedSlot(t *testing.T) {
+	const n = 3
+	pIDs := tss.GenerateTestPartyIDs(n)
+	peerCtx := tss.NewPeerContext(pIDs)
+	states := make([]*KeygenState, n)
+	r1 := make([]*tss.Message, n)
+	for i := 0; i < n; i++ {
+		st, out, err := Round1(tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, 1))
+		if err != nil {
+			t.Fatalf("Round1[%d]: %v", i, err)
+		}
+		states[i] = st
+		r1[i] = out.Messages[0]
+	}
+	for _, bad := range []*tss.Message{nil, {From: r1[1].From}} {
+		msgs := []*tss.Message{r1[0], bad, r1[2]}
+		_, err := Round2(states[0], msgs)
+		var tssErr *tss.Error
+		if !errors.As(err, &tssErr) {
+			t.Fatalf("Round2 error = %v, want *tss.Error", err)
+		}
+		if c := tssErr.Culprits(); len(c) != 1 || c[0].Index != 1 {
+			t.Fatalf("culprits = %v, want party 1", c)
+		}
 	}
 }
 
