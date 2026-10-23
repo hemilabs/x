@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"math"
 	"testing"
 )
 
@@ -41,6 +40,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// mustSorted returns Sorted(hashes) and fails the test on an error.
+func mustSorted(t *testing.T, hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
+	t.Helper()
+	mt, err := Sorted(hashes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mt
 }
 
 // concat concatenates two byte slices.
@@ -104,7 +113,7 @@ func TestMerkle(t *testing.T) {
 
 	// Calculate merkle tree and root.
 	hashes := makeHashes(left, right)
-	merkleRoot2 := Root(Sorted(hashes))
+	merkleRoot2 := Root(mustSorted(t, hashes))
 	if !bytes.Equal(merkleRoot, merkleRoot2[:]) {
 		t.Fatalf("unexpected merkle root got %x expected %x",
 			merkleRoot2[:], merkleRoot)
@@ -112,7 +121,7 @@ func TestMerkle(t *testing.T) {
 
 	// Flip input hashes and make sure we get the same answer.
 	hashes = makeHashes(right, left)
-	merkleRoot3 := Root(Sorted(hashes))
+	merkleRoot3 := Root(mustSorted(t, hashes))
 	if !bytes.Equal(merkleRoot, merkleRoot3[:]) {
 		t.Fatalf("unexpected merkle root got %x expected %x",
 			merkleRoot3[:], merkleRoot)
@@ -132,8 +141,8 @@ func TestAuthPathSort(t *testing.T) {
 		binary.LittleEndian.PutUint64(hash2[:], i)
 		hashes2 = append(hashes2, hash2)
 	}
-	mt := Sorted(hashes)
-	mt2 := Sorted(hashes2)
+	mt := mustSorted(t, hashes)
+	mt2 := mustSorted(t, hashes2)
 
 	for k, v := range mt[:count] {
 		if *v != *mt2[k] {
@@ -150,7 +159,7 @@ func TestAuthPath(t *testing.T) {
 			hash := &[sha256.Size]byte{byte(i)}
 			hashes = append(hashes, hash)
 		}
-		mt := Sorted(hashes)
+		mt := mustSorted(t, hashes)
 
 		for find := 0; find < count; find++ {
 			root := mt[len(mt)-1]
@@ -189,7 +198,7 @@ func TestAuthPathInvalid(t *testing.T) {
 		binary.LittleEndian.PutUint64(hash[:], count-i-1)
 		hashes = append(hashes, hash)
 	}
-	mt := Sorted(hashes)
+	mt := mustSorted(t, hashes)
 
 	findHash := &[sha256.Size]byte{}
 	binary.LittleEndian.PutUint64(findHash[:], count)
@@ -214,7 +223,7 @@ func TestAuthPathInvalid(t *testing.T) {
 
 func TestAuthPathEmpty(t *testing.T) {
 	hashes := make([]*[sha256.Size]byte, 0)
-	mt := Sorted(hashes)
+	mt := mustSorted(t, hashes)
 	if mt != nil {
 		t.Fatalf("Should have gotten nil")
 	}
@@ -235,7 +244,7 @@ func TestVerifyAuthPathMalformed(t *testing.T) {
 	for i := range 10 {
 		leaves = append(leaves, &[sha256.Size]byte{byte(i)})
 	}
-	mt := Sorted(leaves)
+	mt := mustSorted(t, leaves)
 	root := mt[len(mt)-1]
 	good := AuthPath(leaves, leaves[3])
 	if err := VerifyAuthPath(good, root, leaves[3]); err != nil {
@@ -293,7 +302,7 @@ func TestVerifyAuthPathFlagEncoding(t *testing.T) {
 		for i := range count {
 			leaves = append(leaves, &[sha256.Size]byte{byte(i)})
 		}
-		mt := Sorted(leaves)
+		mt := mustSorted(t, leaves)
 		root := mt[len(mt)-1]
 		for find := range count {
 			mb := AuthPath(leaves, leaves[find])
@@ -306,7 +315,7 @@ func TestVerifyAuthPathFlagEncoding(t *testing.T) {
 
 			// Count the flag bits that the branch uses.
 			m := &merkleBranch{flags: mb.Flags, inHashes: mb.Hashes, numLeaves: mb.NumLeaves}
-			height := uint32(math.Ceil(math.Log2(float64(mb.NumLeaves))))
+			height := treeHeight(mb.NumLeaves)
 			if _, err := m.extract(height, 0); err != nil {
 				t.Fatal(err)
 			}
@@ -332,7 +341,7 @@ func TestAuthPathNodeAsLeaf(t *testing.T) {
 	for i := range 4 {
 		leaves = append(leaves, &[sha256.Size]byte{byte(i + 1)})
 	}
-	mt := Sorted(leaves)
+	mt := mustSorted(t, leaves)
 	root := mt[len(mt)-1]
 
 	// The root is the hash of the two internal nodes mt[4] and mt[5].
@@ -345,5 +354,55 @@ func TestAuthPathNodeAsLeaf(t *testing.T) {
 	}
 	if err := VerifyAuthPath(mb, root, mt[4]); !errors.Is(err, ErrRootMismatch) {
 		t.Fatalf("got %v, want %v", err, ErrRootMismatch)
+	}
+}
+
+// TestTreeLeafChecks checks that nil and duplicate leaves fail, that
+// Sorted does not change its input, and that a proof from SortLeaves
+// verifies.
+func TestTreeLeafChecks(t *testing.T) {
+	a, b, c := &[sha256.Size]byte{3}, &[sha256.Size]byte{2}, &[sha256.Size]byte{1}
+
+	// Without the check, [a b c] and [a b c c] share a root.
+	if _, err := Ordered([]*[sha256.Size]byte{a, b, c, c}); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("duplicate: got %v, want %v", err, ErrDuplicate)
+	}
+	if _, err := Sorted([]*[sha256.Size]byte{a, b, a}); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("duplicate: got %v, want %v", err, ErrDuplicate)
+	}
+	// Without the check, leaves after a nil fall out of the root.
+	if _, err := Ordered([]*[sha256.Size]byte{a, b, nil, c}); !errors.Is(err, ErrNilLeaf) {
+		t.Fatalf("nil: got %v, want %v", err, ErrNilLeaf)
+	}
+	if _, err := Sorted([]*[sha256.Size]byte{a, nil}); !errors.Is(err, ErrNilLeaf) {
+		t.Fatalf("nil: got %v, want %v", err, ErrNilLeaf)
+	}
+	if mb := AuthPath([]*[sha256.Size]byte{a, b, a}, a); mb != nil {
+		t.Fatal("duplicate: got a branch, want nil")
+	}
+
+	leaves := []*[sha256.Size]byte{a, b, c}
+	mt := mustSorted(t, leaves)
+	if leaves[0] != a || leaves[1] != b || leaves[2] != c {
+		t.Fatal("Sorted changed the order of its input")
+	}
+	mb := AuthPath(SortLeaves(leaves), b)
+	if err := VerifyAuthPath(mb, mt[len(mt)-1], b); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestTreeWidthLarge checks the width and height for leaf counts above
+// 2^31, where uint32 math wraps.
+func TestTreeWidthLarge(t *testing.T) {
+	n := uint32(1<<31 + 1)
+	if w := calcTreeWidth(n, 31); w != 2 {
+		t.Fatalf("width: got %d, want 2", w)
+	}
+	if h := treeHeight(n); h != 32 {
+		t.Fatalf("height: got %d, want 32", h)
+	}
+	if h := treeHeight(1); h != 0 {
+		t.Fatalf("height of one leaf: got %d, want 0", h)
 	}
 }
