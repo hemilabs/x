@@ -68,3 +68,20 @@ func TestNewProofNilN0(t *testing.T) {
 		t.Fatal("expected error for nil N0")
 	}
 }
+
+// TestVerifyRejectsBadBases verifies that Verify returns false when t
+// is 0 or has no inverse mod NCap.
+func TestVerifyRejectsBadBases(t *testing.T) {
+	pf := &ProofFac{}
+	for _, f := range []**big.Int{&pf.P, &pf.Q, &pf.A, &pf.B, &pf.T, &pf.Sigma, &pf.Z1, &pf.Z2, &pf.W1, &pf.W2, &pf.V} {
+		*f = big.NewInt(1)
+	}
+	pf.W1 = big.NewInt(-1)
+	N0 := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 2047), big.NewInt(1))
+	NCap := new(big.Int).Mul(big.NewInt(3), new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 2046), big.NewInt(1)))
+	for _, tv := range []*big.Int{big.NewInt(0), big.NewInt(3)} {
+		if pf.Verify([]byte("session"), tss.EC(), N0, NCap, big.NewInt(2), tv) {
+			t.Fatalf("Verify accepted t = %v", tv)
+		}
+	}
+}
