@@ -57,8 +57,6 @@ func GetRandomPositiveInt(rand io.Reader, lessThan *big.Int) *big.Int {
 
 // GetRandomPrimeInt returns a random prime of the given bit length, or
 // nil if bits < 2.
-//
-// [FORK] Upstream loops forever when bits < 2.
 func GetRandomPrimeInt(rand io.Reader, bits int) *big.Int {
 	if bits < 2 {
 		return nil
@@ -80,8 +78,6 @@ func GetRandomPrimeInt(rand io.Reader, bits int) *big.Int {
 // Generate a random element in the group of all the elements in Z/nZ that
 // has a multiplicative inverse.
 // It returns nil if n < 2.
-//
-// [FORK] Upstream loops forever when n is 1.
 func GetRandomPositiveRelativelyPrimeInt(rand io.Reader, n *big.Int) *big.Int {
 	if n == nil || n.Cmp(two) < 0 {
 		return nil

@@ -40,8 +40,6 @@ type (
 
 // ValidateBasic checks that the PartyID has a non-empty key and
 // non-negative index.
-//
-// [FORK] Upstream panics on a nil PartyIDData.
 func (pid *PartyID) ValidateBasic() bool {
 	return pid != nil && pid.PartyIDData != nil && len(pid.Key) > 0 && 0 <= pid.Index
 }

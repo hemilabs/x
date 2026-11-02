@@ -117,8 +117,6 @@ func (params *Parameters) SafePrimeGenTimeout() time.Duration {
 
 // SetConcurrency sets the concurrency level.  A value below 1 is
 // stored as 1.
-//
-// [FORK] Upstream stores any value, and a value below 1 panics later.
 func (params *Parameters) SetConcurrency(concurrency int) {
 	params.concurrency = max(concurrency, 1)
 }

@@ -131,7 +131,6 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 	if numPrimes < 1 {
 		return nil, errors.New("numPrimes should be > 0")
 	}
-	// [FORK] Upstream starts no worker and waits forever.
 	if concurrency < 1 {
 		return nil, errors.New("concurrency should be > 0")
 	}
@@ -312,7 +311,7 @@ func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, e
 				if q.ProbablyPrime(20) &&
 					isPocklingtonCriterionSatisfied(p) &&
 					q.BitLen() == qBitLen {
-					// [FORK] A plain send blocks forever when the buffer
+					// A plain send blocks forever when the buffer
 					// is full and the caller returned.
 					if sgp := (&GermainSafePrime{p: p, q: q}); sgp.Validate() {
 						select {
