@@ -57,7 +57,7 @@ func (pf *ZKProof) Verify(Session []byte, X *crypto.ECPoint) bool {
 	if pf == nil || !pf.ValidateBasic() || X == nil || !X.ValidateBasic() {
 		return false
 	}
-	// [FORK] Reject the identity and, on Edwards, points outside the
+	// Reject the identity and, on Edwards, points outside the
 	// prime-order subgroup.  EightInvEight keeps exactly the points of
 	// the prime-order subgroup.  secp256k1 has cofactor 1.
 	if X.IsIdentity() {

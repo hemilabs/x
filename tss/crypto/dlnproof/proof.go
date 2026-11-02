@@ -76,7 +76,7 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	if h1_.Cmp(h2_) == 0 {
 		return false
 	}
-	// [FORK] h1 and h2 must be units mod N.  The keygen and reshare
+	// h1 and h2 must be units mod N.  The keygen and reshare
 	// rounds check this too, but direct callers of Verify do not.
 	if new(big.Int).GCD(nil, nil, h1_, N).Cmp(one) != 0 ||
 		new(big.Int).GCD(nil, nil, h2_, N).Cmp(one) != 0 {

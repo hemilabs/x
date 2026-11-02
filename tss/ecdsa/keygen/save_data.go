@@ -108,7 +108,7 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 	if expectedH2.Cmp(preParams.H2i) != 0 {
 		return false
 	}
-	// [FORK] Also verify H1 = H2^Beta, the sizes, that P, Q and the
+	// Also verify H1 = H2^Beta, the sizes, that P, Q and the
 	// safe primes are prime, and that the Paillier key is N = P*Q of
 	// two primes.  The DLN proofs depend on all of these.
 	expectedH1 := new(big.Int).Exp(preParams.H2i, preParams.Beta, preParams.NTildei)

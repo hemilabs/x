@@ -38,7 +38,7 @@ func isQuadraticResidue(X, N *big.Int) bool {
 }
 
 // NewProof generates a mod proof. Session provides SSID domain separation.
-// challenge derives the challenge y_i in Z_N.  [FORK] Upstream reduced
+// challenge derives the challenge y_i in Z_N.  Upstream reduced
 // one 256-bit hash mod N, so the challenges covered only [0, 2^256).
 // This expands the hash in counter mode to 256 bits more than N and
 // then reduces it mod N.
