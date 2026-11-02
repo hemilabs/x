@@ -123,7 +123,6 @@ func (params *Parameters) SetConcurrency(concurrency int) {
 
 // CheckSelf returns an error if the own PartyID is not in the party
 // list at its Index, or if the party count does not match the list.
-// The rounds index slices by these values.
 func (params *Parameters) CheckSelf() error {
 	pid, ids := params.PartyID(), params.Parties().IDs()
 	if !pid.ValidateBasic() || params.PartyCount() != len(ids) ||

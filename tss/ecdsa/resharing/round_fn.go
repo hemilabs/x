@@ -398,8 +398,7 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		modulusMap[ntHex] = struct{}{}
 	}
 
-	// Start the proof verifications only after every peer passed the
-	// checks above, so that an early return leaves no goroutine.
+	// An early return above must leave no goroutine.
 	for j, msg := range r2NewMsgs {
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,

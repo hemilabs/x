@@ -444,9 +444,8 @@ func TestRound2RejectsOversizedNTilde(t *testing.T) {
 	expectRound2Error(t, fix, msgs, "NTildej insufficient bits", victimIdx)
 }
 
-// TestRound2LeavesNoDLNGoroutine gives peer 1 bad Pedersen values with
-// DLN proofs on.  Round2 must check every peer before it starts any DLN
-// verification, so no verification is still running after it returns.
+// TestRound2LeavesNoDLNGoroutine verifies that a bad peer stops Round2
+// before it starts a DLN verification.
 func TestRound2LeavesNoDLNGoroutine(t *testing.T) {
 	preParams := loadTestPreParams(t, negN)
 	pIDs := tss.GenerateTestPartyIDs(negN)

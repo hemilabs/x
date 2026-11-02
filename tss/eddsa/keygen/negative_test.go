@@ -241,8 +241,8 @@ func TestBuildLocalSaveDataSubsetEdDSA(t *testing.T) {
 	}()
 }
 
-// TestRound1RejectsBadOwnPartyID verifies that Round1 returns an error,
-// and does not panic, when the own PartyID is not in the party list.
+// TestRound1RejectsBadOwnPartyID verifies that Round1 returns an error
+// when the own PartyID is not in the party list.
 func TestRound1RejectsBadOwnPartyID(t *testing.T) {
 	pIDs := tss.GenerateTestPartyIDs(3)
 	stray := tss.NewPartyID("x", "x", big.NewInt(99)) // Index stays -1

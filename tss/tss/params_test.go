@@ -193,8 +193,7 @@ func TestOldAndNewPartiesLength(t *testing.T) {
 	}
 }
 
-// TestCheckSelfAndConcurrency verifies that a bad own PartyID or party
-// count gives an error, and that a low concurrency is stored as 1.
+// TestCheckSelfAndConcurrency verifies CheckSelf and SetConcurrency.
 func TestCheckSelfAndConcurrency(t *testing.T) {
 	pIDs := GenerateTestPartyIDs(3)
 	ctx := NewPeerContext(pIDs)
@@ -219,9 +218,7 @@ func TestCheckSelfAndConcurrency(t *testing.T) {
 	}
 }
 
-// TestCheckCommittees verifies the reshare committee checks: a count
-// that does not match the list, a party in neither committee, and a
-// party in both committees.
+// TestCheckCommittees verifies the reshare committee checks.
 func TestCheckCommittees(t *testing.T) {
 	oldIDs, newIDs := GenerateTestPartyIDs(3), GenerateTestPartyIDs(3)
 	oldCtx, newCtx := NewPeerContext(oldIDs), NewPeerContext(newIDs)

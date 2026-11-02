@@ -62,7 +62,7 @@ func TestGetRandomPrimeInt(t *testing.T) {
 }
 
 // TestRandomHelpersDegenerateBounds verifies that bounds with no valid
-// result give nil and do not loop forever.
+// result give nil.
 func TestRandomHelpersDegenerateBounds(t *testing.T) {
 	if common.GetRandomPrimeInt(rand.Reader, 1) != nil {
 		t.Fatal("GetRandomPrimeInt(1): want nil")

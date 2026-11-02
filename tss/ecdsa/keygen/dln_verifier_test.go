@@ -84,7 +84,7 @@ func generateDLNTestParams(t *testing.T) *dlnTestParams {
 }
 
 // TestNewDlnProofVerifierLowConcurrency verifies that a concurrency of
-// 0 or below is used as 1 and does not panic.
+// 0 or below is used as 1.
 func TestNewDlnProofVerifierLowConcurrency(t *testing.T) {
 	for _, c := range []int{0, -3} {
 		if got := cap(NewDlnProofVerifier(c).semaphore); got != 1 {

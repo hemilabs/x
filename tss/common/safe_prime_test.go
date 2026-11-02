@@ -69,11 +69,8 @@ func TestGetRandomGermainPrimeConcurrent(t *testing.T) {
 	}
 }
 
-// TestGetRandomSafePrimesConcurrentReturns verifies that a search for
-// small safe primes with many workers always returns.  Workers find
-// primes faster than the caller reads them, so a full buffer must not
-// block them after the caller returns.  A concurrency below 1 gives an
-// error and does not wait forever.
+// TestGetRandomSafePrimesConcurrentReturns verifies that workers do not
+// block on a full buffer, and that a concurrency below 1 gives an error.
 func TestGetRandomSafePrimesConcurrentReturns(t *testing.T) {
 	done := make(chan struct{})
 	go func() {

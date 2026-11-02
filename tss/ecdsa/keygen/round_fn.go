@@ -253,8 +253,7 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 		modulusMap[nTildeHex] = struct{}{}
 	}
 
-	// Start the DLN verifications only after every peer passed the
-	// checks above, so that an early return leaves no goroutine.
+	// An early return above must leave no goroutine.
 	for j, msg := range r1Msgs {
 		r1msg := msg.Content.(*KGRound1Message)
 		H1j, H2j, NTildej := r1msg.H1, r1msg.H2, r1msg.NTilde
