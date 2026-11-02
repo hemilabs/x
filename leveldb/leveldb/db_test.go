@@ -2996,7 +2996,6 @@ func TestDB_GracefulClose(t *testing.T) {
 	closeWait.Wait()
 }
 
-// manifestPath returns the path of the current MANIFEST in dir.
 func manifestPath(t *testing.T, dir string) string {
 	t.Helper()
 	cur, err := os.ReadFile(filepath.Join(dir, "CURRENT"))
