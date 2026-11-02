@@ -59,7 +59,7 @@ var (
 )
 
 // smallPrimes holds the primes below verifyPrimesUntil.  It is
-// read-only after init.  
+// read-only after init.
 // Upstream took them from github.com/otiai10/primes, which keeps a
 // process-global cache with no lock and ships no licence.
 var smallPrimes = func() []int64 {
