@@ -172,7 +172,7 @@ func TestDecodeBlockBoundsNoPanic(t *testing.T) {
 		t.Fatal("readRawBlock accepted a snappy block that claims 1 GiB")
 	}
 
-	// One restart at offset 100 in a 9-byte block.
+	// One restart at offset 100 in a 12-byte block.
 	payload := []byte{0, 1, 0, 'k', 100, 0, 0, 0, 1, 0, 0, 0}
 	file = append(append(append([]byte{}, payload...), 0), 0, 0, 0, 0)
 	if _, err := newReader(file).readBlock(blockHandle{length: uint64(len(payload))}, false); err == nil {

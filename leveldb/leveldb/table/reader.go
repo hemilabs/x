@@ -57,7 +57,6 @@ type block struct {
 func (b *block) seek(cmp comparer.Comparer, rstart, rlimit int, key []byte) (index, offset int, err error) {
 	index = sort.Search(b.restartsLen-rstart-(b.restartsLen-rlimit), func(i int) bool {
 		offset := int(binary.LittleEndian.Uint32(b.data[b.restartsOffset+4*(rstart+i):]))
-		// entry checks every length against the block.
 		rkey, _, _, n, eErr := b.entry(offset)
 		if eErr != nil {
 			if err == nil {
@@ -647,7 +646,6 @@ func (r *Reader) readBlock(bh blockHandle, verifyChecksum bool) (*block, error) 
 	if err != nil {
 		return nil, err
 	}
-	// Check the restart array before it is used to index the block.
 	if len(data) < 4 {
 		r.bpool.Put(data)
 		return nil, r.newErrCorruptedBH(bh, "block too small")
