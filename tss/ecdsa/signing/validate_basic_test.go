@@ -98,7 +98,6 @@ func TestSignRound1Message2_ValidateBasic(t *testing.T) {
 	}
 }
 
-// validProofBob returns a ProofBob with every field set.
 func validProofBob() *mta.ProofBob {
 	one := func() *big.Int { return big.NewInt(1) }
 	return &mta.ProofBob{

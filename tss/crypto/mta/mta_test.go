@@ -323,7 +323,6 @@ func TestProofBobWCRoundTrip(t *testing.T) {
 	}
 
 	// A nil field must make ValidateBasic and Verify fail, not panic.
-	// Verify runs in library goroutines during SignRound3 (TSS-03).
 	rv := reflect.ValueOf(*pf.ProofBob)
 	for i := range rv.NumField() {
 		name := rv.Type().Field(i).Name
