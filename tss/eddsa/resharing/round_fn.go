@@ -68,9 +68,8 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 //
 // New committee parties call this too but get a no-op (nil messages).
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
-	// Cut the key data down to the old committee that takes
-	// part, as ECDSA does.  Without it, Ks and the own index do not
-	// match the committee when only t+1 old holders take part.
+	// Ks and the own index must match the old committee that takes
+	// part, which can be only t+1 of the old holders.
 	if params.IsOldCommittee() {
 		if input == nil {
 			return nil, nil, errors.New("round 1: old committee party has no key")
