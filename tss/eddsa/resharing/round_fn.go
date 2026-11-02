@@ -313,7 +313,7 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 	state.temp.newKs = newKs
 	state.temp.newBigXjs = newBigXjs
 
-	// ACK to both committees, with the echo of the received broadcasts.
+	// ACK to both committees.
 	state.temp.echo = reshareEcho(state.temp.dgRound1Messages)
 	r4msg := NewDGRound4Message(params.OldAndNewParties(), Pi, state.temp.echo)
 	state.temp.dgRound4Messages[i] = r4msg

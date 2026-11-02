@@ -567,7 +567,7 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		out.Messages = append(out.Messages, r4msg1)
 	}
 
-	// ACK to both committees, with the echo of the received broadcasts
+	// ACK to both committees
 	temp.echo = reshareEcho(temp.ssid, temp.dgRound1Messages, temp.dgRound2Message1s)
 	r4msg2 := NewDGRound4Message2(params.OldAndNewParties(), Pi, temp.echo)
 	temp.dgRound4Message2s[i] = r4msg2
