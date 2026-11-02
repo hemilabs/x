@@ -166,7 +166,7 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 		return false
 	}
 
-	// [FORK] Bound the other exponents before any Exp.  Upstream uses
+	// Bound the other exponents before any Exp.  Upstream uses
 	// them unbounded, so a large field costs CPU time in proportion to
 	// its size.  The bounds follow from the ranges that NewProof samples
 	// from, with e < q:
