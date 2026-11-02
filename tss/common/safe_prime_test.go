@@ -76,12 +76,12 @@ func TestGetRandomSafePrimesConcurrentReturns(t *testing.T) {
 	go func() {
 		defer close(done)
 		for i := 0; i < 200; i++ {
-			if _, err := GetRandomSafePrimesConcurrent(context.Background(), 32, 1, 8, rand.Reader); err != nil {
+			if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 8, rand.Reader); err != nil {
 				t.Error(err)
 				return
 			}
 		}
-		if _, err := GetRandomSafePrimesConcurrent(context.Background(), 32, 1, 0, rand.Reader); err == nil {
+		if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 0, rand.Reader); err == nil {
 			t.Error("concurrency 0: expected an error")
 		}
 	}()
