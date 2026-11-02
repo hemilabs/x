@@ -42,7 +42,6 @@ func init() {
 	}
 }
 
-// mustSorted returns Sorted(hashes) and fails the test on an error.
 func mustSorted(t *testing.T, hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
 	t.Helper()
 	mt, err := Sorted(hashes)
@@ -363,14 +362,12 @@ func TestAuthPathNodeAsLeaf(t *testing.T) {
 func TestTreeLeafChecks(t *testing.T) {
 	a, b, c := &[sha256.Size]byte{3}, &[sha256.Size]byte{2}, &[sha256.Size]byte{1}
 
-	// Without the check, [a b c] and [a b c c] share a root.
 	if _, err := Ordered([]*[sha256.Size]byte{a, b, c, c}); !errors.Is(err, ErrDuplicate) {
 		t.Fatalf("duplicate: got %v, want %v", err, ErrDuplicate)
 	}
 	if _, err := Sorted([]*[sha256.Size]byte{a, b, a}); !errors.Is(err, ErrDuplicate) {
 		t.Fatalf("duplicate: got %v, want %v", err, ErrDuplicate)
 	}
-	// Without the check, leaves after a nil fall out of the root.
 	if _, err := Ordered([]*[sha256.Size]byte{a, b, nil, c}); !errors.Is(err, ErrNilLeaf) {
 		t.Fatalf("nil: got %v, want %v", err, ErrNilLeaf)
 	}

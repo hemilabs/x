@@ -43,7 +43,6 @@ func calcTreeWidth(num, height uint32) uint32 {
 	return uint32((uint64(num) + (1 << height) - 1) >> height)
 }
 
-// treeHeight returns the height of a tree with num leaves.
 func treeHeight(num uint32) uint32 {
 	if num == 0 {
 		return 0
