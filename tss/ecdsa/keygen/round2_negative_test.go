@@ -465,7 +465,7 @@ func TestRound2RejectsNilDLNProofWithNilFrom(t *testing.T) {
 	r1 := make([]*tss.Message, negN)
 	for i := 0; i < negN; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}

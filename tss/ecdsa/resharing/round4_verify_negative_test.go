@@ -151,7 +151,7 @@ func TestReshareRound4RejectsNilModProof(t *testing.T) {
 		}
 		msgs[r4VictimIdx] = clone
 
-		_, err := ReshareRound4(context.Background(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
+		_, err := ReshareRound4(t.Context(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
 		if err == nil {
 			t.Fatalf("nilFrom=%v: expected error for nil ModProof, got nil", nilFrom)
 		}
