@@ -166,11 +166,10 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 		return false
 	}
 
-	// Bound the other exponents before any Exp.  Upstream uses
-	// them unbounded, so a large field costs CPU time in proportion to
-	// its size.  The bounds follow from the ranges that NewProof samples
-	// from, with e < q:
-	//   W1, W2 = e*mu + x                in [0, 2*q^3*NCap)
+	// Bound the other exponents before any Exp, because the CPU time
+	// of Exp grows with the exponent size.  The bounds follow from the
+	// ranges that NewProof samples from, with e < q:
+	//   W1, W2 = e*mu + x, e*nu + y      in [0, 2*q^3*NCap)
 	//   Sigma                            in [0, q*N0*NCap)
 	//   V      = e*(sigma - nu*p) + r    in (-2*q^3*N0*NCap, 2*q^3*N0*NCap)
 	q3NCap := new(big.Int).Mul(q3, NCap)
