@@ -15,7 +15,7 @@ import (
 
 const (
 	hashInputDelimiter = byte('$')
-	// [FORK] hashNegativeDelimiter replaces hashInputDelimiter after a negative
+	// hashNegativeDelimiter replaces hashInputDelimiter after a negative
 	// input.  big.Int.Bytes() drops the sign, so without it x and -x hash
 	// the same.  Non-negative inputs keep their encoding.
 	hashNegativeDelimiter = byte('-')
