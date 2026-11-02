@@ -38,10 +38,8 @@ func isQuadraticResidue(X, N *big.Int) bool {
 }
 
 // NewProof generates a mod proof. Session provides SSID domain separation.
-// challenge derives the challenge y_i in Z_N.  Upstream reduced
-// one 256-bit hash mod N, so the challenges covered only [0, 2^256).
-// This expands the hash in counter mode to 256 bits more than N and
-// then reduces it mod N.
+// challenge derives the challenge y_i in Z_N.  It expands the hash in
+// counter mode to 256 bits more than N and then reduces it mod N.
 func challenge(Session []byte, N, W *big.Int, prev []*big.Int) *big.Int {
 	seed := common.SHA512_256i_TAGGED(Session, append([]*big.Int{W, N}, prev...)...).Bytes()
 	need := (N.BitLen() + 256 + 7) / 8
