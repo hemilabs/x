@@ -71,8 +71,8 @@ func TestSignRound1RejectsMessageEqualToN(t *testing.T) {
 }
 
 // TestSignRound1RejectsBadMessageInput verifies that SignRound1 returns
-// an error, and does not panic later, for a nil message or a
-// fullBytesLen that cannot hold the message.
+// an error for a nil message or a fullBytesLen that cannot hold the
+// message.
 func TestSignRound1RejectsBadMessageInput(t *testing.T) {
 	pIDs, peerCtx := setupPartyIDs()
 	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)

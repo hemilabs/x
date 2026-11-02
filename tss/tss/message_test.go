@@ -89,7 +89,7 @@ type otherContent struct{}
 func (c *otherContent) ValidateBasic() bool { return c != nil }
 
 // TestValidateMsgs verifies that ValidateMsgs returns an error that
-// names the bad slot, and that it does not panic.
+// names the bad slot.
 func TestValidateMsgs(t *testing.T) {
 	ids := GenerateTestPartyIDs(3)
 	good := func(j int) *Message { return &Message{From: ids[j], Content: &testContent{ok: true}} }

@@ -936,7 +936,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 
 // TestReshareRound5RejectsBadP2PShape gives a new party a nil, a
 // compacted and a sparse round 4 P2P slice.  Round 5 must return an
-// error for each one and must not save a share without the checks.
+// error for each one.
 func TestReshareRound5RejectsBadP2PShape(t *testing.T) {
 	fix := buildReshareFixture(t)
 	const target = 0
