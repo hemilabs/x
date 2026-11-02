@@ -94,8 +94,7 @@ func TestRound2InvalidR1Message(t *testing.T) {
 }
 
 // TestRound2RejectsMalformedSlot gives Round2 a missing slot and a slot
-// with nil content.  Round2 must return an error that names the slot
-// and must not panic.
+// with nil content.  Round2 must return an error that names the slot.
 func TestRound2RejectsMalformedSlot(t *testing.T) {
 	const n = 3
 	pIDs := tss.GenerateTestPartyIDs(n)
