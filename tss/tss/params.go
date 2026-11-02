@@ -218,7 +218,6 @@ func (params *Parameters) SetRand(rand io.Reader) {
 }
 
 // lockedReader serializes reads from a caller-supplied reader.
-// Upstream passes the reader to concurrent goroutines unguarded.
 type lockedReader struct {
 	mu sync.Mutex
 	r  io.Reader
