@@ -117,6 +117,8 @@ func (params *Parameters) SafePrimeGenTimeout() time.Duration {
 
 // SetConcurrency sets the concurrency level.  A value below 1 is
 // stored as 1.
+//
+// [FORK] Upstream stores any value, and a value below 1 panics later.
 func (params *Parameters) SetConcurrency(concurrency int) {
 	params.concurrency = max(concurrency, 1)
 }
@@ -135,8 +137,10 @@ func (params *Parameters) CheckSelf() error {
 // CheckCommittees returns an error if a committee count does not match
 // its party list, or if the own PartyID is in neither committee.
 func (rgParams *ReSharingParameters) CheckCommittees() error {
-	if rgParams.PartyID() == nil ||
-		rgParams.OldPartyCount() != len(rgParams.OldParties().IDs()) ||
+	if !rgParams.PartyID().ValidateBasic() {
+		return errors.New("own PartyID is not valid")
+	}
+	if rgParams.OldPartyCount() != len(rgParams.OldParties().IDs()) ||
 		rgParams.NewPartyCount() != len(rgParams.NewParties().IDs()) {
 		return errors.New("committee counts do not match the party lists")
 	}

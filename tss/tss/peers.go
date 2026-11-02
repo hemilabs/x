@@ -18,6 +18,10 @@ func NewPeerContext(parties SortedPartyIDs) *PeerContext {
 
 // IDs returns the sorted party IDs in this peer context.
 func (p2pCtx *PeerContext) IDs() SortedPartyIDs {
+	// [FORK] Upstream panics on a nil context.
+	if p2pCtx == nil {
+		return nil
+	}
 	return p2pCtx.partyIDs
 }
 

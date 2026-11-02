@@ -131,6 +131,7 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 	if numPrimes < 1 {
 		return nil, errors.New("numPrimes should be > 0")
 	}
+	// [FORK] Upstream starts no worker and waits forever.
 	if concurrency < 1 {
 		return nil, errors.New("concurrency should be > 0")
 	}
@@ -229,10 +230,7 @@ func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, e
 			default:
 				_, err := io.ReadFull(rand, bytes)
 				if err != nil {
-					select {
-					case errCh <- err:
-					case <-ctx.Done():
-					}
+					errCh <- err
 					return
 				}
 

@@ -206,6 +206,8 @@ func TestCheckSelfAndConcurrency(t *testing.T) {
 		"index -1":    NewParameters(S256(), ctx, NewPartyID("y", "y", big.NewInt(98)), 3, 1),
 		"wrong count": NewParameters(S256(), ctx, pIDs[1], 4, 1),
 		"not in list": NewParameters(S256(), ctx, stray, 3, 1),
+		"nil context": NewParameters(S256(), nil, pIDs[1], 3, 1),
+		"empty id":    NewParameters(S256(), ctx, &PartyID{}, 3, 1),
 	} {
 		if err := p.CheckSelf(); err == nil {
 			t.Fatalf("%s: expected an error", name)
@@ -228,7 +230,17 @@ func TestCheckCommittees(t *testing.T) {
 	if err := NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 2, 1).CheckCommittees(); err == nil {
 		t.Fatal("wrong new count: expected an error")
 	}
+	for name, p := range map[string]*ReSharingParameters{
+		"nil old": NewReSharingParameters(S256(), nil, newCtx, oldIDs[0], 3, 1, 3, 1),
+		"nil new": NewReSharingParameters(S256(), oldCtx, nil, oldIDs[0], 3, 1, 3, 1),
+		"empty":   NewReSharingParameters(S256(), oldCtx, newCtx, &PartyID{}, 3, 1, 3, 1),
+	} {
+		if err := p.CheckCommittees(); err == nil {
+			t.Fatalf("%s: expected an error", name)
+		}
+	}
 	stranger := NewPartyID("s", "s", big.NewInt(12345))
+	stranger.Index = 0
 	if err := NewReSharingParameters(S256(), oldCtx, newCtx, stranger, 3, 1, 3, 1).CheckCommittees(); err == nil {
 		t.Fatal("party in neither committee: expected an error")
 	}
