@@ -176,8 +176,6 @@ func (s *session) recover() (err error) {
 		prev := *rec
 		err = rec.decode(r)
 		if err == journal.ErrTornTail {
-			// The last record is not complete: a crash cut it.  Do not
-			// apply it, and end the log here.
 			*rec = prev
 			err = nil
 			break

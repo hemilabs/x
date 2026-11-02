@@ -192,7 +192,6 @@ func (r *Reader) tornTail(first bool) error {
 	return r.err
 }
 
-// allZero reports whether every byte of b is zero.
 func allZero(b []byte) bool {
 	for _, c := range b {
 		if c != 0 {
