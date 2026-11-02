@@ -16,7 +16,7 @@ import (
 // --- SHA512_256i nil guard (hash.go:73) ---
 
 func TestSHA512_256iNilInput(t *testing.T) {
-	// [FORK] nil big.Int in input should be treated as zero, not panic
+	// A nil big.Int hashes as zero and does not panic.
 	result := SHA512_256i(big.NewInt(1), nil, big.NewInt(3))
 	if result == nil {
 		t.Fatal("SHA512_256i should handle nil input without panic")
@@ -47,7 +47,6 @@ func TestSHA512_256iTaggedNilInput(t *testing.T) {
 // --- RejectionSample no in-place mutation (hash_utils.go:24) ---
 
 func TestRejectionSampleNoMutation(t *testing.T) {
-	// [FORK] Upstream mutates eHash in-place. Fork allocates new big.Int.
 	q := big.NewInt(97) // small prime for testing
 	eHash := big.NewInt(150)
 	eHashCopy := new(big.Int).Set(eHash)
@@ -100,7 +99,7 @@ func TestIsInIntervalValid(t *testing.T) {
 // --- AppendBigIntToBytesSlice length-prefixed (int.go:75) ---
 
 func TestAppendBigIntToBytesSlice(t *testing.T) {
-	// [FORK] Uses length prefix to distinguish zero from absent
+	// The length prefix distinguishes zero from absent.
 	base := []byte{0xAA, 0xBB}
 
 	// Append zero: should get [AA BB 00 00 00 00] (4-byte length prefix, no data)
@@ -183,7 +182,7 @@ func TestGetRandomPositiveIntRejectsZero(t *testing.T) {
 }
 
 func TestGetRandomPositiveIntRejectsOne(t *testing.T) {
-	// [FORK] lessThan=1 means interval [1, 1) is empty. Upstream allowed this.
+	// lessThan=1 gives the empty interval [1, 1).
 	result := GetRandomPositiveInt(rand.Reader, big.NewInt(1))
 	if result != nil {
 		t.Fatalf("expected nil, got %v", result)

@@ -17,9 +17,8 @@ import (
 // secp256k1 (q ≈ 2^256), the bias is ≈ 2^-128 — within standard
 // Fiat-Shamir security bounds. For larger moduli (e.g., 2048-bit N in
 // ModProof), the bias is negligible.
-// [FORK] Upstream mutates eHash in-place (eHash.Mod(eHash, q)), which is an
-// aliasing bug: callers that retain a reference to eHash see it silently
-// modified. We allocate a new big.Int to avoid this side effect.
+//
+// RejectionSample does not change eHash. A caller can keep a reference to it.
 func RejectionSample(q *big.Int, eHash *big.Int) *big.Int { // e' = eHash
 	return new(big.Int).Mod(eHash, q)
 }

@@ -68,9 +68,8 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 	binary.LittleEndian.PutUint64(inLenBz, uint64(inLen))
 	ptrs := make([][]byte, inLen)
 	for i, n := range in {
-		// [FORK] Nil guard: upstream panics on nil big.Int input. Protocol fields
-		// (e.g., optional SSID components) may legitimately be nil; we hash the
-		// encoding of zero instead, matching the behaviour of big.NewInt(0).Bytes().
+		// Protocol fields (e.g., optional SSID components) may legitimately be
+		// nil; we hash the encoding of zero instead, matching the behaviour of big.NewInt(0).Bytes().
 		if n == nil {
 			ptrs[i] = zero.Bytes()
 		} else {

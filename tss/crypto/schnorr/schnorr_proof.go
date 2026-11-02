@@ -59,9 +59,8 @@ func (pf *ZKProof) Verify(Session []byte, X *crypto.ECPoint) bool {
 	ec := X.Curve()
 	ecParams := ec.Params()
 	q := ecParams.N
-	// [FORK] Reject proof scalars outside (0, q) to prevent malleability (T + k*q verifies identically)
+	// Reject proof scalars outside (0, q) to prevent malleability (T + k*q verifies identically)
 	// and to guard against zero scalars that would produce identity points in ScalarBaseMult/ScalarMult.
-	// Upstream does not perform this range check.
 	if pf.T.Sign() <= 0 || pf.T.Cmp(q) >= 0 {
 		return false
 	}
@@ -73,7 +72,7 @@ func (pf *ZKProof) Verify(Session []byte, X *crypto.ECPoint) bool {
 		cHash := common.SHA512_256i_TAGGED(Session, X.X(), X.Y(), g.X(), g.Y(), pf.Alpha.X(), pf.Alpha.Y())
 		c = common.RejectionSample(q, cHash)
 	}
-	// [FORK] Guard c=0 before ScalarMult to prevent identity-point panic.
+	// Guard c=0 before ScalarMult to prevent identity-point panic.
 	// RejectionSample returns values in [0, q), so c=0 is possible (probability ~2^-256).
 	if c.Sign() == 0 {
 		return false
@@ -106,8 +105,7 @@ func NewZKVProof(Session []byte, V, R *crypto.ECPoint, s, l *big.Int, rand io.Re
 	a, b := common.GetRandomPositiveInt(rand, q), common.GetRandomPositiveInt(rand, q)
 	aR := R.ScalarMult(a)
 	bG := crypto.ScalarBaseMult(ec, b)
-	// [FORK] Upstream discards the error: `alpha, _ := aR.Add(bG)`. If the sum is
-	// the identity point, alpha is nil and the subsequent alpha.X() panics.
+	// If the sum is the identity point, alpha is nil and alpha.X() panics.
 	alpha, err := aR.Add(bG)
 	if err != nil {
 		return nil, errors.New("ZKVProof: aR + bG yielded an invalid point")
@@ -132,9 +130,8 @@ func (pf *ZKVProof) Verify(Session []byte, V, R *crypto.ECPoint) bool {
 	ec := V.Curve()
 	ecParams := ec.Params()
 	q := ecParams.N
-	// [FORK] Reject proof scalars outside (0, q) to prevent malleability and guard against
+	// Reject proof scalars outside (0, q) to prevent malleability and guard against
 	// zero scalars that would produce identity points in ScalarMult/ScalarBaseMult.
-	// Upstream does not perform these range checks.
 	if pf.T.Sign() <= 0 || pf.T.Cmp(q) >= 0 {
 		return false
 	}
@@ -148,14 +145,13 @@ func (pf *ZKVProof) Verify(Session []byte, V, R *crypto.ECPoint) bool {
 		cHash := common.SHA512_256i_TAGGED(Session, V.X(), V.Y(), R.X(), R.Y(), g.X(), g.Y(), pf.Alpha.X(), pf.Alpha.Y())
 		c = common.RejectionSample(q, cHash)
 	}
-	// [FORK] Guard c=0 before ScalarMult to prevent identity-point panic.
+	// Guard c=0 before ScalarMult to prevent identity-point panic.
 	if c.Sign() == 0 {
 		return false
 	}
 	tR := R.ScalarMult(pf.T)
 	uG := crypto.ScalarBaseMult(ec, pf.U)
-	// [FORK] Upstream discards the error: `tRuG, _ := tR.Add(uG)`. If the sum is
-	// the identity point, tRuG is nil and the subsequent .X() call panics.
+	// If the sum is the identity point, tRuG is nil and the .X() call panics.
 	tRuG, err := tR.Add(uG)
 	if err != nil {
 		return false

@@ -54,9 +54,7 @@ func (p *ECPoint) Y() *big.Int {
 }
 
 func (p *ECPoint) Add(p1 *ECPoint) (*ECPoint, error) {
-	// [FORK] Upstream does not validate p1 before calling elliptic.Curve.Add. A nil p1
-	// causes a nil-pointer panic, and mismatched curves silently miscompute. Added nil
-	// check and curve mismatch guard, and wrapped the result in NewECPoint for validation.
+	// A nil p1 causes a nil-pointer panic, and mismatched curves silently miscompute.
 	if p1 == nil {
 		return nil, fmt.Errorf("ECPoint.Add: p1 is nil")
 	}
@@ -69,7 +67,7 @@ func (p *ECPoint) Add(p1 *ECPoint) (*ECPoint, error) {
 
 func (p *ECPoint) ScalarMult(k *big.Int) *ECPoint {
 	x, y := p.curve.ScalarMult(p.X(), p.Y(), k.Bytes())
-	// [FORK] Restored upstream panic behavior. Identity results (from zero scalar or
+	// Identity results (from zero scalar or
 	// group-order multiples) cause NewECPoint to reject (0,0) and panic. This is
 	// intentional: ~30 of 34 call sites do not check IsIdentity(), so silently
 	// returning identity would propagate bad math through the protocol. Pre-call
@@ -104,11 +102,9 @@ func (p *ECPoint) Equals(p2 *ECPoint) bool {
 	return p.X().Cmp(p2.X()) == 0 && p.Y().Cmp(p2.Y()) == 0
 }
 
-// [FORK] IsIdentity returns true if this point is the identity element (point at infinity).
+// IsIdentity returns true if this point is the identity element (point at infinity).
 // On Weierstrass curves (secp256k1, P-256, etc.), Go represents identity as (0, 0).
 // On Edwards curves (edwards25519), the identity is (0, 1).
-// New method added to support callers that need to detect identity results from
-// ScalarMult/ScalarBaseMult.
 func (p *ECPoint) IsIdentity() bool {
 	if p == nil {
 		return true
@@ -136,7 +132,7 @@ func (p *ECPoint) ValidateBasic() bool {
 }
 
 func (p *ECPoint) EightInvEight() *ECPoint {
-	// [FORK] Use raw curve.ScalarMult for the *8 step to detect torsion points without
+	// Use raw curve.ScalarMult for the *8 step to detect torsion points without
 	// panicking. If p*8 = identity, the point is small-order; return identity directly.
 	// Callers' subsequent crypto checks (Schnorr verify, VSS verify) will reject it.
 	// CRITICAL: On Edwards25519 the identity is (0, 1), NOT (0, 0). Must use IsIdentity()
@@ -156,7 +152,7 @@ func (p *ECPoint) EightInvEight() *ECPoint {
 
 func ScalarBaseMult(curve elliptic.Curve, k *big.Int) *ECPoint {
 	x, y := curve.ScalarBaseMult(k.Bytes())
-	// [FORK] Restored upstream panic behavior. See ScalarMult comment for rationale.
+	// See the ScalarMult comment for the reason for this panic.
 	p, err := NewECPoint(curve, x, y)
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
@@ -241,8 +237,8 @@ func (p *ECPoint) GobEncode() ([]byte, error) {
 }
 
 func (p *ECPoint) GobDecode(buf []byte) error {
-	// [FORK] Upstream has no length bound on decoded coordinates, allowing a crafted
-	// payload to allocate arbitrary memory. Cap at 1024 bytes (covers all standard curves).
+	// Without a length bound on decoded coordinates, a crafted payload can allocate
+	// arbitrary memory. Cap at 1024 bytes (covers all standard curves).
 	const maxCoordLen = 1024
 	reader := bytes.NewReader(buf)
 	var length uint32

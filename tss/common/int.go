@@ -53,9 +53,9 @@ func (mi *modInt) i() *big.Int {
 	return (*big.Int)(mi)
 }
 
-// [FORK] Nil guard: upstream panics on nil b or bound. These inputs can be
-// attacker-controlled (e.g., received proof fields in ZK verification), so we
-// return false instead of crashing.
+// IsInInterval returns true if b is in [0, bound). It returns false for a nil
+// b or bound. These inputs can be attacker-controlled (e.g., received proof
+// fields in ZK verification).
 func IsInInterval(b *big.Int, bound *big.Int) bool {
 	if b == nil || bound == nil {
 		return false
@@ -67,10 +67,6 @@ func IsInInterval(b *big.Int, bound *big.Int) bool {
 // byte slice. The encoding is [4-byte big-endian length][big.Int.Bytes()].
 // This ensures that big.Int(0) (which has empty Bytes()) is distinguishable
 // from "nothing appended" — party index 0 gets [00 00 00 00] appended.
-//
-// [FORK] Upstream appends raw big.Int.Bytes() without a length prefix, making
-// it impossible to distinguish zero-valued fields from absent fields in the
-// SSID/CeremonyID byte stream. The length prefix provides unambiguous parsing.
 func AppendBigIntToBytesSlice(commonBytes []byte, appended *big.Int) []byte {
 	var bz []byte
 	// Defense-in-depth: all current callers pass non-nil big.Int, but this is a

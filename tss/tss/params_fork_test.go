@@ -243,8 +243,7 @@ func TestSSIDNonceUint(t *testing.T) {
 // --- PartyID ValidateBasic tests ---
 
 func TestPartyIDValidateBasicRejectsEmptyKey(t *testing.T) {
-	// [FORK] Upstream checks Key != nil but not len(Key) > 0.
-	// An empty byte slice passes nil check but KeyInt() returns 0.
+	// An empty byte slice passes a nil check but KeyInt() returns 0.
 	pid := &PartyID{
 		PartyIDData: &PartyIDData{
 			Id:      "test",
@@ -291,7 +290,6 @@ func TestPartyIDValidateBasicRejectsNegativeIndex(t *testing.T) {
 // --- SortedPartyIDs Less strict ordering ---
 
 func TestSortedPartyIDsLessIsStrict(t *testing.T) {
-	// [FORK] Upstream uses <= (treats equal as less-than), fork uses < (strict)
 	ids := SortedPartyIDs{
 		NewPartyID("a", "A", big.NewInt(5)),
 		NewPartyID("b", "B", big.NewInt(5)), // same key
