@@ -180,7 +180,7 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	// maps would miss. Such a collision lets A forge range proofs against B.
 	modulusMap := make(map[string]struct{}, len(r1Msgs)*2)
 	// One failure flag per slot and proof, so that two goroutines never
-	// write the same element.  The flag does not depend on msg.From.
+	// write the same element.
 	dlnProof1Failed := make([]bool, len(r1Msgs))
 	dlnProof2Failed := make([]bool, len(r1Msgs))
 	wg := new(sync.WaitGroup)
