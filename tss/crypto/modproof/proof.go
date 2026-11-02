@@ -142,7 +142,7 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 	if N == nil || N.BitLen() < 2048 {
 		return false
 	}
-	// [FORK] isQuadraticResidue calls big.Jacobi, which panics for an
+	// isQuadraticResidue calls big.Jacobi, which panics for an
 	// even N.  Check N before it, not only in Fig 16.
 	if N.Sign() != 1 || N.Bit(0) == 0 {
 		return false
