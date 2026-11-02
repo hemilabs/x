@@ -168,7 +168,7 @@ func isOnCurve(c elliptic.Curve, x, y *big.Int) bool {
 	if x == nil || y == nil {
 		return false
 	}
-	// [FORK] The curve libraries reduce the coordinates before they
+	// The curve libraries reduce the coordinates before they
 	// check them, so a negative or padded value passes.  Require the
 	// canonical range, so that each point has one encoding and Equals
 	// can compare the stored values.
