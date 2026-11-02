@@ -936,7 +936,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 
 // TestReshareRound1RejectsStalePreParams gives ReshareRound1 pre-params
 // that pass Validate but fail ValidateWithProof.  Round 1 must reject
-// them as keygen does, and must not drop them in silence.
+// them.
 func TestReshareRound1RejectsStalePreParams(t *testing.T) {
 	oldIDs, newIDs := tss.GenerateTestPartyIDs(3), tss.GenerateTestPartyIDs(3)
 	params := tss.NewReSharingParameters(tss.S256(), tss.NewPeerContext(oldIDs),
