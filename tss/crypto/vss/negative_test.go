@@ -116,7 +116,7 @@ func TestCreateReconstructSuccess(t *testing.T) {
 }
 
 // TestInterpolateAtZero verifies the value at zero, and that bad input
-// gives an error and not a panic.
+// gives an error.
 func TestInterpolateAtZero(t *testing.T) {
 	ec := tss.EC()
 	// P(x) = 5 + 3x, so P(0)*G = 5*G.

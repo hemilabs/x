@@ -242,7 +242,6 @@ func TestBuildLocalSaveDataSubsetEdDSA(t *testing.T) {
 		t.Fatalf("expected 2 Ks, got %d", len(subset.Ks))
 	}
 
-	// A missing key gives an error.
 	fakeIDs := tss.GenerateTestPartyIDs(1)
 	if _, err := BuildLocalSaveDataSubset(*out.Save, fakeIDs); err == nil {
 		t.Fatal("expected an error for a missing signer key")
