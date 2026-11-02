@@ -19,7 +19,6 @@ import (
 // journalError wraps the latched journal failure for atomic.Value.
 type journalError struct{ err error }
 
-// journalFailed returns the latched journal failure, or nil.
 func (db *DB) journalFailed() error {
 	if v, ok := db.journalErr.Load().(journalError); ok {
 		return v.err
@@ -246,7 +245,6 @@ func (db *DB) writeLocked(batch, ourBatch *Batch, merge, sync bool) error {
 
 	// Write journal.
 	if err := db.writeJournal(batches, seq, sync); err != nil {
-		// Fail-stop, as C LevelDB does for a failed log sync.
 		err = fmt.Errorf("leveldb: journal write failed, reopen the DB: %w", err)
 		db.journalErr.CompareAndSwap(nil, journalError{err})
 		db.unlockWrite(overflow, merged, err)
