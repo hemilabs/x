@@ -26,8 +26,8 @@ type (
 	}
 )
 
-// [FORK] Session parameter added for SSID domain separation (prevents cross-ceremony replay).
 // ProveRangeAlice implements Alice's range proof used in the MtA and MtAwc protocols from GG18Spec (9) Fig. 9.
+// Session gives SSID domain separation, which prevents cross-ceremony replay.
 func ProveRangeAlice(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, c, NTilde, h1, h2, m, r *big.Int, rand io.Reader) (*RangeProofAlice, error) {
 	if pk == nil || NTilde == nil || h1 == nil || h2 == nil || c == nil || m == nil || r == nil {
 		return nil, errors.New("ProveRangeAlice constructor received nil value(s)")
@@ -104,23 +104,21 @@ func (pf *RangeProofAlice) Verify(Session []byte, ec elliptic.Curve, pk *paillie
 	if pf == nil || !pf.ValidateBasic() || pk == nil || NTilde == nil || h1 == nil || h2 == nil || c == nil {
 		return false
 	}
-	// [FORK] Reject degenerate Pedersen parameters: h1=1 or h2=1 eliminates
-	// binding or hiding, making the range proof unsound. Upstream does not check.
+	// Reject degenerate Pedersen parameters: h1=1 or h2=1 eliminates
+	// binding or hiding, making the range proof unsound.
 	one := big.NewInt(1)
 	if h1.Cmp(one) == 0 || h2.Cmp(one) == 0 {
 		return false
 	}
 
-	// [FORK] NTilde (Pedersen commitment modulus) must be sufficiently large for soundness.
-	// Upstream does not check NTilde size in the proof verifier (only at keygen round 2).
+	// NTilde (Pedersen commitment modulus) must be sufficiently large for soundness.
 	// Defense-in-depth: proof verifiers should be self-contained against untrusted parameters.
 	if NTilde.BitLen() < 2048 {
 		return false
 	}
 
-	// [FORK] Paillier modulus must also be sufficiently large. Upstream does not check
-	// pk.N size in the proof verifier. Defense-in-depth: keygen round 2 validates exact
-	// 2048 bits, but the proof verifier should not rely on that.
+	// Paillier modulus must also be sufficiently large. Defense-in-depth: keygen
+	// round 2 validates exact 2048 bits, but the proof verifier should not rely on that.
 	if pk.N.BitLen() < 2048 {
 		return false
 	}
@@ -173,7 +171,7 @@ func (pf *RangeProofAlice) Verify(Session []byte, ec elliptic.Curve, pk *paillie
 	if pf.S1.Cmp(q3) == 1 {
 		return false
 	}
-	// [FORK] Defense-in-depth: s2 upper bound. Honest s2 = e·rho + gamma where
+	// Defense-in-depth: s2 upper bound. Honest s2 = e·rho + gamma where
 	// e ∈ [0, q), rho ∈ [1, q·NTilde), gamma ∈ [1, q³·NTilde).
 	// Maximum honest value: (q-1)(q·NTilde - 1) + (q³·NTilde - 1)
 	//   = q²·NTilde - q·NTilde - q + 1 + q³·NTilde - 1
@@ -183,7 +181,6 @@ func (pf *RangeProofAlice) Verify(Session []byte, ec elliptic.Curve, pk *paillie
 	// Without it, a malicious prover could set s2 to an arbitrarily large value,
 	// increasing the exponent size in h2^s2 and enabling DoS via expensive modular
 	// exponentiation (~2817-bit exponents are the honest maximum on secp256k1).
-	// Upstream does not check.
 	q3NTilde := new(big.Int).Mul(q3, NTilde)
 	s2Bound := new(big.Int).Lsh(q3NTilde, 1) // 2 · q³ · NTilde
 	if pf.S2.Cmp(s2Bound) == 1 {
@@ -200,9 +197,9 @@ func (pf *RangeProofAlice) Verify(Session []byte, ec elliptic.Curve, pk *paillie
 	var products *big.Int // for the following conditionals
 	minusE := new(big.Int).Sub(zero, e)
 
-	// [FORK] Defense-in-depth: verify c is coprime with N^2 before negative-exponent
+	// Defense-in-depth: verify c is coprime with N^2 before negative-exponent
 	// computation. A malicious c with gcd(c, N^2) != 1 would cause Exp to
-	// return nil (ModInverse fails), triggering a nil-pointer panic. Upstream does not check.
+	// return nil (ModInverse fails), triggering a nil-pointer panic.
 	if new(big.Int).GCD(nil, nil, c, pk.NSquare()).Cmp(one) != 0 {
 		return false
 	}

@@ -68,8 +68,8 @@ func (preParams LocalPreParams) Validate() bool {
 		preParams.H2i != nil
 }
 
-// [FORK] ValidateWithProof: upstream only checked for nil fields. This hardened version
-// adds algebraic consistency checks to verify that the pre-params are internally consistent:
+// ValidateWithProof adds algebraic checks to Validate to verify that the
+// pre-params are internally consistent:
 // (1) NTilde = (2P+1)(2Q+1) — ensures NTilde is the product of safe primes derived from P, Q.
 // (2) H2 = H1^Alpha mod NTilde — ensures the discrete-log relationship needed for DLN proofs.
 // Without these checks, corrupted or tampered pre-params could silently produce invalid proofs
@@ -84,7 +84,7 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 		preParams.Q != nil) {
 		return false
 	}
-	// [FORK] Defense-in-depth: P == Q would make NTilde = (2P+1)^2, a perfect square,
+	// Defense-in-depth: P == Q would make NTilde = (2P+1)^2, a perfect square,
 	// which completely breaks the DLN proof (the prover can trivially compute the order
 	// of (Z/NTilde·Z)*). This condition is unreachable under normal operation: P and Q
 	// are independently generated 1024-bit safe primes via GetRandomSafePrimesConcurrent.
@@ -108,7 +108,7 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 	return expectedH2.Cmp(preParams.H2i) == 0
 }
 
-// [FORK] ValidateSaveData performs comprehensive validation of loaded ECDSA save data,
+// ValidateSaveData performs comprehensive validation of loaded ECDSA save data,
 // checking for nil fields, array consistency, curve membership of public keys,
 // and the Feldman VSS invariant (Xi·G == BigXj[ownIndex]).
 //
@@ -170,7 +170,7 @@ func (saveData LocalPartySaveData) ValidateSaveData() error {
 	}
 
 	// Feldman VSS invariant: Xi·G must equal BigXj[ownIndex].
-	// [FORK] Guard Xi=0: ScalarBaseMult(0) panics (identity point). A zero Xi means
+	// Guard Xi=0: ScalarBaseMult(0) panics (identity point). A zero Xi means
 	// the party's secret share is trivially known.
 	if saveData.Xi.Sign() == 0 {
 		return errors.New("ValidateSaveData: Xi is zero")

@@ -85,7 +85,7 @@ func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, erro
 				break
 			}
 		}
-		// [FORK] Defense-in-depth: fail fast if no quadratic residue was found.
+		// Defense-in-depth: fail fast if no quadratic residue was found.
 		//
 		// This condition is unreachable when P and Q are safe primes because:
 		//   - Safe primes satisfy P ≡ Q ≡ 3 (mod 4), so Jacobi(-1, P) = Jacobi(-1, Q) = -1
@@ -137,8 +137,7 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 	if pf == nil || !pf.ValidateBasic() {
 		return false
 	}
-	// [FORK] Reject N that is too small to be secure (must be at least 2048 bits).
-	// Upstream does not check N's size.
+	// Reject N that is too small to be secure (must be at least 2048 bits).
 	if N == nil || N.BitLen() < 2048 {
 		return false
 	}

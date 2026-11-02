@@ -77,7 +77,7 @@ func TestFacProofForkRejectsWrongSession(t *testing.T) {
 }
 
 func TestFacProofForkVSignMagnitudeRoundTrip(t *testing.T) {
-	// [FORK] V can be negative. Test Bytes()/NewProofFromBytes() round-trip.
+	// V can be negative. Test Bytes()/NewProofFromBytes() round-trip.
 	proof, N0, NCap, s, tt := generateFacProofFixture(t)
 
 	// Serialize and deserialize.
@@ -108,7 +108,6 @@ func TestFacProofForkVSignMagnitudeRoundTrip(t *testing.T) {
 }
 
 func TestFacProofForkRejectsSmallN0(t *testing.T) {
-	// [FORK] N0.BitLen() < 2048 should be rejected.
 	proof, _, NCap, s, tt := generateFacProofFixture(t)
 	smallN0 := common.GetRandomPrimeInt(rand.Reader, 512)
 	if proof.Verify(forkSession, tss.EC(), smallN0, NCap, s, tt) {
@@ -117,7 +116,6 @@ func TestFacProofForkRejectsSmallN0(t *testing.T) {
 }
 
 func TestFacProofForkRejectsSmallNCap(t *testing.T) {
-	// [FORK] NCap.BitLen() < 2048 should be rejected.
 	proof, N0, _, s, tt := generateFacProofFixture(t)
 	smallNCap := common.GetRandomPrimeInt(rand.Reader, 512)
 	if proof.Verify(forkSession, tss.EC(), N0, smallNCap, s, tt) {
