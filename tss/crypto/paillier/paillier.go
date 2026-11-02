@@ -278,7 +278,7 @@ func L(u, N *big.Int) *big.Int {
 }
 
 // GenerateXs generates the challenges used in Paillier key Proof.
-// [FORK] The session ID binds the challenges to the ceremony.
+// The session ID binds the challenges to the ceremony.
 func GenerateXs(m int, session []byte, k, N *big.Int, ecdsaPub *crypto2.ECPoint) []*big.Int {
 	var i, n int
 	ret := make([]*big.Int, m)
