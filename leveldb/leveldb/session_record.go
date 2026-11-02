@@ -239,9 +239,8 @@ func (p *sessionRecord) readBytes(field string, r byteReader) []byte {
 		p.err = errors.NewErrCorrupted(storage.FileDesc{}, &ErrManifestCorrupted{field, "invalid length"})
 		return nil
 	}
-	// Allocate the exact length for a normal field.  Do not allocate a
-	// large raw length up front: copy it, so memory grows only with the
-	// bytes that are present.
+	// Do not allocate a large raw length up front: copy it, so memory
+	// grows only with the bytes that are present.
 	var x []byte
 	var err error
 	if n <= maxReadBytesAlloc {
