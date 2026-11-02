@@ -69,7 +69,6 @@ func newClient(cfg *config) (*slack.Client, error) {
 	return slack.New(cfg.SlackOauthToken, opts...), nil
 }
 
-// isLoopback reports whether host is localhost or a loopback IP address.
 func isLoopback(host string) bool {
 	if host == "localhost" {
 		return true
