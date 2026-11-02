@@ -146,8 +146,7 @@ func TestGobDecodeRoundTrip(t *testing.T) {
 	}
 }
 
-// TestECPointUnmarshalJSONNull verifies that JSON null gives an error
-// and not a panic.
+// TestECPointUnmarshalJSONNull verifies that JSON null gives an error.
 func TestECPointUnmarshalJSONNull(t *testing.T) {
 	var p crypto.ECPoint
 	if err := p.UnmarshalJSON([]byte("null")); err == nil {

@@ -164,8 +164,8 @@ func TestGenerateKeyPairSmallBits(t *testing.T) {
 }
 
 // TestProofVerifyBadInputsReturns verifies that Verify returns an
-// error, and does not hang or panic, for an N of a bit length that is
-// not a multiple of 256 and for a nil k.
+// error for an N of a bit length that is not a multiple of 256 and for
+// a nil k.
 func TestProofVerifyBadInputsReturns(t *testing.T) {
 	var pf Proof
 	for i := range pf {

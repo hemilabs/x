@@ -143,7 +143,7 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 		return false
 	}
 	// isQuadraticResidue calls big.Jacobi, which panics for an
-	// even N.  Check N before it, not only in Fig 16.
+	// even N.
 	if N.Sign() != 1 || N.Bit(0) == 0 {
 		return false
 	}

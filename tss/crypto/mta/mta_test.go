@@ -1125,7 +1125,7 @@ func TestProofBobRejectsNonCoprimeV(t *testing.T) {
 }
 
 // TestProofBobWCFromBytesRejectsProofBobParts verifies that a ProofBob
-// encoding, which has no U, gives an error and not a panic.
+// encoding, which has no U, gives an error.
 func TestProofBobWCFromBytesRejectsProofBobParts(t *testing.T) {
 	bzs := make([][]byte, mta.ProofBobBytesParts)
 	for i := range bzs {
