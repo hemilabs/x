@@ -151,12 +151,9 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 	if root == parentRoot {
 		return errors.New("layer cycle")
 	}
-	// If a layer with this root already exists, skip the insertion. Fork blocks
-	// can produce the same state root as the canonical block (same parent, same
-	// coinbase, zero txs); overwriting tree.layers[root] would corrupt the parent
-	// chain for any child layers already built on top of the existing one, and
-	// appending a duplicate root to the lookup indices causes accountTip/storageTip
-	// to resolve the wrong layer.
+	// A fork block can have the same state root as the canonical block. Do not
+	// add the root again: this corrupts the parent chain of the child layers,
+	// and accountTip and storageTip then resolve the wrong layer.
 	if tree.get(root) != nil {
 		return nil
 	}
