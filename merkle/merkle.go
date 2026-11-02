@@ -126,7 +126,6 @@ func tree(hashes []*[sha256.Size]byte, sorted bool) []*[sha256.Size]byte {
 	nextPoT := nextPowerOfTwo(len(hashes))
 	arraySize := nextPoT*2 - 1
 
-	// Populate the array with the leaf hashes.
 	merkles := make([]*[sha256.Size]byte, arraySize)
 	for i, h := range hashes {
 		merkles[i] = leafHash(h)

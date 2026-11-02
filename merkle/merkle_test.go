@@ -80,8 +80,7 @@ func TestMerkle(t *testing.T) {
 	digest([]byte("right"), &right)
 
 	// Note that we flip left and right because the digest of right is less
-	// than the digest of left.  Leaves hash as sha256(0x00 || leaf) and
-	// nodes as sha256(0x01 || left || right).
+	// than the digest of left.
 	lh := make([]byte, sha256.Size)
 	digest(concat([]byte{0x00}, left), &lh)
 	rh := make([]byte, sha256.Size)
