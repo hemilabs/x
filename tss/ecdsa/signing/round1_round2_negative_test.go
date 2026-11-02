@@ -180,7 +180,7 @@ func TestSignRound2ContextCancellation(t *testing.T) {
 // responses for the same gamma and w.
 func TestSignRound2RejectsReentry(t *testing.T) {
 	f := setupThroughRound2(t)
-	if _, err := SignRound2(context.Background(), f.States[0], f.R1P2P[0], f.R1Bcast); err == nil {
+	if _, err := SignRound2(t.Context(), f.States[0], f.R1P2P[0], f.R1Bcast); err == nil {
 		t.Fatal("repeated SignRound2: expected an error")
 	}
 }
