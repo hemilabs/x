@@ -24,8 +24,7 @@ const (
 	Ed25519   CurveName = "ed25519"
 )
 
-// mu guards ec and registry.  Upstream has no lock, so a
-// RegisterCurve or SetCurve during a ceremony races with the readers.
+// mu guards ec and registry.
 var (
 	mu       sync.RWMutex
 	ec       elliptic.Curve
