@@ -21,7 +21,6 @@ const (
 	hashNegativeDelimiter = byte('-')
 )
 
-// hashDelimiter returns the delimiter that follows n in the hash input.
 func hashDelimiter(n *big.Int) byte {
 	if n != nil && n.Sign() < 0 {
 		return hashNegativeDelimiter
