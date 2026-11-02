@@ -356,7 +356,7 @@ func TestRound3RejectsEquivocatedRound1(t *testing.T) {
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -377,7 +377,7 @@ func TestRound3RejectsEquivocatedRound1(t *testing.T) {
 		if i == 1 {
 			view = r1Party1
 		}
-		out, err := Round2(context.Background(), states[i], view)
+		out, err := Round2(t.Context(), states[i], view)
 		if err != nil {
 			t.Fatalf("Round2[%d]: %v", i, err)
 		}
@@ -392,7 +392,7 @@ func TestRound3RejectsEquivocatedRound1(t *testing.T) {
 	r2p2p[0] = states[0].ExportR2P2PSelf()
 	r2bcast[0] = states[0].ExportR2BcastSelf()
 
-	_, err := Round3(context.Background(), states[0], r2p2p, r2bcast)
+	_, err := Round3(t.Context(), states[0], r2p2p, r2bcast)
 	if err == nil || !strings.Contains(err.Error(), "echo mismatch") {
 		t.Fatalf("Round3 error = %v, want echo mismatch", err)
 	}
