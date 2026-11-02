@@ -324,7 +324,7 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 func TestRound1RequiresCeremonyID(t *testing.T) {
 	pIDs := tss.GenerateTestPartyIDs(3)
 	params := tss.NewParameters(tss.S256(), tss.NewPeerContext(pIDs), pIDs[0], 3, 1)
-	_, _, err := Round1(context.Background(), params, LocalPreParams{})
+	_, _, err := Round1(t.Context(), params, LocalPreParams{})
 	if !errors.Is(err, tss.ErrNoCeremonyID) {
 		t.Fatalf("Round1 error = %v, want ErrNoCeremonyID", err)
 	}
