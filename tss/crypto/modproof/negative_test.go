@@ -80,7 +80,7 @@ func TestNewProofFromBytesTruncated(t *testing.T) {
 }
 
 // TestVerifyEvenNNoPanic verifies that Verify returns false for an
-// even N.  big.Jacobi panics for an even modulus.
+// even N.
 func TestVerifyEvenNNoPanic(t *testing.T) {
 	pf := &ProofMod{W: big.NewInt(2), A: big.NewInt(1), B: big.NewInt(1)}
 	for i := range pf.X {
