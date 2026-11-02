@@ -82,7 +82,7 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	// oversized exponents before modular reduction.
 	maxBits := N.BitLen() + 2
 	for i := range p.T {
-		// [FORK] An honest T[i] is not negative.  Exp with a negative
+		// An honest T[i] is not negative.  Exp with a negative
 		// exponent returns nil when h1 has no inverse mod N.
 		if p.T[i] == nil || p.T[i].Sign() < 0 || p.T[i].BitLen() > maxBits {
 			return false

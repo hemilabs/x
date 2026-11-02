@@ -232,7 +232,7 @@ func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error)
 			return false, fmt.Errorf("paillier proof element %d is nil", i)
 		}
 	}
-	// [FORK] Check the inputs before the goroutines start.  A nil k or
+	// Check the inputs before the goroutines start.  A nil k or
 	// ecdsaPub panics in GenerateXs, where the caller cannot recover.
 	// GenerateXs draws values of a multiple of 256 bits and keeps those
 	// below N, so an N of another bit length can make it loop for a very

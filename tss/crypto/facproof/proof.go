@@ -150,7 +150,7 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 	if NCap.BitLen() < 2048 {
 		return false
 	}
-	// [FORK] s and t must be distinct units mod NCap in (1, NCap).  With
+	// s and t must be distinct units mod NCap in (1, NCap).  With
 	// t = 0 a degenerate proof passes, and with a t that has no inverse
 	// Exp returns nil for a negative exponent.
 	one := big.NewInt(1)
