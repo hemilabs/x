@@ -37,7 +37,6 @@ func isQuadraticResidue(X, N *big.Int) bool {
 	return big.Jacobi(X, N) == 1
 }
 
-// NewProof generates a mod proof. Session provides SSID domain separation.
 // challenge derives the challenge y_i in Z_N.  It expands the hash in
 // counter mode to 256 bits more than N and then reduces it mod N.
 func challenge(Session []byte, N, W *big.Int, prev []*big.Int) *big.Int {
@@ -52,6 +51,7 @@ func challenge(Session []byte, N, W *big.Int, prev []*big.Int) *big.Int {
 	return new(big.Int).Mod(new(big.Int).SetBytes(buf[:need]), N)
 }
 
+// NewProof generates a mod proof. Session provides SSID domain separation.
 func NewProof(Session []byte, N, P, Q *big.Int, rand io.Reader) (*ProofMod, error) {
 	Phi := new(big.Int).Mul(new(big.Int).Sub(P, one), new(big.Int).Sub(Q, one))
 	// Fig 16.1
