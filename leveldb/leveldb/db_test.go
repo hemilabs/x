@@ -3113,8 +3113,17 @@ func TestDB_CloseWhileOpenTransaction(t *testing.T) {
 			t.Fatal(err)
 		}
 		var wg sync.WaitGroup
-		wg.Go(func() { _, _ = db.OpenTransaction() })
-		within(t, 10*time.Second, "Close", func() { _ = db.Close() })
+		wg.Go(func() {
+			// A transaction that opens before Close is discarded by it.
+			if _, err := db.OpenTransaction(); err != nil && err != ErrClosed {
+				t.Errorf("OpenTransaction: %v", err)
+			}
+		})
+		within(t, 10*time.Second, "Close", func() {
+			if err := db.Close(); err != nil {
+				t.Errorf("Close: %v", err)
+			}
+		})
 		wg.Wait()
 	}
 }
