@@ -190,8 +190,9 @@ func ProofBobFromBytes(bzs [][]byte) (*ProofBob, error) {
 	}, nil
 }
 
-// ProveBobWC.Verify implements verification of Bob's proof with check "VerifyMtawc_Bob" used in the MtA protocol from GG18Spec (9) Fig. 10.
+// Verify implements verification of Bob's proof with check "VerifyMtawc_Bob" used in the MtA protocol from GG18Spec (9) Fig. 10.
 // an absent `X` verifies a proof generated without the X consistency check X = g^x
+// Verify returns false for a nil proof or a proof with a nil field.
 func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2 *big.Int, X *crypto.ECPoint) bool {
 	// Reject proofs with nil fields before any of them is
 	// dereferenced. Verify runs in library-started goroutines during
@@ -416,12 +417,15 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	return true
 }
 
-// ProveBob.Verify implements verification of Bob's proof without check "VerifyMta_Bob" used in the MtA protocol from GG18Spec (9) Fig. 11.
+// Verify implements verification of Bob's proof without check "VerifyMta_Bob" used in the MtA protocol from GG18Spec (9) Fig. 11.
+// Verify returns false for a nil proof or a proof with a nil field.
 func (pf *ProofBob) Verify(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2 *big.Int) bool {
 	pfWC := &ProofBobWC{ProofBob: pf, U: nil}
 	return pfWC.Verify(Session, ec, pk, NTilde, h1, h2, c1, c2, nil)
 }
 
+// ValidateBasic reports whether pf is not nil and all of its fields
+// are set.
 func (pf *ProofBob) ValidateBasic() bool {
 	return pf != nil &&
 		pf.Z != nil &&
@@ -436,6 +440,8 @@ func (pf *ProofBob) ValidateBasic() bool {
 		pf.T2 != nil
 }
 
+// ValidateBasic reports whether pf is not nil, its ProofBob is valid
+// and U is a point on the curve.
 func (pf *ProofBobWC) ValidateBasic() bool {
 	return pf != nil && pf.ProofBob.ValidateBasic() && pf.U.ValidateBasic()
 }
