@@ -37,6 +37,8 @@ Fixes in this fork on the transaction path:
   until the next `Open` removes them, which costs disk space until then.
 - A fresh MANIFEST keeps the sequence number, the journal numbers and
   the compaction pointers of the commit that writes it.
+- A commit that makes a fresh MANIFEST current succeeds, also when the
+  old MANIFEST cannot be removed.  The next `Open` removes it.
 
 ## Module path
 

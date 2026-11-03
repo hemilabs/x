@@ -3208,3 +3208,30 @@ func TestDB_ManifestRotationKeepsCompPtr(t *testing.T) {
 	h.reopenDB()
 	check("b")
 }
+
+// TestDB_TransactionCommitManifestRemoveError rotates the MANIFEST on
+// every commit and fails the removal of the old one.  The new MANIFEST
+// is current, so Commit must succeed and the value must survive reopen.
+func TestDB_TransactionCommitManifestRemoveError(t *testing.T) {
+	h := newDbHarnessWopt(t, &opt.Options{
+		DisableLargeBatchTransaction: true,
+		MaxManifestFileSize:          1,
+	})
+	defer h.close()
+
+	tr, err := h.db.OpenTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Put([]byte("k"), []byte("v"), nil); err != nil {
+		t.Fatal(err)
+	}
+	h.stor.EmulateError(testutil.ModeRemove, storage.TypeManifest, errors.New("manifest remove error"))
+	if err := tr.Commit(); err != nil {
+		tr.Discard()
+		t.Fatalf("Commit with a failed old MANIFEST removal: %v", err)
+	}
+	h.stor.EmulateError(testutil.ModeRemove, storage.TypeManifest, nil)
+	h.reopenDB()
+	h.getVal("k", "v")
+}
