@@ -12,7 +12,8 @@ modified it on 2025-11-05. The changes are:
 - The import paths now point to `github.com/hemilabs/x/eth-trie`.
 - The verkle and binary tries (`trie/verkle.go`, `trie/verkle_test.go`,
   `trie/bintrie`, `trie/utils`) are removed.
-- `trie/transition.go` is disabled: all code in the file is commented out.
+- `trie/transition.go` is disabled: all of the file, except the package
+  clause, is commented out.
 - The tests use `internal/testutil`, from Hemi Labs, in place of the
   `internal/testrand` package of go-ethereum.
 
