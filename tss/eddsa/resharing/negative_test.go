@@ -222,3 +222,14 @@ func TestReshareRound4RejectsOtherSession(t *testing.T) {
 		t.Fatalf("ReshareRound4 error = %v, want session mismatch", err)
 	}
 }
+
+// TestReshareRound1RejectsBadCommittees verifies that ReshareRound1
+// returns an error, and does not panic, when the old committee has no
+// party list.
+func TestReshareRound1RejectsBadCommittees(t *testing.T) {
+	newIDs := tss.GenerateTestPartyIDs(3)
+	params := tss.NewReSharingParameters(tss.Edwards(), nil, tss.NewPeerContext(newIDs), newIDs[0], 3, 1, 3, 1)
+	if _, _, err := ReshareRound1(params, nil); err == nil {
+		t.Fatal("ReshareRound1 accepted an old committee with no party list")
+	}
+}
