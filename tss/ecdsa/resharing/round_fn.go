@@ -334,66 +334,67 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
 	for j, msg := range r2NewMsgs {
+		Pj := params.NewParties().IDs()[j]
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
 			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
 		if H1j.Cmp(H2j) == 0 {
-			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 4, Pi, Pj)
 		}
 		if H1j.Cmp(reshareOne) == 0 || H2j.Cmp(reshareOne) == 0 {
-			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.BitLen() < resharePaiBitsLen {
-			return nil, tss.NewError(errors.New("paillier N insufficient bits"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("paillier N insufficient bits"), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even paillier N"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("even paillier N"), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime paillier N"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("prime paillier N"), TaskName, 4, Pi, Pj)
 		}
 		sqrtN := new(big.Int).Sqrt(paiPK.N)
 		if new(big.Int).Mul(sqrtN, sqrtN).Cmp(paiPK.N) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square paillier N"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("perfect-square paillier N"), TaskName, 4, Pi, Pj)
 		}
 		if NTildej.BitLen() < resharePaiBitsLen {
-			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 4, Pi, Pj)
 		}
 		if NTildej.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 4, Pi, Pj)
 		}
 		if NTildej.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 4, Pi, Pj)
 		}
 		sqrtNT := new(big.Int).Sqrt(NTildej)
 		if new(big.Int).Mul(sqrtNT, sqrtNT).Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 4, Pi, Pj)
 		}
 		if new(big.Int).GCD(nil, nil, H1j, NTildej).Cmp(reshareOne) != 0 {
-			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 4, Pi, Pj)
 		}
 		if new(big.Int).GCD(nil, nil, H2j, NTildej).Cmp(reshareOne) != 0 {
-			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 4, Pi, Pj)
 		}
 		h1Hex, h2Hex := hex.EncodeToString(H1j.Bytes()), hex.EncodeToString(H2j.Bytes())
 		if _, found := h1H2Map[h1Hex]; found {
-			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 4, Pi, Pj)
 		}
 		if _, found := h1H2Map[h2Hex]; found {
-			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 4, Pi, Pj)
 		}
 		h1H2Map[h1Hex], h1H2Map[h2Hex] = struct{}{}, struct{}{}
 		paiNHex := hex.EncodeToString(paiPK.N.Bytes())
 		if _, found := modulusMap[paiNHex]; found {
-			return nil, tss.NewError(errors.New("duplicate modulus (paillier N)"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate modulus (paillier N)"), TaskName, 4, Pi, Pj)
 		}
 		modulusMap[paiNHex] = struct{}{}
 		ntHex := hex.EncodeToString(NTildej.Bytes())
 		if _, found := modulusMap[ntHex]; found {
-			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 4, Pi, params.NewParties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 4, Pi, Pj)
 		}
 		modulusMap[ntHex] = struct{}{}
 

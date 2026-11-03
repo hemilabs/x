@@ -185,68 +185,69 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	dlnProof2Failed := make([]bool, len(r1Msgs))
 	wg := new(sync.WaitGroup)
 	for j, msg := range r1Msgs {
+		Pj := params.Parties().IDs()[j]
 		r1msg := msg.Content.(*KGRound1Message)
 		H1j, H2j, NTildej, paillierPKj := r1msg.H1,
 			r1msg.H2,
 			r1msg.NTilde,
 			r1msg.PaillierPK
 		if paillierPKj.N.BitLen() != paillierBitsLen {
-			return nil, tss.NewError(errors.New("paillier modulus insufficient bits"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("paillier modulus insufficient bits"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if paillierPKj.N.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even paillier modulus"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("even paillier modulus"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if paillierPKj.N.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime paillier modulus"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("prime paillier modulus"), TaskName, 2, params.PartyID(), Pj)
 		}
 		sqrtN := new(big.Int).Sqrt(paillierPKj.N)
 		if new(big.Int).Mul(sqrtN, sqrtN).Cmp(paillierPKj.N) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square paillier modulus"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("perfect-square paillier modulus"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if H1j.Cmp(H2j) == 0 {
-			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if H1j.Cmp(big.NewInt(1)) == 0 || H2j.Cmp(big.NewInt(1)) == 0 {
-			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if NTildej.BitLen() != paillierBitsLen {
-			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if NTildej.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if NTildej.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 2, params.PartyID(), Pj)
 		}
 		sqrtNT := new(big.Int).Sqrt(NTildej)
 		if new(big.Int).Mul(sqrtNT, sqrtNT).Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if paillierPKj.N.Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if new(big.Int).GCD(nil, nil, H1j, NTildej).Cmp(big.NewInt(1)) != 0 {
-			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if new(big.Int).GCD(nil, nil, H2j, NTildej).Cmp(big.NewInt(1)) != 0 {
-			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 2, params.PartyID(), Pj)
 		}
 		h1JHex, h2JHex := hex.EncodeToString(H1j.Bytes()), hex.EncodeToString(H2j.Bytes())
 		if _, found := h1H2Map[h1JHex]; found {
-			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 2, params.PartyID(), Pj)
 		}
 		if _, found := h1H2Map[h2JHex]; found {
-			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 2, params.PartyID(), Pj)
 		}
 		h1H2Map[h1JHex], h1H2Map[h2JHex] = struct{}{}, struct{}{}
 		paillierNHex := hex.EncodeToString(paillierPKj.N.Bytes())
 		if _, found := modulusMap[paillierNHex]; found {
-			return nil, tss.NewError(errors.New("duplicate modulus (Paillier N)"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate modulus (Paillier N)"), TaskName, 2, params.PartyID(), Pj)
 		}
 		modulusMap[paillierNHex] = struct{}{}
 		nTildeHex := hex.EncodeToString(NTildej.Bytes())
 		if _, found := modulusMap[nTildeHex]; found {
-			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 2, params.PartyID(), params.Parties().IDs()[j])
+			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 2, params.PartyID(), Pj)
 		}
 		modulusMap[nTildeHex] = struct{}{}
 
