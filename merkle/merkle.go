@@ -36,9 +36,8 @@ func (s sortableSlice) Len() int           { return len(s) }
 func (s sortableSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s sortableSlice) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
 
-// calcTreeWidth calculates the width of the tree at a given height.
-// calcTreeWidth calculates and returns the the number of nodes (width) or a
-// merkle tree at the given depth-first height.
+// calcTreeWidth returns the number of nodes (width) of a merkle tree with num
+// leaves at the given height.
 func calcTreeWidth(num, height uint32) uint32 {
 	// Use uint64, so a large num does not wrap.
 	return uint32((uint64(num) + (1 << height) - 1) >> height)
