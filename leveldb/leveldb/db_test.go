@@ -3154,3 +3154,57 @@ func TestDB_DiscardAfterFailedCommitStaysDiscarded(t *testing.T) {
 		t.Fatalf("k = %q after reopen, want \"committed\"", v)
 	}
 }
+
+// TestDB_TransactionCommitRetryKeepsSeq fails the MANIFEST sync of a
+// transaction and then commits it again.  The retry writes a fresh
+// MANIFEST, which must carry the sequence number of the transaction.
+// Without it the committed value is hidden after reopen.
+func TestDB_TransactionCommitRetryKeepsSeq(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+
+	tr, err := h.db.OpenTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Put([]byte("k"), []byte("v"), nil); err != nil {
+		t.Fatal(err)
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, errors.New("manifest sync error"))
+	if err := tr.Commit(); err == nil {
+		t.Fatal("Commit with a failed MANIFEST sync: expected an error")
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, nil)
+	if err := tr.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	h.reopenDB()
+	h.getVal("k", "v")
+}
+
+// TestDB_ManifestRotationKeepsCompPtr rotates the MANIFEST on every
+// commit.  The rotated MANIFEST must carry the compaction pointer of the
+// commit that rotates it, and that pointer must win over the older one.
+func TestDB_ManifestRotationKeepsCompPtr(t *testing.T) {
+	h := newDbHarnessWopt(t, &opt.Options{
+		DisableLargeBatchTransaction: true,
+		MaxManifestFileSize:          1,
+	})
+	defer h.close()
+
+	check := func(want string) {
+		t.Helper()
+		ptr := h.db.s.getCompPtr(0)
+		if ptr == nil || string(ptr.ukey()) != want {
+			t.Fatalf("level 0 compaction pointer = %v, want key %q", ptr, want)
+		}
+	}
+	for _, k := range []string{"a", "b"} {
+		h.put(k, "v")
+		h.compactMem()
+		h.compactRangeAt(0, "", "")
+		check(k)
+	}
+	h.reopenDB()
+	check("b")
+}

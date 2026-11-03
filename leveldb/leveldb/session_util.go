@@ -370,7 +370,7 @@ func (s *session) fillRecord(r *sessionRecord, snapshot bool) {
 		}
 
 		for level, ik := range s.stCompPtrs {
-			if ik != nil {
+			if ik != nil && !r.hasCompPtr(level) {
 				r.addCompPtr(level, ik)
 			}
 		}

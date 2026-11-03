@@ -35,6 +35,8 @@ Fixes in this fork on the transaction path:
   MANIFEST.  `Discard` after a failed commit forces this rewrite before
   it removes the tables.  If the rewrite fails too, it keeps the tables
   until the next `Open` removes them, which costs disk space until then.
+- A fresh MANIFEST keeps the sequence number, the journal numbers and
+  the compaction pointers of the commit that writes it.
 
 ## Module path
 
