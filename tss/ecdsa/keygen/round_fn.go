@@ -100,10 +100,10 @@ func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParam
 
 	// Paillier key and safe primes
 	var pp *LocalPreParams
-	validProof := preParams.Validate() && preParams.ValidateWithProof()
-	if preParams.Validate() && !validProof {
-		return nil, nil, errors.New("preParams failed validation (may be from older tss-lib version)")
-	} else if validProof {
+	if preParams.Validate() {
+		if !preParams.ValidateWithProof() {
+			return nil, nil, errors.New("preParams failed validation (may be from older tss-lib version)")
+		}
 		pp = &preParams
 	} else {
 		ctx, cancel := context.WithTimeout(ctx, params.SafePrimeGenTimeout())
