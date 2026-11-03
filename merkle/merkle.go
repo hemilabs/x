@@ -222,6 +222,10 @@ func (a *authPath) traverseAndBuild(height, pos uint32) {
 
 // Branch is a cooked merkle authentication path that can be transmitted
 // over a wire and can be verified on the other end.
+//
+// One proof can have more than one valid encoding.  For example, a subtree
+// without the matched leaf can go in as one hash or as the hashes of its
+// two children.  Do not identify or compare proofs by their bytes.
 type Branch struct {
 	NumLeaves uint32              // Nuber of leaves
 	Hashes    [][sha256.Size]byte // Merkle branch
