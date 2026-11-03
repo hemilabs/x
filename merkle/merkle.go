@@ -219,14 +219,13 @@ func (a *authPath) traverseAndBuild(height, pos uint32) {
 	}
 	a.bits = append(a.bits, isParent)
 
-	// When the node is a leaf node or not a parent of a matched node,
-	// append the hash to the list that will be part of the final merkle
-	// block.
 	// A leaf goes in as the leaf itself; the verifier hashes it.
 	if height == 0 {
 		a.finalHashes = append(a.finalHashes, a.allHashes[pos])
 		return
 	}
+
+	// A subtree without a matched leaf goes in as its node hash.
 	if isParent == 0x00 {
 		a.finalHashes = append(a.finalHashes, a.calcHash(height, pos))
 		return
@@ -244,9 +243,12 @@ func (a *authPath) traverseAndBuild(height, pos uint32) {
 
 // Branch is a cooked merkle authentication path that can be transmitted
 // over a wire and can be verified on the other end.
+//
+// Hashes holds, in depth-first order, the leaf itself for each leaf in the
+// branch, and the node hash for each subtree without a matched leaf.
 type Branch struct {
 	NumLeaves uint32              // Nuber of leaves
-	Hashes    [][sha256.Size]byte // Merkle branch
+	Hashes    [][sha256.Size]byte // Leaves and node hashes
 	Flags     []byte              // Bitmap of merkle tree
 }
 
