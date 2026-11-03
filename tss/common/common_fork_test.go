@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-// --- SHA512_256i nil guard (hash.go:73) ---
+// --- SHA512_256i nil guard (hash.go) ---
 
 func TestSHA512_256iNilInput(t *testing.T) {
 	// A nil big.Int hashes as zero and does not panic.
@@ -44,7 +44,7 @@ func TestSHA512_256iTaggedNilInput(t *testing.T) {
 	}
 }
 
-// --- RejectionSample no in-place mutation (hash_utils.go:24) ---
+// --- RejectionSample no in-place mutation (hash_utils.go) ---
 
 func TestRejectionSampleNoMutation(t *testing.T) {
 	q := big.NewInt(97) // small prime for testing
@@ -64,7 +64,7 @@ func TestRejectionSampleNoMutation(t *testing.T) {
 	}
 }
 
-// --- IsInInterval nil guard (int.go:60) ---
+// --- IsInInterval nil guard (int.go) ---
 
 func TestIsInIntervalNilB(t *testing.T) {
 	if IsInInterval(nil, big.NewInt(10)) {
@@ -96,7 +96,7 @@ func TestIsInIntervalValid(t *testing.T) {
 	}
 }
 
-// --- AppendBigIntToBytesSlice length-prefixed (int.go:75) ---
+// --- AppendBigIntToBytesSlice length-prefixed (int.go) ---
 
 func TestAppendBigIntToBytesSlice(t *testing.T) {
 	// The length prefix distinguishes zero from absent.
@@ -165,7 +165,7 @@ func TestAppendBigIntToBytesSliceDoesNotMutateBase(t *testing.T) {
 	}
 }
 
-// --- GetRandomPositiveInt rejects lessThan < 2 (random.go:45) ---
+// --- GetRandomPositiveInt rejects lessThan < 2 (random.go) ---
 
 func TestGetRandomPositiveIntRejectsNil(t *testing.T) {
 	result := GetRandomPositiveInt(rand.Reader, nil)
@@ -200,7 +200,7 @@ func TestGetRandomPositiveIntAcceptsTwo(t *testing.T) {
 	}
 }
 
-// --- PadToLengthBytesInPlace (slice.go:59) ---
+// --- PadToLengthBytesInPlace (slice.go) ---
 
 func TestPadToLengthBytesInPlace(t *testing.T) {
 	// Shorter than target: should be zero-padded on the left

@@ -222,9 +222,9 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	}
 
 	// Paillier modulus must also be sufficiently large. A malicious party could
-	// use a small Paillier key to break range proof soundness, allowing extraction of the discrete log from the
-	// ciphertext. Defense-in-depth: keygen round 2 validates exact 2048 bits, but the
-	// proof verifier should not rely on that.
+	// use a small Paillier key to break range proof soundness, allowing extraction
+	// of the discrete log from the ciphertext. Defense-in-depth: keygen round 2
+	// validates exact 2048 bits, but the proof verifier should not rely on that.
 	if pk.N.BitLen() < 2048 {
 		return false
 	}
@@ -235,7 +235,7 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	q7 := new(big.Int).Mul(q3, q3) // q^6
 	q7 = new(big.Int).Mul(q7, q)   // q^7
 
-	// Interval and coprimality checks on proof elements (present in both upstream and fork).
+	// Interval and coprimality checks on proof elements.
 	// Without them, a malicious prover can submit out-of-range or degenerate elements
 	// that cause modular arithmetic failures or weaken proof soundness.
 	if !common.IsInInterval(pf.Z, NTilde) {

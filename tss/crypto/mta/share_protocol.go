@@ -19,7 +19,7 @@ import (
 // AliceInit encrypts a under pkA and creates Alice's range proof. Session gives
 // SSID domain separation, which prevents cross-ceremony replay.
 func AliceInit(Session []byte, ec elliptic.Curve, pkA *paillier.PublicKey, a, NTildeB, h1B, h2B *big.Int, rand io.Reader) (cA *big.Int, pf *RangeProofAlice, err error) {
-	// Nil pkA or NTilde causes nil-pointer panics deep in proof construction.
+	// A nil argument would cause a nil-pointer panic deep in proof construction.
 	if ec == nil || pkA == nil || a == nil || NTildeB == nil || h1B == nil || h2B == nil || rand == nil {
 		return nil, nil, errors.New("AliceInit received nil argument")
 	}

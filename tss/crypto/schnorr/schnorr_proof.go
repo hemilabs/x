@@ -79,8 +79,8 @@ func (pf *ZKProof) Verify(Session []byte, X *crypto.ECPoint) bool {
 	}
 	tG := crypto.ScalarBaseMult(ec, pf.T)
 	Xc := X.ScalarMult(c)
-	// Error handling on Add() (same as upstream): if the result is the identity point,
-	// NewECPoint returns (nil, error) and the subsequent .X() call would panic.
+	// If the result is the identity point, Add returns (nil, error), and a
+	// .X() call on the nil result would panic.
 	aXc, err := pf.Alpha.Add(Xc)
 	if err != nil {
 		return false
@@ -105,7 +105,8 @@ func NewZKVProof(Session []byte, V, R *crypto.ECPoint, s, l *big.Int, rand io.Re
 	a, b := common.GetRandomPositiveInt(rand, q), common.GetRandomPositiveInt(rand, q)
 	aR := R.ScalarMult(a)
 	bG := crypto.ScalarBaseMult(ec, b)
-	// If the sum is the identity point, alpha is nil and alpha.X() panics.
+	// If the sum is the identity point, Add returns (nil, error), and
+	// alpha.X() on the nil result would panic.
 	alpha, err := aR.Add(bG)
 	if err != nil {
 		return nil, errors.New("ZKVProof: aR + bG yielded an invalid point")
@@ -151,7 +152,8 @@ func (pf *ZKVProof) Verify(Session []byte, V, R *crypto.ECPoint) bool {
 	}
 	tR := R.ScalarMult(pf.T)
 	uG := crypto.ScalarBaseMult(ec, pf.U)
-	// If the sum is the identity point, tRuG is nil and the .X() call panics.
+	// If the sum is the identity point, Add returns (nil, error), and
+	// tRuG.X() on the nil result would panic.
 	tRuG, err := tR.Add(uG)
 	if err != nil {
 		return false

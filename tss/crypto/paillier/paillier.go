@@ -212,7 +212,8 @@ func (privateKey *PrivateKey) Proof(k *big.Int, ecdsaPub *crypto2.ECPoint) Proof
 	iters := ProofIters
 	xs := GenerateXs(iters, k, privateKey.N, ecdsaPub)
 	M := new(big.Int).ModInverse(privateKey.N, privateKey.PhiN)
-	// If N is not coprime with PhiN (degenerate key), ModInverse returns nil and Exp panics.
+	// If N is not coprime with PhiN (degenerate key), ModInverse returns nil and
+	// Exp would panic.
 	if M == nil {
 		return pi // N not coprime with PhiN, degenerate key
 	}

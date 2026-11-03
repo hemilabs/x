@@ -53,10 +53,9 @@ const (
 	defaultSafePrimeGenTimeout = 5 * time.Minute
 )
 
-// Exported, used in `tss` client
-//
-// It panics on an invalid partyCount or threshold (e.g., threshold >= partyCount),
-// which violates the (t,n)-threshold assumption.
+// NewParameters returns the parameters for a keygen or signing run. It panics
+// if partyCount < 1 or threshold is not in [0, partyCount): such values
+// violate the (t,n)-threshold assumption.
 func NewParameters(ec elliptic.Curve, ctx *PeerContext, partyID *PartyID, partyCount, threshold int) *Parameters {
 	if partyCount < 1 {
 		panic(fmt.Sprintf("NewParameters: partyCount must be >= 1, got %d", partyCount))
@@ -210,10 +209,9 @@ func (params *Parameters) SetRand(rand io.Reader) {
 
 // ----- //
 
-// Exported, used in `tss` client
-//
-// It panics on an invalid newPartyCount or newThreshold, same rationale as
-// NewParameters above.
+// NewReSharingParameters returns the parameters for a resharing run. It panics
+// like NewParameters on bad old values, and if newPartyCount < 1 or
+// newThreshold is not in [0, newPartyCount).
 func NewReSharingParameters(ec elliptic.Curve, ctx, newCtx *PeerContext, partyID *PartyID, partyCount, threshold, newPartyCount, newThreshold int) *ReSharingParameters {
 	params := NewParameters(ec, ctx, partyID, partyCount, threshold)
 	if newPartyCount < 1 {

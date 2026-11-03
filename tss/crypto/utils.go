@@ -20,8 +20,9 @@ func GenerateNTildei(rand io.Reader, safePrimes [2]*big.Int) (NTildei, h1i, h2i 
 	if !safePrimes[0].ProbablyPrime(30) || !safePrimes[1].ProbablyPrime(30) {
 		return nil, nil, nil, fmt.Errorf("GenerateNTildei: expected two primes")
 	}
-	// If p == q, NTilde = p^2 which is trivially factorable, completely breaking Pedersen commitment
-	// hiding/binding and all range proofs that rely on the hardness of factoring NTilde.
+	// If p == q, NTilde = p^2 which is trivially factorable, completely breaking
+	// Pedersen commitment hiding/binding and all range proofs that rely on the
+	// hardness of factoring NTilde.
 	if safePrimes[0].Cmp(safePrimes[1]) == 0 {
 		return nil, nil, nil, fmt.Errorf("GenerateNTildei: the two primes must be distinct")
 	}
