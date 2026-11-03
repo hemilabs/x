@@ -128,6 +128,40 @@ func TestGeneratePreParamsFailingRandReader(t *testing.T) {
 	}
 }
 
+// blockingReader blocks each Read until ctx is done.
+type blockingReader struct {
+	ctx context.Context
+}
+
+func (b *blockingReader) Read([]byte) (int, error) {
+	<-b.ctx.Done()
+	return 0, b.ctx.Err()
+}
+
+// TestGeneratePreParamsReturnsWhenRandBlocks verifies that the function
+// returns when ctx is done, also when the generators cannot see ctx
+// because they block in the rand reader.
+func TestGeneratePreParamsReturnsWhenRandBlocks(t *testing.T) {
+	r := &blockingReader{ctx: t.Context()}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := GeneratePreParamsWithContextAndRandom(ctx, r, 1)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expected context.DeadlineExceeded, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no return after ctx was done")
+	}
+}
+
 // countingReader wraps an io.Reader and counts how many bytes are read.
 // Used to verify that a custom rand reader is actually being consumed.
 // bytesRead uses atomic access because the production code passes the
