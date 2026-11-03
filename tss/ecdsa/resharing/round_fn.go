@@ -404,7 +404,6 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 
 	// An early return above must leave no goroutine.
 	for j, msg := range r2NewMsgs {
-		Pj := params.NewParties().IDs()[j]
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
 			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
