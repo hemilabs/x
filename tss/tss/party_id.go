@@ -41,7 +41,7 @@ type (
 // ValidateBasic checks that the PartyID has a non-empty key and
 // non-negative index.
 func (pid *PartyID) ValidateBasic() bool {
-	return pid != nil && len(pid.Key) > 0 && 0 <= pid.Index
+	return pid != nil && pid.PartyIDData != nil && len(pid.Key) > 0 && 0 <= pid.Index
 }
 
 // NewPartyID constructs a new PartyID.

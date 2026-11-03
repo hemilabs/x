@@ -7,6 +7,7 @@ package keygen
 import (
 	"context"
 	"math/big"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -452,4 +453,36 @@ func TestRound2RejectsOversizedNTilde(t *testing.T) {
 	nt.SetBit(nt, 2048, 1) // set bit 2048 → 2049-bit value
 	msgs[victimIdx] = bad
 	expectRound2Error(t, fix, msgs, "NTildej insufficient bits", victimIdx)
+}
+
+// TestRound2LeavesNoDLNGoroutine verifies that a bad peer stops Round2
+// before it starts a DLN verification.
+func TestRound2LeavesNoDLNGoroutine(t *testing.T) {
+	preParams := loadTestPreParams(t, negN)
+	pIDs := tss.GenerateTestPartyIDs(negN)
+	peerCtx := tss.NewPeerContext(pIDs)
+	states := make([]*KeygenState, negN)
+	r1 := make([]*tss.Message, negN)
+	for i := 0; i < negN; i++ {
+		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
+		st, out, err := Round1(t.Context(), params, preParams[i])
+		if err != nil {
+			t.Fatalf("Round1[%d]: %v", i, err)
+		}
+		states[i], r1[i] = st, out.Messages[0]
+	}
+	bad := cloneR1MsgContent(r1[victimIdx])
+	c := bad.Content.(*KGRound1Message)
+	c.H2 = new(big.Int).Set(c.H1)
+	r1[victimIdx] = bad
+
+	// A DLN verification takes far longer than the return, so a
+	// started one is still running when the test counts.
+	before := runtime.NumGoroutine()
+	if _, err := Round2(t.Context(), states[0], r1); err == nil {
+		t.Fatal("Round2 accepted h1 == h2")
+	}
+	if after := runtime.NumGoroutine(); after > before {
+		t.Fatalf("%d goroutines still running after Round2 returned", after-before)
+	}
 }
