@@ -887,15 +887,21 @@ func TestDuplicateRootLookup(t *testing.T) {
 	// Chain:
 	//   C1->C2->C3 (HEAD)
 	tr := newTestLayerTree() // base = 0x1
-	tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil),
-		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false))
-	tr.add(common.Hash{0x3}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil),
-		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false))
+	if err := tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false)); err != nil {
+		t.Fatalf("add C2: %v", err)
+	}
+	if err := tr.add(common.Hash{0x3}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false)); err != nil {
+		t.Fatalf("add C3: %v", err)
+	}
 
 	// A fork block with the same state root as C2; inserting it must not
 	// pollute the lookup history for the canonical descendant C3.
-	tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil),
-		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false))
+	if err := tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil),
+		NewStateSetWithOrigin(randomAccountSet("0xa"), randomStorageSet([]string{"0xa"}, [][]string{{"0x1"}}, nil), nil, nil, false)); err != nil {
+		t.Fatalf("add duplicate C2: %v", err)
+	}
 	if n := tr.len(); n != 3 {
 		t.Fatalf("duplicate root insert changed layer count, got %d, want 3", n)
 	}
