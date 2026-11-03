@@ -418,9 +418,6 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 
 // ProveBob.Verify implements verification of Bob's proof without check "VerifyMta_Bob" used in the MtA protocol from GG18Spec (9) Fig. 11.
 func (pf *ProofBob) Verify(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2 *big.Int) bool {
-	if pf == nil {
-		return false
-	}
 	pfWC := &ProofBobWC{ProofBob: pf, U: nil}
 	return pfWC.Verify(Session, ec, pk, NTilde, h1, h2, c1, c2, nil)
 }
