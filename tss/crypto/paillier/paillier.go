@@ -58,22 +58,23 @@ var (
 	one  = big.NewInt(1)
 )
 
-// smallPrimes holds the primes below verifyPrimesUntil.  It is
-// read-only after init.
-var smallPrimes = func() []int64 {
+// primesBelow returns the primes below n by the sieve of Eratosthenes.
+// For n = verifyPrimesUntil it takes microseconds, which is small next
+// to the 2048-bit exponentiations in Verify.
+func primesBelow(n int) []int64 {
 	var out []int64
-	composite := make([]bool, verifyPrimesUntil)
-	for i := 2; i < verifyPrimesUntil; i++ {
+	composite := make([]bool, n)
+	for i := 2; i < n; i++ {
 		if composite[i] {
 			continue
 		}
 		out = append(out, int64(i))
-		for j := i * i; j < verifyPrimesUntil; j += i {
+		for j := i * i; j < n; j += i {
 			composite[j] = true
 		}
 	}
 	return out
-}()
+}
 
 // len is the length of the modulus (each prime = len / 2)
 func GenerateKeyPair(ctx context.Context, rand io.Reader, modulusBitLen int, optionalConcurrency ...int) (privateKey *PrivateKey, publicKey *PublicKey, err error) {
@@ -244,7 +245,7 @@ func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error)
 	}
 	iters := ProofIters
 	pch, xch := make(chan bool, 1), make(chan []*big.Int, 1) // buffered to allow early exit
-	prms := smallPrimes
+	prms := primesBelow(verifyPrimesUntil)
 	go func(ch chan<- bool) {
 		for _, prm := range prms {
 			// If prm divides N then Return 0
