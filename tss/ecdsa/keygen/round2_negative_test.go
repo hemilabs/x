@@ -32,6 +32,13 @@ type round1Fixture struct {
 // calling Round2 on states[0].
 func setupRound1ForNegativeTests(t *testing.T) *round1Fixture {
 	t.Helper()
+	return setupRound1Fixture(t, false)
+}
+
+// setupRound1Fixture runs a real 3-party keygen Round1.  If proofs is
+// false, the parties make no DLN, mod or fac proofs.
+func setupRound1Fixture(t *testing.T, proofs bool) *round1Fixture {
+	t.Helper()
 	const n = 3
 	const threshold = 1 // 2-of-3
 
@@ -44,10 +51,12 @@ func setupRound1ForNegativeTests(t *testing.T) *round1Fixture {
 	allR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
-		params.SetNoProofDLN()
-		params.SetNoProofMod()
-		params.SetNoProofFac()
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		if !proofs {
+			params.SetNoProofDLN()
+			params.SetNoProofMod()
+			params.SetNoProofFac()
+		}
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -458,24 +467,11 @@ func TestRound2RejectsOversizedNTilde(t *testing.T) {
 // no DLN proof and no sender, with proofs on.  Round2 must fail and
 // name the party of the slot.
 func TestRound2RejectsNilDLNProofWithNilFrom(t *testing.T) {
-	preParams := loadTestPreParams(t, negN)
-	pIDs := tss.GenerateTestPartyIDs(negN)
-	peerCtx := tss.NewPeerContext(pIDs)
-	states := make([]*KeygenState, negN)
-	r1 := make([]*tss.Message, negN)
-	for i := 0; i < negN; i++ {
-		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
-		st, out, err := Round1(t.Context(), params, preParams[i])
-		if err != nil {
-			t.Fatalf("Round1[%d]: %v", i, err)
-		}
-		states[i] = st
-		r1[i] = out.Messages[0]
-	}
-	bad := cloneR1MsgContent(r1[victimIdx])
+	fix := setupRound1Fixture(t, true)
+	msgs := cloneR1Msgs(fix.allR1)
+	bad := cloneR1MsgContent(msgs[victimIdx])
 	bad.Content.(*KGRound1Message).DLNProof1 = nil
 	bad.From = nil
-	r1[victimIdx] = bad
-	fix := &round1Fixture{states: states, allR1: r1}
-	expectRound2Error(t, fix, r1, "dln proof verification failed", victimIdx)
+	msgs[victimIdx] = bad
+	expectRound2Error(t, fix, msgs, "dln proof verification failed", victimIdx)
 }
