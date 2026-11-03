@@ -246,6 +246,10 @@ func (a *authPath) traverseAndBuild(height, pos uint32) {
 //
 // Hashes holds, in depth-first order, the leaf itself for each leaf in the
 // branch, and the node hash for each subtree without a matched leaf.
+//
+// One proof can have more than one valid encoding.  For example, a subtree
+// without the matched leaf can go in as one hash or as the hashes of its
+// two children.  Do not identify or compare proofs by their bytes.
 type Branch struct {
 	NumLeaves uint32              // Nuber of leaves
 	Hashes    [][sha256.Size]byte // Leaves and node hashes
