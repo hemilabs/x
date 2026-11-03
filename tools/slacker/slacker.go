@@ -49,7 +49,7 @@ func newClient(cfg *config) (*slack.Client, error) {
 		}
 		// slack-go adds the method name to the URL as a string, so a
 		// query or fragment would take the method name.
-		if u.Host == "" || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" {
+		if u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
 			return nil, errors.New("SLACK_URL must be a host and path, with no query or fragment")
 		}
 		// The token goes in each request, so require https.  Allow
