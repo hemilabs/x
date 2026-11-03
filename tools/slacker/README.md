@@ -28,12 +28,15 @@ slacker --channel <id> [--json | --raw] <message>
 ```
 
 Slacker escapes markup in `<message>`, so a mention or a link shows as plain
-text.  The `--raw` flag sends the markup as is.  Do not use `--raw` with text
+text. The `--raw` flag sends the markup as is. Do not use `--raw` with text
 from an untrusted source, such as a pull request title.
 
+Slacker exits 1 on bad usage or when the send fails. A send that takes more
+than 30 seconds fails.
+
 The `--json` flag will make `slacker` interpret the `<message>` as a JSON Block
-Kit payload.  Slacker sends the payload as is, so do not build it from text
-from an untrusted source.  For example:
+Kit payload. Slacker sends the payload as is, so do not build it from text
+from an untrusted source. For example:
 
 ```
 slacker --channel ccc2124 --json '[{"type":"card","body":{"type": "mrkdwn","text":"My message here!"}}]'

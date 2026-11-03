@@ -52,7 +52,7 @@ func newClient(cfg *config) (*slack.Client, error) {
 		if u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
 			return nil, errors.New("SLACK_URL must be a host and path, with no query or fragment")
 		}
-		// The token goes in each request, so require https.  Allow
+		// The token goes in each request, so require https. Allow
 		// http only to a loopback address, for tests.
 		if u.Scheme != "https" && (u.Scheme != "http" || !isLoopback(u.Hostname())) {
 			return nil, errors.New("SLACK_URL must use https, or http to a loopback address")
@@ -71,7 +71,7 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// sendText posts text.  Unless raw is set, it escapes markup, so a
+// sendText posts text. Unless raw is set, it escapes markup, so a
 // mention or link in text shows as plain text.
 func sendText(ctx context.Context, client *slack.Client, channel, text string, raw bool) error {
 	_, _, err := client.PostMessageContext(ctx, channel, slack.MsgOptionText(text, !raw))
