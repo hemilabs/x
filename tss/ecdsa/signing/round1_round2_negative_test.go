@@ -6,10 +6,12 @@ package signing
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"strings"
 	"testing"
 
+	"github.com/hemilabs/x/tss/v3/crypto/mta"
 	"github.com/hemilabs/x/tss/v3/tss"
 )
 
@@ -128,29 +130,46 @@ func TestSignRound2RejectsReceiverIDMismatch(t *testing.T) {
 	t.Logf("correctly rejected receiverId mismatch: %v", err)
 }
 
-// TestSignRound2RejectsNilRangeProofAlice verifies that SignRound2 rejects
-// a P2P message where RangeProofAlice is nil.
-// Exercises the guard at round_fn.go:212-216 and :243-247 (both goroutines).
-func TestSignRound2RejectsNilRangeProofAlice(t *testing.T) {
+// TestSignRound2RejectsInvalidPeerMessage sends a P2P message with a
+// nil RangeProofAlice or a nil C.  SignRound2 must name the sender.
+func TestSignRound2RejectsInvalidPeerMessage(t *testing.T) {
 	keys := doKeygen(t)
 	f := setupSignRound1(t, keys)
 
-	// Deep-clone the P2P messages destined for party 0 so we can corrupt one.
-	corruptP2P := CloneP2PSlice(f.R1P2P, CloneR1P2PMsg)
+	for _, field := range []string{"RangeProofAlice", "C"} {
+		corruptP2P := CloneP2PSlice(f.R1P2P, CloneR1P2PMsg)
+		corruptContent := corruptP2P[0][1].Content.(*SignRound1Message1)
+		switch field {
+		case "RangeProofAlice":
+			corruptContent.RangeProofAlice = nil
+		case "C":
+			corruptContent.C = nil
+		}
 
-	// Set RangeProofAlice to nil in the message from sender=1 to recipient=0.
-	corruptContent := corruptP2P[0][1].Content.(*SignRound1Message1)
-	corruptContent.RangeProofAlice = nil
+		_, err := SignRound2(t.Context(), f.States[0], corruptP2P[0], f.R1Bcast)
+		if err == nil || !strings.Contains(err.Error(), "invalid round 1 message") {
+			t.Fatalf("%s: expected 'invalid round 1 message', got: %v", field, err)
+		}
+		requireCulprit(t, err, 1)
+	}
+}
 
-	_, err := SignRound2(context.Background(), f.States[0], corruptP2P[0], f.R1Bcast)
-	if err == nil {
-		t.Fatal("expected error for nil RangeProofAlice, got nil")
+// TestSignRound2LocalNilArgumentNamesNoCulprit removes a Paillier key
+// from the local key data.  MtA fails with a nil argument, which is a
+// local failure, so SignRound2 must name no culprit.
+func TestSignRound2LocalNilArgumentNamesNoCulprit(t *testing.T) {
+	keys := doKeygen(t)
+	f := setupSignRound1(t, keys)
+	f.States[0].key.PaillierPKs[1] = nil
+
+	_, err := SignRound2(t.Context(), f.States[0], f.R1P2P[0], f.R1Bcast)
+	tssErr := &tss.Error{}
+	if !errors.As(err, &tssErr) || !errors.Is(err, mta.ErrNilArgument) {
+		t.Fatalf("expected a *tss.Error with ErrNilArgument, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "RangeProofAlice missing") {
-		t.Fatalf("unexpected error: %v", err)
+	if c := tssErr.Culprits(); len(c) != 0 {
+		t.Fatalf("culprits = %v, want none", c)
 	}
-	requireCulprit(t, err, 1)
-	t.Logf("correctly rejected nil RangeProofAlice: %v", err)
 }
 
 // TestSignRound2ContextCancellation verifies that SignRound2 returns an

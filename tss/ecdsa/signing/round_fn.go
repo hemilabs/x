@@ -173,12 +173,16 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 
 	i := params.PartyID().Index
 
-	// ReceiverID check
+	// Check each peer message here, so that a nil argument in MtA is a
+	// local failure.
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
 		}
 		r1msg := r1p2p[j].Content.(*SignRound1Message1)
+		if !r1msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(), Pj)
+		}
 		if !params.PartyID().KeyEquals(r1msg.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 2, params.PartyID(), Pj)
 		}
@@ -203,19 +207,10 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				return
 			}
 			r1msg := r1p2p[j].Content.(*SignRound1Message1)
-			rangeProofAliceJ := r1msg.RangeProofAlice
-			if rangeProofAliceJ == nil {
-				errsMid[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
-				gcancel()
-				return
-			}
-			if gctx.Err() != nil {
-				return
-			}
 			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(j)))
 			beta, c1ji, _, pi1ji, err := mta.BobMid(
 				AliceContextJ, ContextI, params.EC(), key.PaillierPKs[j],
-				rangeProofAliceJ, temp.gamma, r1msg.C,
+				r1msg.RangeProofAlice, temp.gamma, r1msg.C,
 				key.NTildej[j], key.H1j[j], key.H2j[j],
 				key.NTildej[i], key.H1j[i], key.H2j[i], params.Rand())
 			if errors.Is(err, mta.ErrNilArgument) {
@@ -239,19 +234,10 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				return
 			}
 			r1msg := r1p2p[j].Content.(*SignRound1Message1)
-			rangeProofAliceJ := r1msg.RangeProofAlice
-			if rangeProofAliceJ == nil {
-				errsMidWC[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
-				gcancel()
-				return
-			}
-			if gctx.Err() != nil {
-				return
-			}
 			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(j)))
 			v, c2ji, _, pi2ji, err := mta.BobMidWC(
 				AliceContextJ, ContextI, params.EC(), key.PaillierPKs[j],
-				rangeProofAliceJ, temp.w, r1msg.C,
+				r1msg.RangeProofAlice, temp.w, r1msg.C,
 				key.NTildej[j], key.H1j[j], key.H2j[j],
 				key.NTildej[i], key.H1j[i], key.H2j[i],
 				temp.bigWs[i], params.Rand())
