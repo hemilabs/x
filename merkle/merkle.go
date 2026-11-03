@@ -24,8 +24,13 @@ var (
 	ErrLeafNotFound = errors.New("leaf not proven by merkle branch")
 	ErrRootMismatch = errors.New("merkle root mismatch")
 	ErrMalformed    = errors.New("malformed merkle branch")
-	ErrNilLeaf      = errors.New("nil merkle leaf")
-	ErrDuplicate    = errors.New("duplicate merkle leaf")
+
+	// ErrNilLeaf is returned by Sorted and Ordered when a leaf is nil.
+	ErrNilLeaf = errors.New("nil merkle leaf")
+
+	// ErrDuplicate is returned by Sorted and Ordered when two leaves
+	// are equal.
+	ErrDuplicate = errors.New("duplicate merkle leaf")
 )
 
 // XXX debate wrapping this in type and make the merkle tree opaque.
