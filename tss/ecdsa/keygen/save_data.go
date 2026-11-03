@@ -71,7 +71,10 @@ func (preParams LocalPreParams) Validate() bool {
 // [FORK] ValidateWithProof: upstream only checked for nil fields. This hardened version
 // adds algebraic consistency checks to verify that the pre-params are internally consistent:
 // (1) NTilde = (2P+1)(2Q+1) — ensures NTilde is the product of safe primes derived from P, Q.
-// (2) H2 = H1^Alpha mod NTilde — ensures the discrete-log relationship needed for DLN proofs.
+// (2) H2 = H1^Alpha and H1 = H2^Beta mod NTilde — the discrete-log relationships for DLN proofs.
+// (3) NTilde and the Paillier N are 2048 bits, and N = PaillierSK.P * PaillierSK.Q.
+// (4) P, Q, 2P+1, 2Q+1, PaillierSK.P and PaillierSK.Q are prime.
+// The primality tests make this check slow, so call it one time per set of pre-params.
 // Without these checks, corrupted or tampered pre-params could silently produce invalid proofs
 // that would be rejected by honest verifiers, wasting an entire keygen ceremony.
 func (preParams LocalPreParams) ValidateWithProof() bool {

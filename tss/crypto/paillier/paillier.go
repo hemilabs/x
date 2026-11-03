@@ -206,7 +206,9 @@ func (privateKey *PrivateKey) Decrypt(c *big.Int) (m *big.Int, err error) {
 // Proof is an implementation of Gennaro, R., Micciancio, D., Rabin, T.:
 // An efficient non-interactive statistical zero-knowledge proof system for quasi-safe prime products.
 // In: In Proc. of the 5th ACM Conference on Computer and Communications Security (CCS-98. Citeseer (1998)
-
+//
+// The session ID binds the proof to one ceremony.  Verify must get the
+// same session ID.
 func (privateKey *PrivateKey) Proof(session []byte, k *big.Int, ecdsaPub *crypto2.ECPoint) Proof {
 	var pi Proof
 	iters := ProofIters
@@ -223,6 +225,8 @@ func (privateKey *PrivateKey) Proof(session []byte, k *big.Int, ecdsaPub *crypto
 	return pi
 }
 
+// Verify checks a Paillier key proof for pkN under the session ID that
+// the prover used.
 func (pf Proof) Verify(session []byte, pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error) {
 	// [FORK] Defense-in-depth: reject proofs with nil elements to prevent
 	// nil-pointer panics from degenerate keys or malformed messages.
