@@ -6,7 +6,6 @@
 package signing
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"errors"
@@ -177,14 +176,17 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 
 	i := params.PartyID().Index
 
-	// ReceiverID check
-	myKey := params.PartyID().KeyInt().Bytes()
+	// Check each peer message here, so that a nil argument in MtA is a
+	// local failure.
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
 		}
 		r1msg := r1p2p[j].Content.(*SignRound1Message1)
-		if !bytes.Equal(r1msg.ReceiverID, myKey) {
+		if !r1msg.ValidateBasic() {
+			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2, params.PartyID(), Pj)
+		}
+		if !params.PartyID().KeyEquals(r1msg.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 2, params.PartyID(), Pj)
 		}
 	}
@@ -208,21 +210,17 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				return
 			}
 			r1msg := r1p2p[j].Content.(*SignRound1Message1)
-			rangeProofAliceJ := r1msg.RangeProofAlice
-			if rangeProofAliceJ == nil {
-				errsMid[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
-				gcancel()
-				return
-			}
-			if gctx.Err() != nil {
-				return
-			}
 			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(j)))
 			beta, c1ji, _, pi1ji, err := mta.BobMid(
 				AliceContextJ, ContextI, params.EC(), key.PaillierPKs[j],
-				rangeProofAliceJ, temp.gamma, r1msg.C,
+				r1msg.RangeProofAlice, temp.gamma, r1msg.C,
 				key.NTildej[j], key.H1j[j], key.H2j[j],
 				key.NTildej[i], key.H1j[i], key.H2j[i], params.Rand())
+			if errors.Is(err, mta.ErrNilArgument) {
+				errsMid[j] = tss.NewError(err, TaskName, 2, params.PartyID())
+				gcancel()
+				return
+			}
 			if err != nil {
 				errsMid[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
 				gcancel()
@@ -239,22 +237,18 @@ func SignRound2(ctx context.Context, state *SigningState, r1p2p, r1bcast []*tss.
 				return
 			}
 			r1msg := r1p2p[j].Content.(*SignRound1Message1)
-			rangeProofAliceJ := r1msg.RangeProofAlice
-			if rangeProofAliceJ == nil {
-				errsMidWC[j] = tss.NewError(errorspkg.New("RangeProofAlice missing"), TaskName, 2, params.PartyID(), Pj)
-				gcancel()
-				return
-			}
-			if gctx.Err() != nil {
-				return
-			}
 			AliceContextJ := common.AppendBigIntToBytesSlice(temp.ssid, new(big.Int).SetInt64(int64(j)))
 			v, c2ji, _, pi2ji, err := mta.BobMidWC(
 				AliceContextJ, ContextI, params.EC(), key.PaillierPKs[j],
-				rangeProofAliceJ, temp.w, r1msg.C,
+				r1msg.RangeProofAlice, temp.w, r1msg.C,
 				key.NTildej[j], key.H1j[j], key.H2j[j],
 				key.NTildej[i], key.H1j[i], key.H2j[i],
 				temp.bigWs[i], params.Rand())
+			if errors.Is(err, mta.ErrNilArgument) {
+				errsMidWC[j] = tss.NewError(err, TaskName, 2, params.PartyID())
+				gcancel()
+				return
+			}
 			if err != nil {
 				errsMidWC[j] = tss.NewError(err, TaskName, 2, params.PartyID(), Pj)
 				gcancel()
@@ -301,13 +295,12 @@ func SignRound3(ctx context.Context, state *SigningState, r2p2p []*tss.Message) 
 	i := params.PartyID().Index
 
 	// ReceiverID check
-	myKey := params.PartyID().KeyInt().Bytes()
 	for j, Pj := range params.Parties().IDs() {
 		if j == i {
 			continue
 		}
 		r2msg := r2p2p[j].Content.(*SignRound2Message)
-		if !bytes.Equal(r2msg.ReceiverID, myKey) {
+		if !params.PartyID().KeyEquals(r2msg.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 3, params.PartyID(), Pj)
 		}
 	}
