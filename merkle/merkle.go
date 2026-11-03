@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"math/bits"
 	"slices"
 	"sort"
@@ -254,8 +255,11 @@ func (a *authPath) calcHash(height, pos uint32) *[sha256.Size]byte {
 // approach.
 func (a *authPath) traverseAndBuild(height, pos uint32) {
 	// Determine whether this node is a parent of a matched node.
+	// Use uint64, so the leaf range of a large tree does not wrap.
 	var isParent byte
-	for i := pos << height; i < (pos+1)<<height && i < a.numLeaves; i++ {
+	first := uint64(pos) << height
+	last := min(uint64(pos+1)<<height, uint64(a.numLeaves))
+	for i := first; i < last; i++ {
 		isParent |= a.matchedBits[i]
 	}
 	a.bits = append(a.bits, isParent)
@@ -293,12 +297,16 @@ type Branch struct {
 
 // AuthPath returns a Merkle tree authentication path for hash.  The leaves
 // must be in tree order: for a tree from Sorted, use SortLeaves.  It returns
-// nil if hash is not a leaf, or if a leaf is nil or a duplicate.
+// nil if hash is not a leaf, if a leaf is nil or a duplicate, or if there
+// are more leaves than NumLeaves can hold.
 func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
-	numLeaves := uint32(len(leaves))
-	if numLeaves == 0 || hash == nil || checkLeaves(leaves) != nil {
+	if len(leaves) == 0 || uint64(len(leaves)) > math.MaxUint32 {
 		return nil
 	}
+	if hash == nil || checkLeaves(leaves) != nil {
+		return nil
+	}
+	numLeaves := uint32(len(leaves))
 	ap := authPath{
 		numLeaves:   numLeaves,
 		matchedBits: make([]byte, 0, numLeaves),
@@ -318,14 +326,8 @@ func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 		return nil
 	}
 
-	// Calculate the number of merkle branches (height) in the tree.
-	height := uint32(0)
-	for calcTreeWidth(ap.numLeaves, height) > 1 {
-		height++
-	}
-
 	// Build the depth-first partial merkle tree.
-	ap.traverseAndBuild(height, 0)
+	ap.traverseAndBuild(treeHeight(numLeaves), 0)
 
 	// Create merkle branch.
 	mb := &Branch{
