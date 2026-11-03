@@ -108,9 +108,11 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 	return expectedH2.Cmp(preParams.H2i) == 0
 }
 
-// [FORK] ValidateSaveData performs comprehensive validation of loaded ECDSA save data,
-// checking for nil fields, array consistency, curve membership of public keys,
-// and the Feldman VSS invariant (Xi·G == BigXj[ownIndex]).
+// ValidateSaveData performs comprehensive validation of loaded ECDSA save data.
+// It checks for nil fields, array consistency and curve membership of public
+// keys.  It checks that Xi is in [1, q), that Xi·G == BigXj[ownIndex], that
+// BigXj interpolates to ECDSAPub, and that the own Paillier key, NTilde, H1
+// and H2 are present and equal the public values at ownIndex.
 //
 // Call this after loading save data from storage and before using it in signing
 // or resharing. Without this, corrupted or tampered save data could silently produce
@@ -152,7 +154,7 @@ func (saveData LocalPartySaveData) ValidateSaveData() error {
 		if saveData.NTildej[i] == nil || saveData.H1j[i] == nil || saveData.H2j[i] == nil {
 			return fmt.Errorf("ValidateSaveData: NTildej/H1j/H2j[%d] is nil", i)
 		}
-		if saveData.PaillierPKs[i] == nil {
+		if saveData.PaillierPKs[i] == nil || saveData.PaillierPKs[i].N == nil {
 			return fmt.Errorf("ValidateSaveData: PaillierPKs[%d] is nil", i)
 		}
 	}
@@ -170,8 +172,8 @@ func (saveData LocalPartySaveData) ValidateSaveData() error {
 	}
 
 	// Feldman VSS invariant: Xi·G must equal BigXj[ownIndex].
-	// [FORK] Guard Xi=0: ScalarBaseMult(0) panics (identity point). A zero Xi means
-	// the party's secret share is trivially known.
+	// ScalarBaseMult panics for Xi = 0 or Xi = q, because the result
+	// is the identity point.
 	ec := saveData.BigXj[ownIdx].Curve()
 	if saveData.Xi.Sign() <= 0 || saveData.Xi.Cmp(ec.Params().N) >= 0 {
 		return errors.New("ValidateSaveData: Xi is not in [1, q)")
@@ -190,19 +192,18 @@ func (saveData LocalPartySaveData) ValidateSaveData() error {
 		return errors.New("ValidateSaveData: BigXj does not interpolate to ECDSAPub")
 	}
 
-	// The own Paillier and Pedersen values must match the public ones.
-	if sk := saveData.PaillierSK; sk != nil && sk.N != nil &&
-		(saveData.PaillierPKs[ownIdx].N == nil || sk.N.Cmp(saveData.PaillierPKs[ownIdx].N) != 0) {
+	// Signing uses the own values, and the other parties use the
+	// public values at ownIndex.  They must be the same.
+	if !saveData.LocalPreParams.Validate() || saveData.PaillierSK.N == nil {
+		return errors.New("ValidateSaveData: own Paillier or Pedersen value is nil")
+	}
+	if saveData.PaillierSK.N.Cmp(saveData.PaillierPKs[ownIdx].N) != 0 {
 		return errors.New("ValidateSaveData: PaillierSK does not match PaillierPKs[ownIndex]")
 	}
-	for _, p := range [][2]*big.Int{
-		{saveData.NTildei, saveData.NTildej[ownIdx]},
-		{saveData.H1i, saveData.H1j[ownIdx]},
-		{saveData.H2i, saveData.H2j[ownIdx]},
-	} {
-		if p[0] != nil && p[0].Cmp(p[1]) != 0 {
-			return errors.New("ValidateSaveData: own Pedersen values do not match")
-		}
+	if saveData.NTildei.Cmp(saveData.NTildej[ownIdx]) != 0 ||
+		saveData.H1i.Cmp(saveData.H1j[ownIdx]) != 0 ||
+		saveData.H2i.Cmp(saveData.H2j[ownIdx]) != 0 {
+		return errors.New("ValidateSaveData: NTildei, H1i or H2i does not match the value at ownIndex")
 	}
 
 	return nil

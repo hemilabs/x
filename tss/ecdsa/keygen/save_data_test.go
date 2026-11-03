@@ -46,6 +46,12 @@ func validSaveData(t *testing.T) LocalPartySaveData {
 		sd.H2j[i] = big.NewInt(int64(3000 + i))
 		sd.PaillierPKs[i] = &paillier.PublicKey{N: big.NewInt(int64(4000 + i))}
 	}
+
+	// Own values equal the public values at index 0.
+	sd.PaillierSK = &paillier.PrivateKey{PublicKey: paillier.PublicKey{N: big.NewInt(4000)}}
+	sd.NTildei = big.NewInt(1000)
+	sd.H1i = big.NewInt(2000)
+	sd.H2i = big.NewInt(3000)
 	return sd
 }
 
@@ -412,22 +418,31 @@ func TestValidateHappyPath(t *testing.T) {
 }
 
 // TestValidateSaveDataRejectsTampering verifies that ValidateSaveData
-// rejects a wrong group key, an Xi out of range and a Paillier key of
-// another party.  Xi = q must not panic.
+// rejects a wrong group key, an Xi out of range, a missing own Paillier
+// key, and own values of another party.  Xi = q must not panic.
 func TestValidateSaveDataRejectsTampering(t *testing.T) {
 	ec := tss.S256()
-	for name, tamper := range map[string]func(sd *LocalPartySaveData){
-		"wrong ECDSAPub": func(sd *LocalPartySaveData) { sd.ECDSAPub = crypto.ScalarBaseMult(ec, big.NewInt(42)) },
-		"Xi = q":         func(sd *LocalPartySaveData) { sd.Xi = new(big.Int).Set(ec.Params().N) },
-		"other PaillierSK": func(sd *LocalPartySaveData) {
+	tests := []struct {
+		name   string
+		tamper func(sd *LocalPartySaveData)
+	}{
+		{"wrong ECDSAPub", func(sd *LocalPartySaveData) { sd.ECDSAPub = crypto.ScalarBaseMult(ec, big.NewInt(42)) }},
+		{"Xi = q", func(sd *LocalPartySaveData) { sd.Xi = new(big.Int).Set(ec.Params().N) }},
+		{"nil PaillierSK", func(sd *LocalPartySaveData) { sd.PaillierSK = nil }},
+		{"other PaillierSK", func(sd *LocalPartySaveData) {
 			sd.PaillierSK = &paillier.PrivateKey{PublicKey: paillier.PublicKey{N: big.NewInt(4001)}}
-		},
-		"other NTildei": func(sd *LocalPartySaveData) { sd.NTildei = big.NewInt(1001) },
-	} {
-		sd := validSaveData(t)
-		tamper(&sd)
-		if err := sd.ValidateSaveData(); err == nil {
-			t.Fatalf("%s: ValidateSaveData accepted tampered data", name)
-		}
+		}},
+		{"other NTildei", func(sd *LocalPartySaveData) { sd.NTildei = big.NewInt(1001) }},
+		{"other H1i", func(sd *LocalPartySaveData) { sd.H1i = big.NewInt(2001) }},
+		{"other H2i", func(sd *LocalPartySaveData) { sd.H2i = big.NewInt(3001) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sd := validSaveData(t)
+			tt.tamper(&sd)
+			if err := sd.ValidateSaveData(); err == nil {
+				t.Fatal("ValidateSaveData accepted tampered data")
+			}
+		})
 	}
 }
