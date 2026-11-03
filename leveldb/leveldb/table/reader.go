@@ -57,8 +57,9 @@ type block struct {
 func (b *block) seek(cmp comparer.Comparer, rstart, rlimit int, key []byte) (index, offset int, err error) {
 	index = sort.Search(b.restartsLen-rstart-(b.restartsLen-rlimit), func(i int) bool {
 		offset := int(binary.LittleEndian.Uint32(b.data[b.restartsOffset+4*(rstart+i):]))
-		rkey, _, _, n, eErr := b.entry(offset)
-		if eErr != nil {
+		// A restart entry holds its full key, so it shares no prefix.
+		rkey, _, nShared, n, eErr := b.entry(offset)
+		if eErr != nil || nShared != 0 {
 			if err == nil {
 				err = &ErrCorrupted{Reason: "bad restart entry"}
 			}

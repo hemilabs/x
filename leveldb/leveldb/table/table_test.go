@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/hemilabs/x/leveldb/leveldb/comparer"
 	"github.com/hemilabs/x/leveldb/leveldb/iterator"
 	"github.com/hemilabs/x/leveldb/leveldb/opt"
 	"github.com/hemilabs/x/leveldb/leveldb/storage"
@@ -190,5 +191,8 @@ func TestDecodeBlockBoundsNoPanic(t *testing.T) {
 	it := r.newBlockIter(b, nil, nil, false)
 	if it.First() || it.Error() == nil {
 		t.Fatal("the iterator accepted a shared prefix longer than the key")
+	}
+	if _, _, err := b.seek(comparer.DefaultComparer, 0, b.restartsLen, []byte("k")); err == nil {
+		t.Fatal("seek accepted a restart entry with a shared prefix")
 	}
 }
