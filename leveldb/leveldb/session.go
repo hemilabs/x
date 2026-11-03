@@ -153,9 +153,7 @@ func (s *session) recover() (err error) {
 		// record drops version edits, and the janitor of the same Open
 		// then deletes the tables they reference.  Only a torn last
 		// record, as a crash can leave, ends the log.
-		strict = true
-
-		jr      = journal.NewReader(reader, dropper{s, fd}, strict, true)
+		jr      = journal.NewReader(reader, dropper{s, fd}, true, true)
 		rec     = &sessionRecord{}
 		staging = s.stVersion.newStaging()
 	)
@@ -180,20 +178,15 @@ func (s *session) recover() (err error) {
 			err = nil
 			break
 		}
-		if err == nil {
-			// save compact pointers
-			for _, r := range rec.compPtrs {
-				s.setCompPtr(r.level, r.ikey)
-			}
-			// commit record to version staging
-			staging.commit(rec)
-		} else {
-			err = errors.SetFd(err, fd)
-			if strict || !errors.IsCorrupted(err) {
-				return
-			}
-			s.logf("manifest error: %v (skipped)", errors.SetFd(err, fd))
+		if err != nil {
+			return errors.SetFd(err, fd)
 		}
+		// save compact pointers
+		for _, r := range rec.compPtrs {
+			s.setCompPtr(r.level, r.ikey)
+		}
+		// commit record to version staging
+		staging.commit(rec)
 		rec.resetCompPtrs()
 		rec.resetAddedTables()
 		rec.resetDeletedTables()
