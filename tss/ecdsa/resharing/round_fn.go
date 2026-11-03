@@ -597,11 +597,12 @@ func reshareEcho(ssid []byte, r1Msgs, r2Msgs []*tss.Message) []byte {
 	return common.SHA512_256i(list...).Bytes()
 }
 
-// ReshareRound5 verifies FacProofs and saves the new key share.
+// ReshareRound5 checks that all new parties echo the same broadcasts,
+// verifies FacProofs and saves the new key share.
 // Only new committee members produce output (the final Save).
 //
 // r4P2P[j] is new party j's DGRound4Message1 (P2P FacProof).
-// r4Bcast[j] is new party j's DGRound4Message2 (ACK broadcast).
+// r4Bcast[j] is new party j's DGRound4Message2 (ACK broadcast with echo).
 func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*ReshareRoundOutput, error) {
 	params, save, temp, input := state.params, state.save, state.temp, state.input
 	tss.MergeMsgs(temp.dgRound4Message1s, r4P2P)

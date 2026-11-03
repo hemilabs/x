@@ -94,7 +94,8 @@ func Round1(params *tss.Parameters, preParams ...interface{}) (*KeygenState, *Ro
 	}, nil
 }
 
-// Round2 sends P2P shares and broadcasts decommitment + Schnorr proof.
+// Round2 sends P2P shares and broadcasts decommitment + Schnorr proof
+// + the echo of the round 1 broadcasts.
 func Round2(state *KeygenState, r1Msgs []*tss.Message) (*RoundOutput, error) {
 	params := state.params
 	temp := &state.temp
@@ -157,8 +158,9 @@ func round1Echo(ssid []byte, r1Msgs []*tss.Message) []byte {
 	return common.SHA512_256i(list...).Bytes()
 }
 
-// Round3 verifies all decommitments, shares, and Schnorr proofs,
-// then computes the distributed EdDSA public key and saves the result.
+// Round3 checks that all parties echo the same round 1 broadcasts,
+// verifies all decommitments, shares, and Schnorr proofs, then
+// computes the distributed EdDSA public key and saves the result.
 func Round3(state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, error) {
 	params := state.params
 	temp := &state.temp

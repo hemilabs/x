@@ -351,14 +351,15 @@ func round1Echo(ssid []byte, r1Msgs []*tss.Message) []byte {
 	return common.SHA512_256i(list...).Bytes()
 }
 
-// Round3 validates round 2 messages (de-commitments, VSS shares,
+// Round3 checks that all parties echo the same round 1 broadcasts,
+// validates round 2 messages (de-commitments, VSS shares,
 // FacProof, ModProof, ReceiverID), computes the aggregate public
 // key and per-party public key shares, and produces the round 3
 // Paillier proof broadcast.
 //
 // r2p2p[j] is party j's KGRound2Message1 (P2P, contains VSS share).
 // r2bcast[j] is party j's KGRound2Message2 (broadcast, contains
-// de-commitment and ModProof).
+// de-commitment, ModProof and echo).
 func Round3(ctx context.Context, state *KeygenState, r2p2p, r2bcast []*tss.Message) (*RoundOutput, error) {
 	params := state.params
 	save := state.save
