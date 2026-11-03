@@ -360,6 +360,9 @@ func TestProofBobWCRoundTrip(t *testing.T) {
 		if badBob.ValidateBasic() {
 			t.Fatal("ValidateBasic accepted nil ProofBob")
 		}
+		if badBob.Verify(testSession, ec, p.pkA, p.NTildeA, p.h1A, p.h2A, cA, c2) {
+			t.Fatal("Verify accepted nil ProofBob")
+		}
 		if (&mta.ProofBobWC{U: pf.U}).ValidateBasic() {
 			t.Fatal("ValidateBasic accepted nil embedded ProofBob")
 		}
