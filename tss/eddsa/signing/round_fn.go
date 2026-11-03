@@ -54,6 +54,9 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 // SignRound1 initializes signing state and broadcasts a commitment
 // to the signing nonce Ri.
 func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.Int, fullBytesLen int) (*SigningState, *SignRoundOutput, error) {
+	if err := params.CheckSelf(); err != nil {
+		return nil, nil, err
+	}
 	// Fail before any work when the ceremony ID is missing.
 	if _, err := params.CeremonySSID(); err != nil {
 		return nil, nil, err

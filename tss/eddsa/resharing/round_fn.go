@@ -70,6 +70,9 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 //
 // New committee parties call this too but get a no-op (nil messages).
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
+	if err := params.CheckCommittees(); err != nil {
+		return nil, nil, err
+	}
 	// Fail before any work when the ceremony ID is missing.
 	if _, err := params.CeremonySSID(); err != nil {
 		return nil, nil, err

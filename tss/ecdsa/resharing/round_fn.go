@@ -110,6 +110,9 @@ func reshareSSID(params *tss.ReSharingParameters, temp *localTempData, roundNumb
 // key is the existing key share.  preParams is for the new committee
 // (may be zero-value if this party is old-only).
 func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveData, preParams keygen.LocalPreParams) (*ReshareState, *ReshareRoundOutput, error) {
+	if err := params.CheckCommittees(); err != nil {
+		return nil, nil, err
+	}
 	// Fail before any work when the ceremony ID is missing.
 	if _, err := params.CeremonySSID(); err != nil {
 		return nil, nil, err
@@ -365,7 +368,7 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 	wg := new(sync.WaitGroup)
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
-	for j, msg := range r2NewMsgs {
+	for _, msg := range r2NewMsgs {
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
 			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
@@ -428,7 +431,13 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 4, Pi, msg.From)
 		}
 		modulusMap[ntHex] = struct{}{}
+	}
 
+	// An early return above must leave no goroutine.
+	for j, msg := range r2NewMsgs {
+		r2msg1 := msg.Content.(*DGRound2Message1)
+		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
+			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
 		nTasks := 1
 		if !params.NoProofDLN() {
 			nTasks = 3
