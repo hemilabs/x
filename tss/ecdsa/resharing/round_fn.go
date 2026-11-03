@@ -101,11 +101,12 @@ func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveDat
 		}
 	}
 	save := keygen.NewLocalPartySaveData(newPC)
-	// Reject stale pre-params as keygen does.
-	if preParams.Validate() && !preParams.ValidateWithProof() {
-		return nil, nil, errors.New("preParams failed validation")
-	}
-	if preParams.ValidateWithProof() {
+	// Present pre-params must pass the full check here.  Round 2 makes
+	// new primes only when there are none.
+	if preParams.Validate() {
+		if !preParams.ValidateWithProof() {
+			return nil, nil, errors.New("preParams failed validation")
+		}
 		save.LocalPreParams = preParams
 	}
 
