@@ -49,11 +49,17 @@ func generateDLNParams(t *testing.T) (h1, h2, x, p, q, N *big.Int) {
 	pMulQ := new(big.Int).Mul(p, q)
 
 	// h1 = f^2 mod N (a quadratic residue)
-	f := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	f, err := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	if err != nil {
+		t.Fatal(err)
+	}
 	h1 = modN.Mul(f, f)
 
 	// x = alpha, random coprime to N
-	alpha := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	alpha, err := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	if err != nil {
+		t.Fatal(err)
+	}
 	x = new(big.Int).Mod(alpha, pMulQ)
 
 	// h2 = h1^x mod N

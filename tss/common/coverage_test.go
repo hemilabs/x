@@ -107,9 +107,9 @@ func TestGetRandomGeneratorOfTheQuadraticResidue(t *testing.T) {
 	// Use a small safe-prime product: p=5 (q=2), p2=7 (q2=3), N=35
 	// This is tiny but exercises the code path.
 	n := big.NewInt(35)
-	g := GetRandomGeneratorOfTheQuadraticResidue(rand.Reader, n)
-	if g == nil {
-		t.Fatal("returned nil")
+	g, err := GetRandomGeneratorOfTheQuadraticResidue(rand.Reader, n)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if g.Sign() <= 0 || g.Cmp(n) >= 0 {
 		t.Fatalf("out of range: %v", g)

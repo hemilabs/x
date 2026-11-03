@@ -89,6 +89,8 @@ func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySav
 //
 // key is the existing key share.  preParams is for the new committee
 // (may be zero-value if this party is old-only).
+//
+// It returns an error if params fail CheckCommittees.
 func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveData, preParams keygen.LocalPreParams) (*ReshareState, *ReshareRoundOutput, error) {
 	if err := params.CheckCommittees(); err != nil {
 		return nil, nil, err
@@ -317,7 +319,10 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		return out, nil
 	}
 
-	dlnVerifier := keygen.NewDlnProofVerifier(params.Concurrency())
+	dlnVerifier, err := keygen.NewDlnProofVerifier(params.Concurrency())
+	if err != nil {
+		return nil, err
+	}
 	Pi := params.PartyID()
 	i := newIndex(params)
 
@@ -398,7 +403,10 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		modulusMap[ntHex] = struct{}{}
 	}
 
-	// An early return above must leave no goroutine.
+	// Start the proof goroutines only after every peer passes the checks
+	// above, so that a rejected peer leaks no goroutine.  The first bad
+	// proof cancels gctx.  A proof that is skipped because gctx is done
+	// reports false, and is not counted against its peer.
 	for j, msg := range r2NewMsgs {
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
@@ -431,15 +439,15 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		if !params.NoProofDLN() {
 			_j, _msg := j, msg
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
-			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
-				if !isValid {
+			dlnVerifier.VerifyDLNProof(gctx, r2msg1.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
+				if !isValid && gctx.Err() == nil {
 					dlnProof1FailCulprits[_j] = _msg.From
 					gcancel()
 				}
 				wg.Done()
 			})
-			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
-				if !isValid {
+			dlnVerifier.VerifyDLNProof(gctx, r2msg1.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
+				if !isValid && gctx.Err() == nil {
 					dlnProof2FailCulprits[_j] = _msg.From
 					gcancel()
 				}
@@ -510,7 +518,6 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 	}
 
 	// Compute Vc
-	var err error
 	Vc := make([]*crypto.ECPoint, params.NewThreshold()+1)
 	for c := 0; c <= params.NewThreshold(); c++ {
 		Vc[c] = vjc[0][c]

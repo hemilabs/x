@@ -59,6 +59,9 @@ func GeneratePreParamsWithContextAndRandom(ctx context.Context, rand io.Reader, 
 			panic(errors.New("GeneratePreParams: expected 0 or 1 item in `optionalConcurrency`"))
 		}
 		concurrency = optionalConcurrency[0]
+		if concurrency < 1 {
+			return nil, errors.New("GeneratePreParams: concurrency must be at least 1")
+		}
 	} else {
 		concurrency = runtime.NumCPU()
 	}
@@ -136,8 +139,14 @@ consumer:
 
 	p, q := sgps[0].Prime(), sgps[1].Prime()
 	modPQ := common.ModInt(new(big.Int).Mul(p, q))
-	f1 := common.GetRandomPositiveRelativelyPrimeInt(rand, NTildei)
-	alpha := common.GetRandomPositiveRelativelyPrimeInt(rand, NTildei)
+	f1, err := common.GetRandomPositiveRelativelyPrimeInt(rand, NTildei)
+	if err != nil {
+		return nil, err
+	}
+	alpha, err := common.GetRandomPositiveRelativelyPrimeInt(rand, NTildei)
+	if err != nil {
+		return nil, err
+	}
 	beta := modPQ.ModInverse(alpha)
 	// [FORK] Nil check on ModInverse result: upstream did not check. ModInverse returns nil
 	// when alpha is not coprime with p*q, which would cause a nil-pointer panic downstream

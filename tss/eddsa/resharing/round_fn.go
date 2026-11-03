@@ -67,6 +67,7 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 // and broadcasts a commitment.
 //
 // New committee parties call this too but get a no-op (nil messages).
+// It returns an error if params fail CheckCommittees.
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
 	if err := params.CheckCommittees(); err != nil {
 		return nil, nil, err

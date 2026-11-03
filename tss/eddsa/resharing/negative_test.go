@@ -167,12 +167,23 @@ func TestReshareRound2PubKeyMismatch(t *testing.T) {
 }
 
 // TestReshareRound1RejectsBadCommittees verifies that ReshareRound1
-// returns an error, and does not panic, when the old committee has no
-// party list.
+// returns an error, and does not panic, for bad committee settings.
 func TestReshareRound1RejectsBadCommittees(t *testing.T) {
-	newIDs := tss.GenerateTestPartyIDs(3)
-	params := tss.NewReSharingParameters(tss.Edwards(), nil, tss.NewPeerContext(newIDs), newIDs[0], 3, 1, 3, 1)
-	if _, _, err := ReshareRound1(params, nil); err == nil {
-		t.Fatal("ReshareRound1 accepted an old committee with no party list")
+	oldIDs, newIDs := tss.GenerateTestPartyIDs(3), tss.GenerateTestPartyIDs(3)
+	oldCtx, newCtx := tss.NewPeerContext(oldIDs), tss.NewPeerContext(newIDs)
+	stranger := tss.NewPartyID("s", "s", big.NewInt(12345))
+	for _, tc := range []struct {
+		name string
+		p    *tss.ReSharingParameters
+	}{
+		{"nil old context", tss.NewReSharingParameters(tss.Edwards(), nil, newCtx, newIDs[0], 3, 1, 3, 1)},
+		{"neither committee", tss.NewReSharingParameters(tss.Edwards(), oldCtx, newCtx, stranger, 3, 1, 3, 1)},
+		{"empty PartyID", tss.NewReSharingParameters(tss.Edwards(), oldCtx, newCtx, &tss.PartyID{}, 3, 1, 3, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := ReshareRound1(tc.p, nil); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
 	}
 }

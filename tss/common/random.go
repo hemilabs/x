@@ -55,40 +55,32 @@ func GetRandomPositiveInt(rand io.Reader, lessThan *big.Int) *big.Int {
 	return try
 }
 
-// GetRandomPrimeInt returns a random prime of the given bit length, or
-// nil if bits < 2.
+// GetRandomPrimeInt returns a random prime of the given bit length.  It
+// returns nil if bits < 2 or if rand fails.
 func GetRandomPrimeInt(rand io.Reader, bits int) *big.Int {
 	if bits < 2 {
 		return nil
 	}
-	try, err := cryptorand.Prime(rand, bits)
-	if err != nil ||
-		try.Cmp(zero) == 0 {
-		// fallback to older method
-		for {
-			try = MustGetRandomInt(rand, bits)
-			if probablyPrime(try) {
-				break
-			}
-		}
+	p, err := cryptorand.Prime(rand, bits)
+	if err != nil {
+		return nil
 	}
-	return try
+	return p
 }
 
 // GetRandomPositiveRelativelyPrimeInt returns a random element of Z/nZ
-// that has a multiplicative inverse.  It returns nil if n < 2.
-func GetRandomPositiveRelativelyPrimeInt(rand io.Reader, n *big.Int) *big.Int {
+// that has a multiplicative inverse.  It returns an error if n < 2, because
+// no such element exists.
+func GetRandomPositiveRelativelyPrimeInt(rand io.Reader, n *big.Int) (*big.Int, error) {
 	if n == nil || n.Cmp(two) < 0 {
-		return nil
+		return nil, errors.New("modulus must be at least 2")
 	}
-	var try *big.Int
 	for {
-		try = MustGetRandomInt(rand, n.BitLen())
+		try := MustGetRandomInt(rand, n.BitLen())
 		if IsNumberInMultiplicativeGroup(n, try) {
-			break
+			return try, nil
 		}
 	}
-	return try
 }
 
 func IsNumberInMultiplicativeGroup(n, v *big.Int) bool {
@@ -104,10 +96,15 @@ func IsNumberInMultiplicativeGroup(n, v *big.Int) bool {
 //	THIS METHOD ONLY WORKS IF N IS THE PRODUCT OF TWO SAFE PRIMES!
 //
 // https://github.com/didiercrunch/paillier/blob/d03e8850a8e4c53d04e8016a2ce8762af3278b71/utils.go#L39
-func GetRandomGeneratorOfTheQuadraticResidue(rand io.Reader, n *big.Int) *big.Int {
-	f := GetRandomPositiveRelativelyPrimeInt(rand, n)
+//
+// It returns an error if n < 2.
+func GetRandomGeneratorOfTheQuadraticResidue(rand io.Reader, n *big.Int) (*big.Int, error) {
+	f, err := GetRandomPositiveRelativelyPrimeInt(rand, n)
+	if err != nil {
+		return nil, err
+	}
 	fSq := new(big.Int).Mul(f, f)
-	return fSq.Mod(fSq, n)
+	return fSq.Mod(fSq, n), nil
 }
 
 // GetRandomQuadraticNonResidue returns a quadratic non residue of odd n.

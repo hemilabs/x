@@ -42,7 +42,10 @@ func ProveRangeAlice(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, 
 	// 1.
 	alpha := common.GetRandomPositiveInt(rand, q3)
 	// 2.
-	beta := common.GetRandomPositiveRelativelyPrimeInt(rand, pk.N)
+	beta, err := common.GetRandomPositiveRelativelyPrimeInt(rand, pk.N)
+	if err != nil {
+		return nil, err
+	}
 
 	// 3.
 	gamma := common.GetRandomPositiveInt(rand, q3NTilde)
