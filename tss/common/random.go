@@ -75,9 +75,8 @@ func GetRandomPrimeInt(rand io.Reader, bits int) *big.Int {
 	return try
 }
 
-// Generate a random element in the group of all the elements in Z/nZ that
-// has a multiplicative inverse.
-// It returns nil if n < 2.
+// GetRandomPositiveRelativelyPrimeInt returns a random element of Z/nZ
+// that has a multiplicative inverse.  It returns nil if n < 2.
 func GetRandomPositiveRelativelyPrimeInt(rand io.Reader, n *big.Int) *big.Int {
 	if n == nil || n.Cmp(two) < 0 {
 		return nil

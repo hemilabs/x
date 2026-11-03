@@ -311,9 +311,9 @@ func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, e
 				if q.ProbablyPrime(20) &&
 					isPocklingtonCriterionSatisfied(p) &&
 					q.BitLen() == qBitLen {
-					// A plain send blocks forever when the buffer
-					// is full and the caller returned.
 					if sgp := (&GermainSafePrime{p: p, q: q}); sgp.Validate() {
+						// A plain send blocks forever when the
+						// buffer is full and the caller returned.
 						select {
 						case primeCh <- sgp:
 						case <-ctx.Done():
