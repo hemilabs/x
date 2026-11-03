@@ -159,29 +159,33 @@ func (shares Shares) ReConstruct(ec elliptic.Curve) (secret *big.Int, err error)
 
 	secret = new(big.Int)
 	for i, share := range shares {
-		times := new(big.Int).SetInt64(1)
-		for j := 0; j < len(xs); j++ {
-			if j == i {
-				continue
-			}
-			sub := modN.Sub(xs[j], share.ID)
-			subInv := modN.ModInverse(sub)
-			// [FORK] Upstream does not check for nil ModInverse. If share IDs collide
-			// mod q, ModInverse returns nil causing a nil-pointer panic.
-			// Defense-in-depth: the mod-q duplicate check above now catches this
-			// condition, but this nil guard is retained as a safeguard.
-			if subInv == nil {
-				return nil, errors.New("ModInverse(xs[j] - share.ID) returned nil; share IDs may collide modulo the curve order")
-			}
-			div := modN.Mul(xs[j], subInv)
-			times = modN.Mul(times, div)
+		times, err := lagrangeAtZero(ec, xs, i)
+		if err != nil {
+			return nil, fmt.Errorf("ReConstruct: %w", err)
 		}
-
 		fTimes := modN.Mul(share.Share, times)
 		secret = modN.Add(secret, fTimes)
 	}
 
 	return secret, nil
+}
+
+// lagrangeAtZero returns the Lagrange weight of xs[i] at zero: the
+// product of xs[j] / (xs[j] - xs[i]) mod q for all j != i.
+func lagrangeAtZero(ec elliptic.Curve, xs []*big.Int, i int) (*big.Int, error) {
+	modQ := common.ModInt(ec.Params().N)
+	weight := big.NewInt(1)
+	for j := range xs {
+		if j == i {
+			continue
+		}
+		inv := modQ.ModInverse(modQ.Sub(xs[j], xs[i]))
+		if inv == nil {
+			return nil, fmt.Errorf("ids %d and %d collide modulo the curve order", i, j)
+		}
+		weight = modQ.Mul(weight, modQ.Mul(xs[j], inv))
+	}
+	return weight, nil
 }
 
 func samplePolynomial(ec elliptic.Curve, threshold int, secret *big.Int, rand io.Reader) []*big.Int {
@@ -215,34 +219,32 @@ func evaluatePolynomial(ec elliptic.Curve, threshold int, v []*big.Int, id *big.
 
 // InterpolateAtZero returns P(0) for the points P(ks[j]) = points[j]
 // by Lagrange interpolation over all the points.  If the points lie on
-// a polynomial of degree threshold or less, this is the group key.
+// a polynomial of degree threshold or less, this is the group key.  It
+// returns an error for a nil or zero key, two equal keys, or a nil
+// point.
 func InterpolateAtZero(ec elliptic.Curve, ks []*big.Int, points []*crypto.ECPoint) (*crypto.ECPoint, error) {
 	if len(ks) == 0 || len(ks) != len(points) {
 		return nil, errors.New("InterpolateAtZero: bad input length")
 	}
-	modQ := common.ModInt(ec.Params().N)
+	for j := range ks {
+		if ks[j] == nil || points[j] == nil {
+			return nil, fmt.Errorf("InterpolateAtZero: share %d is nil", j)
+		}
+	}
+	if _, err := CheckIndexes(ec, ks); err != nil {
+		return nil, fmt.Errorf("InterpolateAtZero: %w", err)
+	}
 	var sum *crypto.ECPoint
 	for j := range ks {
-		coef := big.NewInt(1)
-		for k := range ks {
-			if k == j {
-				continue
-			}
-			inv := modQ.ModInverse(modQ.Sub(ks[k], ks[j]))
-			if inv == nil {
-				return nil, fmt.Errorf("InterpolateAtZero: keys %d and %d collide", j, k)
-			}
-			coef = modQ.Mul(coef, modQ.Mul(ks[k], inv))
+		weight, err := lagrangeAtZero(ec, ks, j)
+		if err != nil {
+			return nil, fmt.Errorf("InterpolateAtZero: %w", err)
 		}
-		if coef.Sign() == 0 || points[j] == nil {
-			return nil, fmt.Errorf("InterpolateAtZero: bad share %d", j)
-		}
-		term := points[j].ScalarMult(coef)
+		term := points[j].ScalarMult(weight)
 		if sum == nil {
 			sum = term
 			continue
 		}
-		var err error
 		if sum, err = sum.Add(term); err != nil {
 			return nil, fmt.Errorf("InterpolateAtZero: %w", err)
 		}

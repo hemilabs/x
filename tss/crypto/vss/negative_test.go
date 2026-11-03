@@ -136,6 +136,7 @@ func TestInterpolateAtZero(t *testing.T) {
 		"length":    {ks[:2], pts},
 		"collision": {[]*big.Int{big.NewInt(1), big.NewInt(1)}, pts[:2]},
 		"zero key":  {[]*big.Int{big.NewInt(0), big.NewInt(1)}, pts[:2]},
+		"nil key":   {[]*big.Int{nil, big.NewInt(1)}, pts[:2]},
 		"nil point": {ks[:2], []*crypto.ECPoint{pts[0], nil}},
 	} {
 		if _, err := InterpolateAtZero(ec, in.ks, in.pts); err == nil {
