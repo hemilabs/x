@@ -59,6 +59,8 @@ func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]by
 // preParams must be pre-generated and validated via
 // GeneratePreParams / ValidateWithProof.  If preParams is zero-value
 // (Validate() returns false), Round1 generates fresh safe primes.
+//
+// It returns an error if params fail CheckSelf.
 func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParams) (*KeygenState, *RoundOutput, error) {
 	if err := params.CheckSelf(); err != nil {
 		return nil, nil, err
@@ -175,7 +177,10 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 
 	i := params.PartyID().Index
 
-	dlnVerifier := NewDlnProofVerifier(params.Concurrency())
+	dlnVerifier, err := NewDlnProofVerifier(params.Concurrency())
+	if err != nil {
+		return nil, err
+	}
 
 	// Comprehensive parameter validation battery.
 	h1H2Map := make(map[string]struct{}, len(r1Msgs)*2)
@@ -253,7 +258,12 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 		modulusMap[nTildeHex] = struct{}{}
 	}
 
-	// An early return above must leave no goroutine.
+	// Start the proof goroutines only after every peer passes the checks
+	// above, so that a rejected peer leaks no goroutine.  The first bad
+	// proof cancels gctx.  A proof that is skipped because gctx is done
+	// reports false, and is not counted against its peer.
+	gctx, gcancel := context.WithCancel(ctx)
+	defer gcancel()
 	for j, msg := range r1Msgs {
 		r1msg := msg.Content.(*KGRound1Message)
 		H1j, H2j, NTildej := r1msg.H1, r1msg.H2, r1msg.NTilde
@@ -262,15 +272,17 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 			_j := j
 			_msg := msg
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
-			dlnVerifier.VerifyDLNProof(r1msg.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
-				if !isValid {
+			dlnVerifier.VerifyDLNProof(gctx, r1msg.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
+				if !isValid && gctx.Err() == nil {
 					dlnProof1FailCulprits[_j] = _msg.From
+					gcancel()
 				}
 				wg.Done()
 			})
-			dlnVerifier.VerifyDLNProof(r1msg.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
-				if !isValid {
+			dlnVerifier.VerifyDLNProof(gctx, r1msg.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
+				if !isValid && gctx.Err() == nil {
 					dlnProof2FailCulprits[_j] = _msg.From
+					gcancel()
 				}
 				wg.Done()
 			})

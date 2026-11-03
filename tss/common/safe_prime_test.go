@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"math/big"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -69,16 +70,42 @@ func TestGetRandomGermainPrimeConcurrent(t *testing.T) {
 	}
 }
 
-// TestGetRandomSafePrimesConcurrentReturns verifies that workers do not
-// block on a full buffer, and that a concurrency below 1 gives an error.
-// A worker that blocks makes the search hang until the test times out.
+// TestGetRandomSafePrimesConcurrentReturns verifies that the search
+// returns when its workers find more primes than it needs.  A worker that
+// blocks on its send makes the deferred Wait hang, so the loop runs under
+// a deadline.  With 8 workers and 32-bit primes, the extra workers find
+// primes within the 200 runs.
 func TestGetRandomSafePrimesConcurrentReturns(t *testing.T) {
-	for i := 0; i < 200; i++ {
-		if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 8, rand.Reader); err != nil {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	errc := make(chan error, 1)
+	go func() {
+		for i := 0; i < 200; i++ {
+			if _, err := GetRandomSafePrimesConcurrent(ctx, 32, 1, 8, rand.Reader); err != nil {
+				errc <- err
+				return
+			}
+		}
+		errc <- nil
+	}()
+	select {
+	case err := <-errc:
+		if err != nil {
 			t.Fatal(err)
 		}
+	case <-ctx.Done():
+		t.Fatal("safe-prime search did not return")
 	}
-	if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 0, rand.Reader); err == nil {
-		t.Fatal("concurrency 0: expected an error")
+}
+
+// TestGetRandomSafePrimesConcurrentBadConcurrency verifies that a
+// concurrency below 1 gives an error.
+func TestGetRandomSafePrimesConcurrentBadConcurrency(t *testing.T) {
+	for _, c := range []int{0, -1} {
+		t.Run(strconv.Itoa(c), func(t *testing.T) {
+			if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, c, rand.Reader); err == nil {
+				t.Fatalf("concurrency %d: expected an error", c)
+			}
+		})
 	}
 }

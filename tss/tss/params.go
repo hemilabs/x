@@ -115,16 +115,35 @@ func (params *Parameters) SafePrimeGenTimeout() time.Duration {
 	return params.safePrimeGenTimeout
 }
 
-// SetConcurrency sets the concurrency level.  A value below 1 is
-// stored as 1.
-func (params *Parameters) SetConcurrency(concurrency int) {
-	params.concurrency = max(concurrency, 1)
+// SetConcurrency sets the concurrency level.  It returns an error and
+// keeps the old level if concurrency < 1.
+func (params *Parameters) SetConcurrency(concurrency int) error {
+	if concurrency < 1 {
+		return errors.New("concurrency must be at least 1")
+	}
+	params.concurrency = concurrency
+	return nil
 }
 
-// CheckSelf returns an error if the own PartyID is not in the party
-// list at its Index, or if the party count does not match the list.
+// checkPartyList returns an error if an entry of ids is not a valid
+// PartyID, or if the Index of an entry is not its position in ids.
+func checkPartyList(ids SortedPartyIDs) error {
+	for i, id := range ids {
+		if !id.ValidateBasic() || id.Index != i {
+			return fmt.Errorf("party list entry %d is not valid", i)
+		}
+	}
+	return nil
+}
+
+// CheckSelf returns an error if an entry of the party list is not valid,
+// if the party count does not match the list, or if the own PartyID is
+// not in the list at its Index.
 func (params *Parameters) CheckSelf() error {
 	pid, ids := params.PartyID(), params.Parties().IDs()
+	if err := checkPartyList(ids); err != nil {
+		return err
+	}
 	if !pid.ValidateBasic() || params.PartyCount() != len(ids) ||
 		pid.Index >= len(ids) || ids[pid.Index].KeyInt().Cmp(pid.KeyInt()) != 0 {
 		return errors.New("own PartyID does not match the party list")
@@ -132,11 +151,19 @@ func (params *Parameters) CheckSelf() error {
 	return nil
 }
 
-// CheckCommittees returns an error if a committee count does not match
-// its party list, or if the own PartyID is in neither committee.
+// CheckCommittees returns an error if the own PartyID has no key, if an
+// entry of a committee list is not valid, if a committee count does not
+// match its list, or if the own PartyID is in neither committee.  It does
+// not check the Index of the own PartyID, because reshare finds the party
+// in each committee by its key.
 func (rgParams *ReSharingParameters) CheckCommittees() error {
-	if !rgParams.PartyID().ValidateBasic() {
-		return errors.New("own PartyID is not valid")
+	if pid := rgParams.PartyID(); pid == nil || pid.PartyIDData == nil || len(pid.Key) == 0 {
+		return errors.New("own PartyID has no key")
+	}
+	for _, ids := range []SortedPartyIDs{rgParams.OldParties().IDs(), rgParams.NewParties().IDs()} {
+		if err := checkPartyList(ids); err != nil {
+			return err
+		}
 	}
 	if rgParams.OldPartyCount() != len(rgParams.OldParties().IDs()) ||
 		rgParams.NewPartyCount() != len(rgParams.NewParties().IDs()) {
