@@ -64,6 +64,7 @@ r4out, _ := keygen.Round4(ctx, state, r3Msgs)
 import "github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
 
 m := new(big.Int).SetBytes(msgHash[:])
+params.SetCeremonyID(signID) // required: a new ID for each signing, not the keygen ID
 sigState, r1out, _ := signing.SignRound1(params, keyShare, m, nil, 0)
 r2out, _ := signing.SignRound2(ctx, sigState, r1p2p, r1bcast)
 r3out, _ := signing.SignRound3(ctx, sigState, r2p2p)
@@ -130,6 +131,7 @@ r3out, _ := keygen.Round3(state, r2p2p, r2bcast)
 import "github.com/hemilabs/x/tss-lib/v3/eddsa/signing"
 
 m := new(big.Int).SetBytes(msgHash[:])
+params.SetCeremonyID(signID) // required: a new ID for each signing, not the keygen ID
 sigState, r1out, _ := signing.SignRound1(params, keyShare, m, 0)
 r2out, _ := signing.SignRound2(sigState, r1)
 r3out, _ := signing.SignRound3(sigState, r2)
