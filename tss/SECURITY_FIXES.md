@@ -4,8 +4,9 @@ Security fixes from the audit of upstream
 [binance/tss-lib](https://github.com/bnb-chain/tss-lib), implemented
 in the v3 channel-free round function architecture.
 
-77 fixes in production code across 24 files, all annotated with
-`[FORK]` comments in source.  Grep for `[FORK]` to find them all.
+76 fixes in production code across 24 files are annotated with
+`[FORK]` comments in source.  Grep for `[FORK]` to find them.  Later
+fixes have no annotation.  Each one has its own section below.
 
 The v2 base had 260 annotations across 88 files — the difference is
 that v3 deleted the channel-based `Party`/`Round`/`BaseUpdate` API
