@@ -59,7 +59,8 @@ func RegisterCurve(name CurveName, curve elliptic.Curve) {
 	registry[name] = curve
 }
 
-// return curve, exist(bool)
+// GetCurveByName returns the curve registered as name.  It returns
+// false if no curve has that name.  It is safe for concurrent use.
 func GetCurveByName(name CurveName) (elliptic.Curve, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -70,7 +71,9 @@ func GetCurveByName(name CurveName) (elliptic.Curve, bool) {
 	return nil, false
 }
 
-// return name, exist(bool)
+// GetCurveName returns the name under which the type of curve is
+// registered.  It returns false if the type is not registered.  It is
+// safe for concurrent use.
 func GetCurveName(curve elliptic.Curve) (CurveName, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -94,15 +97,20 @@ func SameCurve(lhs, rhs elliptic.Curve) bool {
 	return false
 }
 
-// EC returns the current elliptic curve in use. The default is secp256k1
+// EC returns the default curve, secp256k1 unless SetCurve changed it.
+// ECPoint gob decoding uses it, and ECPoint JSON decoding uses it when
+// the JSON has no curve name.  It is safe for concurrent use.
 func EC() elliptic.Curve {
 	mu.RLock()
 	defer mu.RUnlock()
 	return ec
 }
 
-// SetCurve sets the curve used by TSS. Must be called before Start. The default is secp256k1
-// Deprecated
+// SetCurve sets the default curve that EC returns.  It panics if curve
+// is nil.  It is safe for concurrent use.
+//
+// Deprecated: a ceremony uses the curve in its Parameters, not this
+// default.
 func SetCurve(curve elliptic.Curve) {
 	if curve == nil {
 		panic(errors.New("SetCurve received a nil curve"))
