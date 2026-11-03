@@ -34,7 +34,11 @@ var (
 	// ErrRootMismatch is returned when the root of the branch is not
 	// the given root.
 	ErrRootMismatch = errors.New("merkle root mismatch")
-	ErrMalformed    = errors.New("malformed merkle branch")
+
+	// ErrMalformed is returned when a branch, root or leaf does not
+	// have the correct format.  An example is a branch with too few
+	// flag bits or hashes for NumLeaves.
+	ErrMalformed = errors.New("malformed merkle branch")
 )
 
 // XXX debate wrapping this in type and make the merkle tree opaque.
