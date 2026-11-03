@@ -259,6 +259,17 @@ func (rgParams *ReSharingParameters) NewThreshold() int {
 	return rgParams.newThreshold
 }
 
+// ConfirmQuorum returns the number of matching confirmations from the
+// new committee that an old party needs before it retires its old
+// share.  The confirmation digest is public, so up to t corrupt new
+// parties can copy it.  Out of 2t+1 confirmers at least t+1 are
+// honest and hold working shares, and they can sign without the
+// corrupt parties.  A committee with fewer than 2t+1 parties must
+// confirm in full.
+func (rgParams *ReSharingParameters) ConfirmQuorum() int {
+	return min(2*rgParams.newThreshold+1, rgParams.newPartyCount)
+}
+
 // [FORK] Append-aliasing fix: upstream does `append(old, newParties...)` directly,
 // which can corrupt the OldParties backing array if old has spare capacity. We
 // allocate a fresh slice before appending to avoid this aliasing corruption.

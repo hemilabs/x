@@ -652,16 +652,6 @@ func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*Reshare
 	return out, nil
 }
 
-// confirmQuorum returns the number of matching confirmations that
-// old parties need before they retire their shares.  The digest is
-// public, so up to t corrupt new parties can copy it.  Out of 2t+1
-// confirmers at least t+1 are honest and hold working shares, and
-// they can sign without the corrupt parties.  A committee with fewer
-// than 2t+1 parties must confirm in full.
-func confirmQuorum(t, n int) int {
-	return min(2*t+1, n)
-}
-
 // confirmDigest binds a confirmation to the session, the group key,
 // the fresh round 1 commitments and the new public shares.
 func confirmDigest(ssid []byte, pub *crypto.ECPoint, vcts []*big.Int, bigXj []*crypto.ECPoint) ([]byte, error) {
@@ -679,7 +669,7 @@ func confirmDigest(ssid []byte, pub *crypto.ECPoint, vcts []*big.Int, bigXj []*c
 }
 
 // ReshareConfirm reports whether an old committee party may retire
-// its old share.  It returns true when confirmQuorum new parties
+// its old share.  It returns true when ConfirmQuorum new parties
 // confirm the same sharing of the same key for this ceremony.
 //
 // r5Msgs[j] is new party j's DGRound5Message.  Missing, foreign or
@@ -714,7 +704,7 @@ func ReshareConfirm(state *ReshareState, r5Msgs []*tss.Message) (bool, error) {
 		}
 		counts[string(c.Digest)]++
 	}
-	quorum := confirmQuorum(params.NewThreshold(), params.NewPartyCount())
+	quorum := params.ConfirmQuorum()
 	for _, n := range counts {
 		if n >= quorum {
 			return true, nil

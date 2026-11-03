@@ -131,6 +131,30 @@ func TestReSharingParametersGetters(t *testing.T) {
 	}
 }
 
+func TestReSharingParametersConfirmQuorum(t *testing.T) {
+	tests := []struct {
+		name string
+		n, t int
+		want int
+	}{
+		{"2t+1 below n", 5, 1, 3},
+		{"2t+1 equals n", 5, 2, 5},
+		{"2t+1 above n", 3, 2, 3},
+		{"threshold zero", 2, 0, 1},
+	}
+	oldPIDs := GenerateTestPartyIDs(3)
+	oldCtx := NewPeerContext(oldPIDs)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			newCtx := NewPeerContext(GenerateTestPartyIDs(tt.n))
+			params := NewReSharingParameters(S256(), oldCtx, newCtx, oldPIDs[0], 3, 1, tt.n, tt.t)
+			if got := params.ConfirmQuorum(); got != tt.want {
+				t.Fatalf("ConfirmQuorum(n=%d, t=%d) = %d, want %d", tt.n, tt.t, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestReSharingParametersCommitteeMembership(t *testing.T) {
 	oldPIDs := GenerateTestPartyIDs(3)
 	newPIDs := GenerateTestPartyIDs(3)
