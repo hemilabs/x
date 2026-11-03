@@ -257,7 +257,6 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 
 	// An early return above must leave no goroutine.
 	for j, msg := range r1Msgs {
-		Pj := params.Parties().IDs()[j]
 		r1msg := msg.Content.(*KGRound1Message)
 		H1j, H2j, NTildej := r1msg.H1, r1msg.H2, r1msg.NTilde
 		if !params.NoProofDLN() {
