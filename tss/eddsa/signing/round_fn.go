@@ -271,7 +271,8 @@ func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput,
 	}
 
 	if sumS.Sign() == 0 {
-		return nil, fmt.Errorf("accumulated S is zero: malicious share detected")
+		return nil, tss.NewError(errors.New("accumulated S is zero"),
+			TaskName, 4, params.PartyID(), badShares(state, r3Msgs)...)
 	}
 
 	// Build signature data.
