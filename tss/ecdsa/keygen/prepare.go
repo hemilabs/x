@@ -107,6 +107,8 @@ func GeneratePreParamsWithContextAndRandom(ctx context.Context, rand io.Reader, 
 consumer:
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("generate pre-params: %w", ctx.Err())
 		case <-logProgressTicker.C:
 			common.Logger.Info("still generating primes...")
 		case sgps = <-sgpCh:
