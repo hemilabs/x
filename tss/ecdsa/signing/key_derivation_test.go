@@ -94,3 +94,27 @@ func TestUpdatePublicKeyAndAdjustBigXjRejectsWrongChild(t *testing.T) {
 		t.Fatal("a rejected call changed the keys")
 	}
 }
+
+// TestUpdatePublicKeyAndAdjustBigXjErrorKeepsKeys verifies that an error
+// on a later BigXj leaves the key and the earlier BigXj unchanged.
+func TestUpdatePublicKeyAndAdjustBigXjErrorKeepsKeys(t *testing.T) {
+	ec := tss.S256()
+	delta := big.NewInt(7)
+	pub := crypto.ScalarBaseMult(ec, big.NewInt(42))
+	// minusDelta + delta*G is the identity point, so Add fails.
+	minusDelta := crypto.ScalarBaseMult(ec, new(big.Int).Sub(ec.Params().N, delta))
+	save := keygen.LocalPartySaveData{ECDSAPub: pub, BigXj: []*crypto.ECPoint{pub, minusDelta}}
+	child, err := pub.Add(crypto.ScalarBaseMult(ec, delta))
+	if err != nil {
+		t.Fatal(err)
+	}
+	extPub := &ecdsa.PublicKey{Curve: ec, X: child.X(), Y: child.Y()}
+
+	keys := []keygen.LocalPartySaveData{save}
+	if err := UpdatePublicKeyAndAdjustBigXj(delta, keys, extPub, ec); err == nil {
+		t.Fatal("expected an error for an identity BigXj")
+	}
+	if !keys[0].ECDSAPub.Equals(pub) || !keys[0].BigXj[0].Equals(pub) {
+		t.Fatal("a failed call changed the keys")
+	}
+}
