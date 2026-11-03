@@ -28,7 +28,7 @@ func TestSignRound3RejectsReceiverIDMismatch(t *testing.T) {
 		break
 	}
 
-	_, err := SignRound3(context.Background(), f.States[victim], corrupted)
+	_, err := SignRound3(t.Context(), f.States[victim], corrupted)
 	if err == nil {
 		t.Fatal("expected error for ReceiverID mismatch, got nil")
 	}
@@ -55,7 +55,7 @@ func TestSignRound3RejectsNilProofBob(t *testing.T) {
 		break
 	}
 
-	_, err := SignRound3(context.Background(), f.States[victim], corrupted)
+	_, err := SignRound3(t.Context(), f.States[victim], corrupted)
 	if err == nil {
 		t.Fatal("expected error for nil ProofBob, got nil")
 	}
@@ -82,7 +82,7 @@ func TestSignRound3RejectsNilProofBobWC(t *testing.T) {
 		break
 	}
 
-	_, err := SignRound3(context.Background(), f.States[victim], corrupted)
+	_, err := SignRound3(t.Context(), f.States[victim], corrupted)
 	if err == nil {
 		t.Fatal("expected error for nil ProofBobWC, got nil")
 	}
@@ -98,7 +98,7 @@ func TestSignRound3RejectsNilProofBobWC(t *testing.T) {
 func TestSignRound3ContextCancellation(t *testing.T) {
 	f := setupThroughRound2(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // cancel immediately
 
 	_, err := SignRound3(ctx, f.States[0], f.R2P2P[0])

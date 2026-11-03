@@ -50,7 +50,7 @@ func Test_Validate_Bad(t *testing.T) {
 }
 
 func TestGetRandomGermainPrimeConcurrent(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Minute)
 	defer cancel()
 	sgps, err := GetRandomSafePrimesConcurrent(ctx, 1024, 2, runtime.NumCPU(), rand.Reader)
 	if err != nil {

@@ -45,7 +45,7 @@ func setupRound3Fixture(t *testing.T) *round3TestFixture {
 	allR1 := make([]*tss.Message, negN)
 	for i := 0; i < negN; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -56,7 +56,7 @@ func setupRound3Fixture(t *testing.T) *round3TestFixture {
 	// -- Round 2 --
 	r2Outputs := make([]*RoundOutput, negN)
 	for i := 0; i < negN; i++ {
-		out, err := Round2(context.Background(), states[i], allR1)
+		out, err := Round2(t.Context(), states[i], allR1)
 		if err != nil {
 			t.Fatalf("Round2[%d]: %v", i, err)
 		}
@@ -161,7 +161,7 @@ func copyBcastSlice(msgs []*tss.Message) []*tss.Message {
 // the correct culprit party.
 func requireRound3Error(t *testing.T, fix *round3TestFixture, p2p []*tss.Message, bcast []*tss.Message, wantSubstr string, wantCulpritIdx int) {
 	t.Helper()
-	_, err := Round3(context.Background(), fix.states[0], p2p, bcast)
+	_, err := Round3(t.Context(), fix.states[0], p2p, bcast)
 	if err == nil {
 		t.Fatalf("expected Round3 to fail with %q, but it succeeded", wantSubstr)
 	}
@@ -328,7 +328,7 @@ func TestRound3RejectsContextCancellation(t *testing.T) {
 	p2p := copyP2PSlice(fix.allR2P2P[0])
 	bcast := copyBcastSlice(fix.allR2Bcast)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // pre-cancel
 
 	_, err := Round3(ctx, fix.states[0], p2p, bcast)

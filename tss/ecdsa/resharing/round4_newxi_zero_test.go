@@ -5,7 +5,6 @@
 package resharing
 
 import (
-	"context"
 	"math/big"
 	"strings"
 	"testing"
@@ -140,7 +139,7 @@ func TestReshareRound4RejectsNewXiZero(t *testing.T) {
 
 	// Step 9: Call ReshareRound4 and expect "newXi is zero" error.
 	_, err := ReshareRound4(
-		context.Background(),
+		t.Context(),
 		fix.NewStates[newVictim],
 		fix.NewR2Msg1s,
 		r3P2P,

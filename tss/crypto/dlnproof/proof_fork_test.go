@@ -25,7 +25,7 @@ var dlnSession = []byte("dln-fork-test")
 // N = (2p+1)(2q+1).
 func generateDLNParams(t *testing.T) (h1, h2, x, p, q, N *big.Int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 
 	concurrency := runtime.NumCPU()

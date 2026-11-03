@@ -25,7 +25,7 @@ func TestGeneratePreParamsMultipleConcurrencyArgsPanics(t *testing.T) {
 				t.Fatal("expected panic when multiple concurrency args are provided")
 			}
 		}()
-		ctx := context.Background()
+		ctx := t.Context()
 		_, _ = GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 2, 4)
 	}()
 }
@@ -33,7 +33,7 @@ func TestGeneratePreParamsMultipleConcurrencyArgsPanics(t *testing.T) {
 // TestGeneratePreParamsContextAlreadyCancelled verifies that passing an
 // already-cancelled context returns an error immediately without blocking.
 func TestGeneratePreParamsContextAlreadyCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // cancel immediately before calling
 
 	start := time.Now()
@@ -54,7 +54,7 @@ func TestGeneratePreParamsContextAlreadyCancelled(t *testing.T) {
 // TestGeneratePreParamsContextAlreadyCancelledAndRandom exercises the
 // WithContextAndRandom variant with an already-cancelled context.
 func TestGeneratePreParamsContextAlreadyCancelledAndRandom(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	start := time.Now()
@@ -76,7 +76,7 @@ func TestGeneratePreParamsContextAlreadyCancelledAndRandom(t *testing.T) {
 // does not panic and is handled gracefully (the code divides by 3 and clamps
 // to minimum 1).
 func TestGeneratePreParamsZeroConcurrency(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
 	defer cancel()
 
 	// Should not panic even with concurrency=0; the function clamps to 1.
@@ -93,7 +93,7 @@ func TestGeneratePreParamsZeroConcurrency(t *testing.T) {
 // TestGeneratePreParamsNegativeConcurrency verifies that a negative
 // concurrency value is handled gracefully (clamped to 1 after division).
 func TestGeneratePreParamsNegativeConcurrency(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, -3)
@@ -116,7 +116,7 @@ func (f *failingReader) Read([]byte) (int, error) {
 // TestGeneratePreParamsFailingRandReader verifies that a broken rand reader
 // causes an error (not a panic) and returns promptly.
 func TestGeneratePreParamsFailingRandReader(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, &failingReader{}, 1)
@@ -150,7 +150,7 @@ func (c *countingReader) Read(p []byte) (int, error) {
 func TestGeneratePreParamsCustomRandIsUsed(t *testing.T) {
 	cr := &countingReader{inner: rand.Reader}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 
 	// Will almost certainly timeout, but that's fine — we just want to confirm
@@ -170,7 +170,7 @@ func TestGeneratePreParamsResultValidates(t *testing.T) {
 		t.Skip("skipping slow safe prime generation in short mode")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Minute)
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContextAndRandom(ctx, rand.Reader, 1)
@@ -252,7 +252,7 @@ func TestGeneratePreParamsResultValidates(t *testing.T) {
 func TestGeneratePreParamsTimeoutWrapper(t *testing.T) {
 	// 1ms timeout — will definitely fail, but should return an error not panic
 	start := time.Now()
-	preParams, err := GeneratePreParams(1*time.Millisecond, 1)
+	preParams, err := GeneratePreParams(t.Context(), 1*time.Millisecond, 1)
 	elapsed := time.Since(start)
 
 	if preParams != nil {
@@ -271,7 +271,7 @@ func TestGeneratePreParamsTimeoutWrapper(t *testing.T) {
 // We do this by passing a cancelled context — both functions should behave
 // identically.
 func TestGeneratePreParamsWithContextCallsWithContextAndRandom(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	pp1, err1 := GeneratePreParamsWithContext(ctx, 1)

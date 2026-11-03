@@ -42,7 +42,7 @@ func TestReshareRound4RejectsBadDecommitment(t *testing.T) {
 		Content:     &DGRound3Message2{VDeCommitment: corruptD},
 	}
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], r3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], r3Bcast)
 	if err == nil {
 		t.Fatal("expected error from corrupted decommitment, got nil")
 	}
@@ -73,7 +73,7 @@ func TestReshareRound4RejectsReceiverIDMismatch(t *testing.T) {
 		},
 	}
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], fix.NewR2Msg1s, r3P2P, fix.OldR3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], fix.NewR2Msg1s, r3P2P, fix.OldR3Bcast)
 	if err == nil {
 		t.Fatal("expected error from ReceiverID mismatch, got nil")
 	}
@@ -104,7 +104,7 @@ func TestReshareRound4RejectsBadVSSShare(t *testing.T) {
 		},
 	}
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], fix.NewR2Msg1s, r3P2P, fix.OldR3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], fix.NewR2Msg1s, r3P2P, fix.OldR3Bcast)
 	if err == nil {
 		t.Fatal("expected error from corrupted VSS share, got nil")
 	}
@@ -121,7 +121,7 @@ func TestReshareRound4RejectsBadVSSShare(t *testing.T) {
 func TestReshareRound4ContextCancellation(t *testing.T) {
 	fix := setupThroughRound3(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // pre-cancel
 
 	_, err := ReshareRound4(ctx, fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], fix.OldR3Bcast)
@@ -146,7 +146,7 @@ func TestReshareRound4RejectsNilModProof(t *testing.T) {
 	clone.Content.(*DGRound2Message1).ModProof = nil
 	msgs[r4VictimIdx] = clone
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
 	if err == nil {
 		t.Fatal("expected error for nil ModProof, got nil")
 	}
@@ -172,7 +172,7 @@ func TestReshareRound4RejectsV0NotECDSAPub(t *testing.T) {
 	}
 	fix.NewStates[0].save.ECDSAPub = fakeKey
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], fix.OldR3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], fix.OldR3Bcast)
 	if err == nil {
 		t.Fatal("expected error from V_0 != ECDSAPub, got nil")
 	}
@@ -209,7 +209,7 @@ func TestReshareRound4RejectsWrongLengthDecommitment(t *testing.T) {
 		Content:     &DGRound3Message2{VDeCommitment: wrongCmt.D},
 	}
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], r3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], r3Bcast)
 	if err == nil {
 		t.Fatal("expected error from wrong-length decommitment, got nil")
 	}
@@ -245,7 +245,7 @@ func TestReshareRound4RejectsOffCurveDecommitment(t *testing.T) {
 		Content:     &DGRound3Message2{VDeCommitment: offCmt.D},
 	}
 
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], r3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], fix.NewR2Msg1s, fix.OldR3P2P[0], r3Bcast)
 	if err == nil {
 		t.Fatal("expected error from off-curve decommitment, got nil")
 	}

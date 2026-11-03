@@ -36,7 +36,7 @@ import (
 // The ECDSA public key is preserved across the reshare.
 func TestECDSAKeygenSignReshare(t *testing.T) {
 	const threshold = 1
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// ------------------------------------------------------------------
 	// Phase 1: Paillier pre-parameters
@@ -44,7 +44,7 @@ func TestECDSAKeygenSignReshare(t *testing.T) {
 	t.Log("generating Paillier pre-params for 4 parties...")
 	allPreParams := make([]keygen.LocalPreParams, 4)
 	for i := range allPreParams {
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
+		pp, err := keygen.GeneratePreParams(t.Context(), 5*time.Minute)
 		if err != nil {
 			t.Fatalf("GeneratePreParams[%d]: %v", i, err)
 		}
@@ -363,7 +363,7 @@ func ecdsaReshare(t *testing.T, ctx context.Context, oldPIDs, newPIDs tss.Sorted
 	r2Msg2s := make([]*tss.Message, newN)
 	for idx := range entries {
 		pr := entries[idx].role
-		out, err := resharing.ReshareRound2(entries[idx].state, r1Msgs)
+		out, err := resharing.ReshareRound2(t.Context(), entries[idx].state, r1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2[%s]: %v", pr.pid.Id, err)
 		}

@@ -29,7 +29,7 @@ var forkSession = []byte("facproof-fork-test")
 func generateFacProofFixture(t *testing.T) (*ProofFac, *big.Int, *big.Int, *big.Int, *big.Int) {
 	t.Helper()
 	ec := tss.EC()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 
 	// Generate Paillier keypair for N0.
@@ -188,7 +188,7 @@ func TestFacProofForkRejectsNilEC(t *testing.T) {
 
 func TestFacProofForkNilSession(t *testing.T) {
 	ec := tss.EC()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 
 	sk, _, err := paillier.GenerateKeyPair(ctx, rand.Reader, 2048)
