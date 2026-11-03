@@ -3015,6 +3015,10 @@ func TestDB_JournalSyncFailureIsSticky(t *testing.T) {
 	if err := h.db.Put([]byte("later"), []byte("v"), wo); err == nil {
 		t.Fatal("Put after a journal failure: expected an error until reopen")
 	}
+	if tr, err := h.db.OpenTransaction(); err == nil {
+		tr.Discard()
+		t.Fatal("OpenTransaction after a journal failure: expected an error until reopen")
+	}
 	h.reopenDB()
 	for i := 0; i < 10; i++ {
 		if _, err := h.db.Get([]byte(fmt.Sprintf("k%02d", i)), nil); err != nil {
