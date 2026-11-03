@@ -66,7 +66,8 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 // Lagrange-interpolated wi, creates VSS shares for the new committee,
 // and broadcasts a commitment.
 //
-// New committee parties call this too but get a no-op (nil messages).
+// New committee parties call this too.  They compute the session ID
+// and send no messages.
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
@@ -87,15 +88,17 @@ func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySave
 
 	state := &ReshareState{params: params, input: input, save: &save, temp: *temp}
 
-	if !params.IsOldCommittee() {
-		return state, &ReshareRoundOutput{}, nil
-	}
-
+	// Every party computes the SSID.  The new committee binds its
+	// Round 5 confirmation to it.
 	ssid, err := getReshareSSID(params, &state.temp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("round 1 SSID: %w", err)
 	}
 	state.temp.ssid = ssid
+
+	if !params.IsOldCommittee() {
+		return state, &ReshareRoundOutput{}, nil
+	}
 
 	Pi := params.PartyID()
 	i := oldIndex(params)
@@ -160,12 +163,6 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 		state.save.EDDSAPub = candidate
 		state.temp.dgRound1Messages[j] = msg
 	}
-
-	ssid, err := getReshareSSID(params, &state.temp)
-	if err != nil {
-		return nil, fmt.Errorf("round 2 SSID: %w", err)
-	}
-	state.temp.ssid = ssid
 
 	Pi := params.PartyID()
 	i := newIndex(params)
