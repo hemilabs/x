@@ -7,6 +7,7 @@
 package cache
 
 import (
+	"context"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -581,10 +582,12 @@ func TestGetEvictVsClose(t *testing.T) {
 			c.Close(false)
 			wg.Wait()
 		}()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		select {
 		case <-done:
-		case <-time.After(10 * time.Second):
+		case <-ctx.Done():
 			t.Fatal("Get and Close deadlocked")
 		}
+		cancel()
 	}
 }

@@ -8,6 +8,7 @@ package table
 
 import (
 	"bytes"
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -174,10 +175,12 @@ func TestReaderGetVsRelease(t *testing.T) {
 			tr.Release()
 			wg.Wait()
 		}()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		select {
 		case <-done:
-		case <-time.After(10 * time.Second):
+		case <-ctx.Done():
 			t.Fatal("Get and Release deadlocked")
 		}
+		cancel()
 	}
 }
