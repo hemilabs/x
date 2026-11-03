@@ -359,25 +359,23 @@ func (db *DB) OpenTransaction() (*Transaction, error) {
 		return nil, err
 	}
 
+	// Check closeC in the same section that sets db.tr.  Close closes
+	// closeC before it reads db.tr, so either Close sees this
+	// transaction and discards it, or this sees the close.
+	db.trMu.Lock()
+	defer db.trMu.Unlock()
+	select {
+	case <-db.closeC:
+		<-db.writeLockC
+		return nil, ErrClosed
+	default:
+	}
 	tr := &Transaction{
 		db:  db,
 		seq: db.seq,
 		mem: db.mpoolGet(0),
 	}
-	// Check closeC in the same section that sets db.tr.  Close closes
-	// closeC before it reads db.tr, so either Close sees this
-	// transaction and discards it, or this sees the close.
-	db.trMu.Lock()
-	select {
-	case <-db.closeC:
-		db.trMu.Unlock()
-		db.mpoolPut(tr.mem.DB) // return the unused memdb
-		<-db.writeLockC
-		return nil, ErrClosed
-	default:
-	}
 	tr.mem.incref()
 	db.tr = tr
-	db.trMu.Unlock()
 	return tr, nil
 }
