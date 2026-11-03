@@ -261,7 +261,8 @@ func eddsaSign(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, 
 // Round 2: new committee validates pub key consistency, ACKs old
 // Round 3: old committee sends P2P shares + decommitment to new
 // Round 4: new committee verifies shares and commitments, ACKs both
-// Round 5: new committee saves new key material, old zeros Xi
+// Round 5: new committee saves new key material; the caller destroys
+//          the old share
 // -------------------------------------------------------------------
 
 func eddsaReshare(oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldT, newT int) ([]keygen.LocalPartySaveData, error) {
