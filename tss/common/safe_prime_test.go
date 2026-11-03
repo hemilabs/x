@@ -71,23 +71,14 @@ func TestGetRandomGermainPrimeConcurrent(t *testing.T) {
 
 // TestGetRandomSafePrimesConcurrentReturns verifies that workers do not
 // block on a full buffer, and that a concurrency below 1 gives an error.
+// A worker that blocks makes the search hang until the test times out.
 func TestGetRandomSafePrimesConcurrentReturns(t *testing.T) {
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for i := 0; i < 200; i++ {
-			if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 8, rand.Reader); err != nil {
-				t.Error(err)
-				return
-			}
+	for i := 0; i < 200; i++ {
+		if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 8, rand.Reader); err != nil {
+			t.Fatal(err)
 		}
-		if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 0, rand.Reader); err == nil {
-			t.Error("concurrency 0: expected an error")
-		}
-	}()
-	select {
-	case <-done:
-	case <-time.After(60 * time.Second):
-		t.Fatal("GetRandomSafePrimesConcurrent did not return")
+	}
+	if _, err := GetRandomSafePrimesConcurrent(t.Context(), 32, 1, 0, rand.Reader); err == nil {
+		t.Fatal("concurrency 0: expected an error")
 	}
 }

@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hemilabs/x/tss/v3/crypto/paillier"
 	"github.com/hemilabs/x/tss/v3/tss"
@@ -465,12 +464,13 @@ func TestRound2LeavesNoDLNGoroutine(t *testing.T) {
 	c.H2 = new(big.Int).Set(c.H1)
 	r1[victimIdx] = bad
 
+	// A DLN verification takes far longer than the return, so a
+	// started one is still running when the test counts.
 	before := runtime.NumGoroutine()
 	if _, err := Round2(t.Context(), states[0], r1); err == nil {
 		t.Fatal("Round2 accepted h1 == h2")
 	}
-	time.Sleep(100 * time.Millisecond)
-	if after := runtime.NumGoroutine(); after > before+1 {
+	if after := runtime.NumGoroutine(); after > before {
 		t.Fatalf("%d goroutines still running after Round2 returned", after-before)
 	}
 }
