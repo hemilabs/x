@@ -58,8 +58,9 @@ func CheckIndexes(ec elliptic.Curve, indexes []*big.Int) ([]*big.Int, error) {
 // Returns a new array of secret shares created by Shamir's Secret Sharing Algorithm,
 // requiring a minimum number of shares to recreate, of length shares, from the input secret.
 //
-// Returns the polynomial coefficients as the third return value. The polynomial
-// is needed for the per-participant SNARK architecture where each operator's SP1 guest must evaluate the polynomial independently.
+// Returns the polynomial coefficients as the third return value. The
+// polynomial is needed for the per-participant SNARK architecture where each
+// operator's SP1 guest must evaluate the polynomial independently.
 func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.Int, rand io.Reader) (Vs, Shares, []*big.Int, error) {
 	if secret == nil || indexes == nil {
 		return nil, nil, nil, fmt.Errorf("vss secret or indexes == nil: secret=%t indexes=%t", secret != nil, indexes != nil)
@@ -138,8 +139,8 @@ func (shares Shares) ReConstruct(ec elliptic.Curve) (secret *big.Int, err error)
 	modN := common.ModInt(ec.Params().N)
 
 	// Check for duplicate share IDs (reduced mod q) to prevent silently wrong
-	// Lagrange interpolation. Duplicate IDs cause division
-	// by zero in ModInverse. Reduction mod q is necessary because distinct integers
+	// Lagrange interpolation. Duplicate IDs cause division by zero in
+	// ModInverse. Reduction mod q is necessary because distinct integers
 	// that are congruent mod q (e.g., k and k+q) produce a zero denominator in the
 	// Lagrange basis computation. This mirrors the approach in CheckIndexes.
 	q := ec.Params().N

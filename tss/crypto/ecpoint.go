@@ -53,8 +53,12 @@ func (p *ECPoint) Y() *big.Int {
 	return new(big.Int).Set(p.coords[1])
 }
 
+// Add returns p + p1.  It returns an error if p1 is nil, if the points
+// are on different curves, or if the sum is not a valid point, for
+// example the identity.
 func (p *ECPoint) Add(p1 *ECPoint) (*ECPoint, error) {
-	// A nil p1 causes a nil-pointer panic, and mismatched curves silently miscompute.
+	// elliptic.Curve.Add panics on a nil p1 and gives a wrong point for
+	// points on different curves.
 	if p1 == nil {
 		return nil, fmt.Errorf("ECPoint.Add: p1 is nil")
 	}
@@ -67,11 +71,11 @@ func (p *ECPoint) Add(p1 *ECPoint) (*ECPoint, error) {
 
 func (p *ECPoint) ScalarMult(k *big.Int) *ECPoint {
 	x, y := p.curve.ScalarMult(p.X(), p.Y(), k.Bytes())
-	// Identity results (from zero scalar or
-	// group-order multiples) cause NewECPoint to reject (0,0) and panic. This is
-	// intentional: ~30 of 34 call sites do not check IsIdentity(), so silently
-	// returning identity would propagate bad math through the protocol. Pre-call
-	// guards at each site ensure the panic is unreachable in normal operation.
+	// Identity results (from zero scalar or group-order multiples) cause
+	// NewECPoint to reject (0,0) and panic. This is intentional: ~30 of 34
+	// call sites do not check IsIdentity(), so silently returning identity
+	// would propagate bad math through the protocol. Pre-call guards at each
+	// site ensure the panic is unreachable in normal operation.
 	newP, err := NewECPoint(p.curve, x, y)
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))

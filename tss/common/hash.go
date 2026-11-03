@@ -68,8 +68,8 @@ func SHA512_256i(in ...*big.Int) *big.Int {
 	binary.LittleEndian.PutUint64(inLenBz, uint64(inLen))
 	ptrs := make([][]byte, inLen)
 	for i, n := range in {
-		// Protocol fields (e.g., optional SSID components) may legitimately be
-		// nil; we hash the encoding of zero instead, matching the behaviour of big.NewInt(0).Bytes().
+		// Protocol fields (e.g., optional SSID components) may be nil.
+		// A nil entry hashes as zero, the same as big.NewInt(0).Bytes().
 		if n == nil {
 			ptrs[i] = zero.Bytes()
 		} else {
@@ -118,7 +118,7 @@ func SHA512_256i_TAGGED(tag []byte, in ...*big.Int) *big.Int {
 	binary.LittleEndian.PutUint64(inLenBz, uint64(inLen))
 	ptrs := make([][]byte, inLen)
 	for i, n := range in {
-		// Nil guard (same as SHA512_256i above, present in both upstream and fork).
+		// A nil entry hashes as zero, the same as in SHA512_256i.
 		if n == nil {
 			ptrs[i] = zero.Bytes()
 		} else {

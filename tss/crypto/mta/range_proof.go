@@ -127,9 +127,9 @@ func (pf *RangeProofAlice) Verify(Session []byte, ec elliptic.Curve, pk *paillie
 	q3 := new(big.Int).Mul(q, q)
 	q3 = new(big.Int).Mul(q, q3)
 
-	// Interval, coprimality, and degeneracy checks on proof elements (present in both
-	// upstream and fork). Without them, a malicious prover can submit out-of-range or
-	// degenerate elements that cause modular arithmetic failures or weaken soundness.
+	// Interval, coprimality, and degeneracy checks on proof elements. Without
+	// them, a malicious prover can submit out-of-range or degenerate elements
+	// that cause modular arithmetic failures or weaken soundness.
 	if !common.IsInInterval(pf.Z, NTilde) {
 		return false
 	}
