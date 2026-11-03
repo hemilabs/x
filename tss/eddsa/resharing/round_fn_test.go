@@ -11,6 +11,7 @@ import (
 
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 
+	"github.com/hemilabs/x/tss/v3/crypto"
 	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
 	"github.com/hemilabs/x/tss/v3/eddsa/signing"
 	"github.com/hemilabs/x/tss/v3/tss"
@@ -156,11 +157,45 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 	}
 
 	// --- Confirm: old parties retire only with min(2t+1, n) confirmations ---
+	edit := func(m *tss.Message, f func(c *DGRound5Message)) *tss.Message {
+		c := *m.Content.(*DGRound5Message)
+		c.VCommitments = append([]*big.Int(nil), c.VCommitments...)
+		f(&c)
+		return &tss.Message{From: m.From, Content: &c}
+	}
+	last := r5Msgs[newN-1]
+	only := func(m *tss.Message) []*tss.Message {
+		msgs := make([]*tss.Message, newN)
+		msgs[newN-1] = m
+		return msgs
+	}
 	partial := make([]*tss.Message, newN)
 	copy(partial, r5Msgs[:newN-1])
-	if ok, err := ReshareConfirm(oldStates[0], partial); err != nil || ok {
-		t.Fatalf("ReshareConfirm with %d confirmations = %v, %v; want false",
-			newN-1, ok, err)
+	// The checks run in order: ReshareConfirm keeps earlier messages.
+	steps := []struct {
+		name string
+		msgs []*tss.Message
+	}{
+		{"t+1", partial},
+		{"stale commitments", only(edit(last, func(c *DGRound5Message) {
+			c.VCommitments[0] = new(big.Int).Add(c.VCommitments[0], big.NewInt(1))
+		}))},
+		{"other key", only(edit(last, func(c *DGRound5Message) {
+			c.EDDSAPub = crypto.ScalarBaseMult(tss.Edwards(), big.NewInt(2))
+		}))},
+		{"no digest", only(edit(last, func(c *DGRound5Message) { c.Digest = nil }))},
+		{"wrong sender", only(&tss.Message{From: r5Msgs[0].From, Content: last.Content})},
+	}
+	for _, s := range steps {
+		if ok, err := ReshareConfirm(oldStates[0], s.msgs); err != nil || ok {
+			t.Fatalf("%s: ReshareConfirm = %v, %v; want false", s.name, ok, err)
+		}
+	}
+	if _, err := ReshareConfirm(oldStates[0], r5Msgs[:newN-1]); err == nil {
+		t.Fatal("ReshareConfirm with a short message list: want error")
+	}
+	if _, err := ReshareConfirm(newStates[0], r5Msgs); err == nil {
+		t.Fatal("ReshareConfirm on a new-only party: want error")
 	}
 	for i := 0; i < oldN; i++ {
 		ok, err := ReshareConfirm(oldStates[i], r5Msgs)
