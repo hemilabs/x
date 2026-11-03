@@ -956,14 +956,19 @@ func TestReshareConfirmQuorum(t *testing.T) {
 		t.Fatal("Round 5 modified the old share")
 	}
 
-	stale := func(m *tss.Message) *tss.Message {
-		c := m.Content.(*DGRound5Message)
-		vcts := append([]*big.Int(nil), c.VCommitments...)
-		vcts[0] = new(big.Int).Add(vcts[0], big.NewInt(1))
-		return &tss.Message{From: m.From, Content: &DGRound5Message{
-			ECDSAPub: c.ECDSAPub, VCommitments: vcts, Digest: c.Digest,
-		}}
+	edit := func(m *tss.Message, f func(c *DGRound5Message)) *tss.Message {
+		c := *m.Content.(*DGRound5Message)
+		c.VCommitments = append([]*big.Int(nil), c.VCommitments...)
+		f(&c)
+		return &tss.Message{From: m.From, Content: &c}
 	}
+	stale := edit(r5[1], func(c *DGRound5Message) {
+		c.VCommitments[0] = new(big.Int).Add(c.VCommitments[0], big.NewInt(1))
+	})
+	otherKey := edit(r5[1], func(c *DGRound5Message) {
+		c.ECDSAPub = crypto.ScalarBaseMult(tss.S256(), big.NewInt(2))
+	})
+	noDigest := edit(r5[1], func(c *DGRound5Message) { c.Digest = nil })
 	foreign := &tss.Message{From: r5[0].From, Content: r5[2].Content}
 
 	// The checks run in order: ReshareConfirm keeps earlier messages.
@@ -974,7 +979,9 @@ func TestReshareConfirmQuorum(t *testing.T) {
 	}{
 		{"none", []*tss.Message{nil, nil, nil}, false},
 		{"one", []*tss.Message{r5[0], nil, nil}, false},
-		{"stale commitments", []*tss.Message{nil, stale(r5[1]), nil}, false},
+		{"stale commitments", []*tss.Message{nil, stale, nil}, false},
+		{"other key", []*tss.Message{nil, otherKey, nil}, false},
+		{"no digest", []*tss.Message{nil, noDigest, nil}, false},
 		{"wrong sender", []*tss.Message{nil, nil, foreign}, false},
 		{"t+1", []*tss.Message{nil, r5[1], nil}, false},
 		{"2t+1", []*tss.Message{nil, nil, r5[2]}, true},
@@ -987,6 +994,9 @@ func TestReshareConfirmQuorum(t *testing.T) {
 		if ok != s.want {
 			t.Fatalf("%s: ReshareConfirm = %v, want %v", s.name, ok, s.want)
 		}
+	}
+	if _, err := ReshareConfirm(fix.oldStates[0], r5[:fix.n-1]); err == nil {
+		t.Fatal("ReshareConfirm with a short message list: want error")
 	}
 	if _, err := ReshareConfirm(fix.newStates[0], r5); err == nil {
 		t.Fatal("ReshareConfirm on a new-only party: want error")
