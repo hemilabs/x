@@ -164,6 +164,18 @@ type blockIter struct {
 	err error
 }
 
+// setKey sets the key to the first nShared bytes of the current key
+// followed by key.  It returns false, with the iterator in error, when
+// nShared is longer than the current key.
+func (i *blockIter) setKey(nShared int, key []byte) bool {
+	if nShared > len(i.key) {
+		i.sErr(i.tr.newErrCorruptedBH(i.block.bh, "shared prefix too long"))
+		return false
+	}
+	i.key = append(i.key[:nShared], key...)
+	return true
+}
+
 func (i *blockIter) sErr(err error) {
 	i.err = err
 	i.key = nil
@@ -285,11 +297,9 @@ func (i *blockIter) Next() bool {
 			i.dir = dirEOI
 			return false
 		}
-		if nShared > len(i.key) {
-			i.sErr(i.tr.newErrCorruptedBH(i.block.bh, "shared prefix too long"))
+		if !i.setKey(nShared, key) {
 			return false
 		}
-		i.key = append(i.key[:nShared], key...)
 		i.value = value
 		i.offset += n
 	}
@@ -309,11 +319,9 @@ func (i *blockIter) Next() bool {
 		i.dir = dirEOI
 		return false
 	}
-	if nShared > len(i.key) {
-		i.sErr(i.tr.newErrCorruptedBH(i.block.bh, "shared prefix too long"))
+	if !i.setKey(nShared, key) {
 		return false
 	}
-	i.key = append(i.key[:nShared], key...)
 	i.value = value
 	i.prevOffset = i.offset
 	i.offset += n
@@ -405,11 +413,9 @@ func (i *blockIter) Prev() bool {
 			}
 			i.value = value
 		}
-		if nShared > len(i.key) {
-			i.sErr(i.tr.newErrCorruptedBH(i.block.bh, "shared prefix too long"))
+		if !i.setKey(nShared, key) {
 			return false
 		}
-		i.key = append(i.key[:nShared], key...)
 		offset += n
 		// Stop if target offset reached.
 		if offset >= i.offset {
