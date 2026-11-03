@@ -3010,10 +3010,14 @@ func TestDB_ConcurrentTransactionClose(t *testing.T) {
 		}
 
 		// Commit and Close race on db.tr. Either may win; the
-		// race detector must not fire.
+		// race detector must not fire.  Commit fails only because
+		// Close got there first.
 		var wg sync.WaitGroup
 		wg.Go(func() {
-			_ = tr.Commit()
+			err := tr.Commit()
+			if err != nil && err != ErrClosed && err != errTransactionDone {
+				t.Errorf("Commit: %v", err)
+			}
 		})
 		if err := db.Close(); err != nil {
 			t.Fatal(err)
