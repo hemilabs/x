@@ -29,6 +29,11 @@ machine with pure round functions.  Each round takes explicit state +
 inbound messages and returns outbound messages.  The caller owns the
 event loop.
 
+Call the rounds of one state once each, in order.  A call out of order
+returns an error and does not change the state.  After a round returns
+an error, the state rejects every later call with `tss.ErrStateFailed`.
+Start a new session with a new state.
+
 **No protobuf.**  All message types are plain Go structs with typed
 fields.  Serialization is the caller's responsibility — the library
 does not prescribe a wire format.
