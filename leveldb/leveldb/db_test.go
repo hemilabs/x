@@ -2998,30 +2998,43 @@ func TestDB_GracefulClose(t *testing.T) {
 // TestDB_GetResultIsCopy changes the slice that Get returns, with and
 // without a buffer pool.  The next Get must return the stored value.
 func TestDB_GetResultIsCopy(t *testing.T) {
-	for _, disable := range []bool{false, true} {
-		db, err := Open(storage.NewMemStorage(), &opt.Options{DisableBufferPool: disable})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer db.Close()
-		if err := db.Put([]byte("k"), []byte("value"), nil); err != nil {
-			t.Fatal(err)
-		}
-		// Move the value from the memdb into a table and its cache.
-		if err := db.CompactRange(util.Range{}); err != nil {
-			t.Fatal(err)
-		}
-		v, err := db.Get([]byte("k"), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		copy(v, "XXXXX")
-		v, err = db.Get([]byte("k"), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(v) != "value" {
-			t.Fatalf("DisableBufferPool=%v: Get returned %q after a change to an earlier result", disable, v)
-		}
+	tests := []struct {
+		name              string
+		disableBufferPool bool
+	}{
+		{"buffer pool", false},
+		{"no buffer pool", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := Open(storage.NewMemStorage(), &opt.Options{DisableBufferPool: tt.disableBufferPool})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := db.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			if err := db.Put([]byte("k"), []byte("value"), nil); err != nil {
+				t.Fatal(err)
+			}
+			// Move the value from the memdb into a table and its cache.
+			if err := db.CompactRange(util.Range{}); err != nil {
+				t.Fatal(err)
+			}
+			v, err := db.Get([]byte("k"), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			copy(v, "XXXXX")
+			v, err = db.Get([]byte("k"), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(v) != "value" {
+				t.Fatalf("Get returned %q after a change to an earlier result, want \"value\"", v)
+			}
+		})
 	}
 }
