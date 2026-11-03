@@ -43,6 +43,9 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 // SignRound1 initializes signing state and broadcasts a commitment
 // to the signing nonce Ri.
 func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.Int, fullBytesLen int) (*SigningState, *SignRoundOutput, error) {
+	if err := params.CheckSelf(); err != nil {
+		return nil, nil, err
+	}
 	if key.Xi == nil || key.Xi.Sign() == 0 {
 		return nil, nil, errors.New("invalid key data: Xi is nil or zero")
 	}
