@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -105,7 +106,7 @@ func TestSendText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := sendText(client, "general", "test message", false); err != nil {
+	if err := sendText(t.Context(), client, "general", "test message", false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -123,7 +124,7 @@ func TestSendBlocks(t *testing.T) {
 	}
 
 	blocks := `[{"type":"section","text":{"type":"mrkdwn","text":"test message"}}]`
-	if err := sendBlocks(client, "general", []byte(blocks)); err != nil {
+	if err := sendBlocks(t.Context(), client, "general", []byte(blocks)); err != nil {
 		t.Fatalf("sendBlocks returned error: %v", err)
 	}
 }
@@ -136,7 +137,7 @@ func TestSendBlocksInvalidJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = sendBlocks(client, "general", []byte("not json"))
+	err = sendBlocks(t.Context(), client, "general", []byte("not json"))
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -153,10 +154,10 @@ func TestSendTextEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 	msg := "<!channel> <https://a.example|b.example>"
-	if err := sendText(client, "general", msg, false); err != nil {
+	if err := sendText(t.Context(), client, "general", msg, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := sendText(client, "general", msg, true); err != nil {
+	if err := sendText(t.Context(), client, "general", msg, true); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -208,16 +209,14 @@ func TestSendTextTimeout(t *testing.T) {
 	defer s.Close()
 	defer close(done)
 
-	old := clientTimeout
-	clientTimeout = 100 * time.Millisecond
-	defer func() { clientTimeout = old }()
-
 	client, err := newClient(&config{SlackOauthToken: "xoxb-test", SlackURL: s.URL + "/"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
 	start := time.Now()
-	if err := sendText(client, "general", "test", false); err == nil {
+	if err := sendText(ctx, client, "general", "test", false); err == nil {
 		t.Fatal("expected a timeout error")
 	}
 	if d := time.Since(start); d > 5*time.Second {

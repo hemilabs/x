@@ -5,15 +5,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/slack-go/slack"
 )
@@ -41,13 +40,8 @@ func configFromEnv(channelID string) (*config, error) {
 	return cfg, nil
 }
 
-// clientTimeout limits each request to Slack.
-var clientTimeout = 30 * time.Second
-
 func newClient(cfg *config) (*slack.Client, error) {
-	opts := []slack.Option{
-		slack.OptionHTTPClient(&http.Client{Timeout: clientTimeout}),
-	}
+	var opts []slack.Option
 	if cfg.SlackURL != "" {
 		u, err := url.Parse(cfg.SlackURL)
 		if err != nil {
@@ -79,17 +73,17 @@ func isLoopback(host string) bool {
 
 // sendText posts text.  Unless raw is set, it escapes markup, so a
 // mention or link in text shows as plain text.
-func sendText(client *slack.Client, channel, text string, raw bool) error {
-	_, _, err := client.PostMessage(channel, slack.MsgOptionText(text, !raw))
+func sendText(ctx context.Context, client *slack.Client, channel, text string, raw bool) error {
+	_, _, err := client.PostMessageContext(ctx, channel, slack.MsgOptionText(text, !raw))
 	return err
 }
 
-func sendBlocks(client *slack.Client, channel string, data []byte) error {
+func sendBlocks(ctx context.Context, client *slack.Client, channel string, data []byte) error {
 	var blocks slack.Blocks
 	if err := json.Unmarshal(data, &blocks); err != nil {
 		return fmt.Errorf("unmarshal blocks: %w", err)
 	}
 
-	_, _, err := client.PostMessage(channel, slack.MsgOptionBlocks(blocks.BlockSet...))
+	_, _, err := client.PostMessageContext(ctx, channel, slack.MsgOptionBlocks(blocks.BlockSet...))
 	return err
 }
