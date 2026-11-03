@@ -185,9 +185,8 @@ second sort.
 
 ## Security Audit
 
-See [SECURITY_FIXES.md](SECURITY_FIXES.md) for the complete list of
-security fixes from the v2 audit (76 in v3 production code, annotated
-with `[FORK]` comments).
+See [SECURITY_FIXES.md](SECURITY_FIXES.md) for the security fixes in
+v3 production code.
 
 ## Packages
 
