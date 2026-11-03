@@ -33,6 +33,13 @@ type round1Fixture struct {
 // calling Round2 on states[0].
 func setupRound1ForNegativeTests(t *testing.T) *round1Fixture {
 	t.Helper()
+	return setupRound1Fixture(t, false)
+}
+
+// setupRound1Fixture runs a real 3-party keygen Round1.  If proofs is
+// false, the parties make no DLN, mod or fac proofs.
+func setupRound1Fixture(t *testing.T, proofs bool) *round1Fixture {
+	t.Helper()
 	const n = 3
 	const threshold = 1 // 2-of-3
 
@@ -45,10 +52,12 @@ func setupRound1ForNegativeTests(t *testing.T) *round1Fixture {
 	allR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
-		params.SetNoProofDLN()
-		params.SetNoProofMod()
-		params.SetNoProofFac()
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		if !proofs {
+			params.SetNoProofDLN()
+			params.SetNoProofMod()
+			params.SetNoProofFac()
+		}
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -453,6 +462,19 @@ func TestRound2RejectsOversizedNTilde(t *testing.T) {
 	nt.SetBit(nt, 2048, 1) // set bit 2048 → 2049-bit value
 	msgs[victimIdx] = bad
 	expectRound2Error(t, fix, msgs, "NTildej insufficient bits", victimIdx)
+}
+
+// TestRound2RejectsNilDLNProofWithNilFrom sends a round 1 message with
+// no DLN proof and no sender, with proofs on.  Round2 must fail and
+// name the party of the slot.
+func TestRound2RejectsNilDLNProofWithNilFrom(t *testing.T) {
+	fix := setupRound1Fixture(t, true)
+	msgs := cloneR1Msgs(fix.allR1)
+	bad := cloneR1MsgContent(msgs[victimIdx])
+	bad.Content.(*KGRound1Message).DLNProof1 = nil
+	bad.From = nil
+	msgs[victimIdx] = bad
+	expectRound2Error(t, fix, msgs, "dln proof verification failed", victimIdx)
 }
 
 // TestRound2LeavesNoDLNGoroutine verifies that a bad peer stops Round2
