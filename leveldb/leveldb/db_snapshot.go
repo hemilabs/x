@@ -90,6 +90,8 @@ func (db *DB) newSnapshot() *Snapshot {
 	return snap
 }
 
+// String returns the sequence number of the snapshot, or "released"
+// after Release.
 func (snap *Snapshot) String() string {
 	snap.mu.RLock()
 	defer snap.mu.RUnlock()

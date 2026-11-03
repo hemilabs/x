@@ -359,7 +359,9 @@ type Options struct {
 	// The default is 1MiB.
 	IteratorSamplingRate int
 
-	// NoSync allows completely disable fsync.
+	// NoSync disables fsync of the journal, the tables and the MANIFEST
+	// records.  A new MANIFEST and the CURRENT file are still synced, so
+	// that Open works after a power loss.
 	//
 	// The default is false.
 	NoSync bool
