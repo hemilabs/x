@@ -340,12 +340,36 @@ func TestRound4LeavesNoProofGoroutine(t *testing.T) {
 	msgs[r4VictimIdx] = bad
 
 	// A proof verification takes far longer than the return, so a
-	// started one is still running when the test counts.
-	before := runtime.NumGoroutine()
+	// started one is still running when the test looks.
 	if _, err := ReshareRound4(t.Context(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast); err == nil {
 		t.Fatal("ReshareRound4 accepted h1 == h2")
 	}
-	if after := runtime.NumGoroutine(); after > before {
-		t.Fatalf("%d goroutines still running after ReshareRound4 returned", after-before)
+	if n := goroutinesIn("VerifyDLNProof.func", "ReshareRound4.func"); n != 0 {
+		t.Fatalf("%d proof goroutines still running after ReshareRound4 returned", n)
 	}
+}
+
+// goroutinesIn returns the number of goroutines whose stack contains one
+// of fns.  Unlike a count of all goroutines, it does not change when an
+// unrelated goroutine starts or exits.
+func goroutinesIn(fns ...string) int {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	count := 0
+	for _, g := range strings.Split(string(buf), "\n\n") {
+		for _, fn := range fns {
+			if strings.Contains(g, fn) {
+				count++
+				break
+			}
+		}
+	}
+	return count
 }

@@ -933,3 +933,25 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 		newStates: newStates,
 	}
 }
+
+// TestReshareRound1RejectsBadCommittees verifies that ReshareRound1
+// returns an error, and does not panic, for bad committee settings.
+func TestReshareRound1RejectsBadCommittees(t *testing.T) {
+	oldIDs, newIDs := tss.GenerateTestPartyIDs(3), tss.GenerateTestPartyIDs(3)
+	oldCtx, newCtx := tss.NewPeerContext(oldIDs), tss.NewPeerContext(newIDs)
+	stranger := tss.NewPartyID("s", "s", big.NewInt(12345))
+	for _, tc := range []struct {
+		name string
+		p    *tss.ReSharingParameters
+	}{
+		{"nil old context", tss.NewReSharingParameters(tss.S256(), nil, newCtx, newIDs[0], 3, 1, 3, 1)},
+		{"neither committee", tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, stranger, 3, 1, 3, 1)},
+		{"empty PartyID", tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, &tss.PartyID{}, 3, 1, 3, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := ReshareRound1(tc.p, keygen.LocalPartySaveData{}, keygen.LocalPreParams{}); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+}

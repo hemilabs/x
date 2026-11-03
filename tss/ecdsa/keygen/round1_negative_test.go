@@ -7,6 +7,7 @@ package keygen
 import (
 	"bytes"
 	"context"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -311,5 +312,16 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 	// only the full sorted party key list, which is shared.
 	if !bytes.Equal(states[0].temp.ssid, states[1].temp.ssid) {
 		t.Fatal("parties with the same CeremonyID should have the same SSID")
+	}
+}
+
+// TestRound1RejectsBadOwnPartyID verifies that Round1 returns an error
+// when the own PartyID is not in the party list.
+func TestRound1RejectsBadOwnPartyID(t *testing.T) {
+	pIDs := tss.GenerateTestPartyIDs(3)
+	stray := tss.NewPartyID("x", "x", big.NewInt(99)) // Index stays -1
+	params := tss.NewParameters(tss.S256(), tss.NewPeerContext(pIDs), stray, 3, 1)
+	if _, _, err := Round1(t.Context(), params, LocalPreParams{}); err == nil {
+		t.Fatal("Round1 accepted a PartyID that is not in the list")
 	}
 }

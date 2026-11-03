@@ -67,7 +67,10 @@ func ProveBobWC(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTild
 	rhoPrm := common.GetRandomPositiveInt(rand, q3NTilde)
 
 	// 4.
-	beta := common.GetRandomPositiveRelativelyPrimeInt(rand, pk.N)
+	beta, err := common.GetRandomPositiveRelativelyPrimeInt(rand, pk.N)
+	if err != nil {
+		return nil, err
+	}
 
 	gamma := common.GetRandomPositiveInt(rand, q7)
 

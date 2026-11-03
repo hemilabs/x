@@ -27,7 +27,11 @@ func GenerateNTildei(rand io.Reader, safePrimes [2]*big.Int) (NTildei, h1i, h2i 
 		return nil, nil, nil, fmt.Errorf("GenerateNTildei: the two primes must be distinct")
 	}
 	NTildei = new(big.Int).Mul(safePrimes[0], safePrimes[1])
-	h1 := common.GetRandomGeneratorOfTheQuadraticResidue(rand, NTildei)
-	h2 := common.GetRandomGeneratorOfTheQuadraticResidue(rand, NTildei)
-	return NTildei, h1, h2, nil
+	if h1i, err = common.GetRandomGeneratorOfTheQuadraticResidue(rand, NTildei); err != nil {
+		return nil, nil, nil, err
+	}
+	if h2i, err = common.GetRandomGeneratorOfTheQuadraticResidue(rand, NTildei); err != nil {
+		return nil, nil, nil, err
+	}
+	return NTildei, h1i, h2i, nil
 }

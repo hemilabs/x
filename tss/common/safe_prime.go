@@ -13,7 +13,6 @@ import (
 	"io"
 	"math/big"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -101,10 +100,10 @@ var ErrGeneratorCancelled = fmt.Errorf("generator work cancelled")
 
 // GetRandomSafePrimesConcurrent tries to find safe primes concurrently.
 // The returned results are safe primes `p` and prime `q` such that `p=2q+1`.
-// Concurrency level can be controlled with the `concurrencyLevel` parameter.
-// If a safe prime could not be found before the context is done, the error
-// is returned. Also, if at least one search process failed, error is returned
-// as well.
+// The `concurrency` parameter sets the number of search goroutines.
+// It returns an error if bitLen < 6, numPrimes < 1 or concurrency < 1, if
+// the context is done before it finds the primes, or if a search goroutine
+// fails.
 //
 // How fast we generate a prime number is mostly a matter of luck and it depends
 // on how lucky we are with drawing the first bytes.
@@ -115,10 +114,10 @@ var ErrGeneratorCancelled = fmt.Errorf("generator work cancelled")
 //
 // Concurrency level should be set depending on what `bitLen` of prime is
 // expected. For example, as of today, on a typical workstation, for 512-bit
-// safe prime, `concurrencyLevel` should be set to `1` as generating the prime
+// safe prime, `concurrency` should be set to `1` as generating the prime
 // of this length is a matter of milliseconds for a single core.
-// For 1024-bit safe prime, `concurrencyLevel` should be usually set to at least
-// `2` and for 2048-bit safe prime, `concurrencyLevel` must be set to at least
+// For 1024-bit safe prime, `concurrency` should be usually set to at least
+// `2` and for 2048-bit safe prime, `concurrency` must be set to at least
 // `4` to get the result in a reasonable time.
 //
 // This function generates safe primes of at least 6 `bitLen`. For every
@@ -135,14 +134,14 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 		return nil, errors.New("concurrency should be > 0")
 	}
 
-	primeCh := make(chan *GermainSafePrime, concurrency*numPrimes)
+	// Each worker sends at most one error and then returns, so a buffer of
+	// concurrency errors never blocks.  A worker sends a prime with a select
+	// on the context, so primeCh needs no buffer.
+	primeCh := make(chan *GermainSafePrime)
 	errCh := make(chan error, concurrency)
 	primes := make([]*GermainSafePrime, 0, numPrimes)
 
 	waitGroup := &sync.WaitGroup{}
-
-	defer close(primeCh)
-	defer close(errCh)
 	defer waitGroup.Wait()
 
 	generatorCtx, cancelGeneratorCtx := context.WithCancel(ctx)
@@ -155,13 +154,12 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 		)
 	}
 
-	needed := int32(numPrimes) //nolint:gosec // numPrimes is a small count, fits in int32
 	for {
 		select {
 		case result := <-primeCh:
 			primes = append(primes, result)
-			if atomic.AddInt32(&needed, -1) <= 0 {
-				return primes[:numPrimes], nil
+			if len(primes) == numPrimes {
+				return primes, nil
 			}
 		case err := <-errCh:
 			return nil, err
@@ -312,8 +310,9 @@ func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, e
 					isPocklingtonCriterionSatisfied(p) &&
 					q.BitLen() == qBitLen {
 					if sgp := (&GermainSafePrime{p: p, q: q}); sgp.Validate() {
-						// A plain send blocks forever when the
-						// buffer is full and the caller returned.
+						// The caller cancels ctx before it waits
+						// for this goroutine, so the send must
+						// not block past ctx.
 						select {
 						case primeCh <- sgp:
 						case <-ctx.Done():

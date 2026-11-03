@@ -52,38 +52,6 @@ func TestMustGetRandomIntNegativeBits(t *testing.T) {
 	MustGetRandomInt(nil, -1)
 }
 
-// --- GetRandomPrimeInt edge cases ---
-
-func TestGetRandomPrimeIntZeroBits(t *testing.T) {
-	result := GetRandomPrimeInt(nil, 0)
-	if result != nil {
-		t.Fatal("zero bits should return nil")
-	}
-}
-
-func TestGetRandomPrimeIntNegativeBits(t *testing.T) {
-	result := GetRandomPrimeInt(nil, -1)
-	if result != nil {
-		t.Fatal("negative bits should return nil")
-	}
-}
-
-// --- GetRandomPositiveRelativelyPrimeInt edge cases ---
-
-func TestGetRandomRelPrimeNilN(t *testing.T) {
-	result := GetRandomPositiveRelativelyPrimeInt(nil, nil)
-	if result != nil {
-		t.Fatal("nil n should return nil")
-	}
-}
-
-func TestGetRandomRelPrimeZeroN(t *testing.T) {
-	result := GetRandomPositiveRelativelyPrimeInt(nil, big.NewInt(0))
-	if result != nil {
-		t.Fatal("zero n should return nil")
-	}
-}
-
 // --- IsNumberInMultiplicativeGroup edge cases ---
 
 func TestIsNumberInMultiplicativeGroupNilArgs(t *testing.T) {
