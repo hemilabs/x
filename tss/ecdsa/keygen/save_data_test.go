@@ -395,8 +395,8 @@ func TestValidateHappyPath(t *testing.T) {
 	}
 }
 
-// TestValidateWithProofChecksBeta verifies that a wrong Beta or a wrong
-// Paillier factor fails.
+// TestValidateWithProofChecksBeta verifies that a wrong Beta, a wrong
+// Paillier factor or a Paillier factor that is not prime fails.
 func TestValidateWithProofChecksBeta(t *testing.T) {
 	pp := loadTestPreParams(t, 1)[0]
 	bad := pp
@@ -410,5 +410,14 @@ func TestValidateWithProofChecksBeta(t *testing.T) {
 	bad.PaillierSK = &sk
 	if bad.ValidateWithProof() {
 		t.Fatal("ValidateWithProof accepted a wrong Paillier factor")
+	}
+	// N = N * 1 passes the product check, so only the primality check
+	// rejects it.
+	sk = *pp.PaillierSK
+	sk.P, sk.Q = new(big.Int).Set(sk.N), big.NewInt(1)
+	bad = pp
+	bad.PaillierSK = &sk
+	if bad.ValidateWithProof() {
+		t.Fatal("ValidateWithProof accepted a Paillier factor that is not prime")
 	}
 }
