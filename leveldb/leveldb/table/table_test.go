@@ -154,17 +154,23 @@ func TestReaderGetVsRelease(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			var wg sync.WaitGroup
+			// Release starts after each reader has done one Get.
+			var started, wg sync.WaitGroup
+			started.Add(8)
 			for range 8 {
 				wg.Go(func() {
-					for {
-						if _, err := tr.Get([]byte("k"), nil); err != nil {
+					for i := 0; ; i++ {
+						_, err := tr.Get([]byte("k"), nil)
+						if i == 0 {
+							started.Done()
+						}
+						if err != nil {
 							return
 						}
 					}
 				})
 			}
-			time.Sleep(50 * time.Microsecond)
+			started.Wait()
 			tr.Release()
 			wg.Wait()
 		}()
