@@ -168,10 +168,10 @@ func isOnCurve(c elliptic.Curve, x, y *big.Int) bool {
 	if x == nil || y == nil {
 		return false
 	}
-	// The curve libraries reduce the coordinates before they
-	// check them, so a negative or padded value passes.  Require the
-	// canonical range, so that each point has one encoding and Equals
-	// can compare the stored values.
+	// A curve library can reduce a coordinate before it checks it, so
+	// a value outside [0, p) can pass.  Require the canonical range,
+	// so that each point has one encoding and Equals can compare the
+	// stored values.
 	P := c.Params().P
 	if x.Sign() < 0 || y.Sign() < 0 || x.Cmp(P) >= 0 || y.Cmp(P) >= 0 {
 		return false
