@@ -42,12 +42,19 @@ func init() {
 
 // RegisterCurve adds a named curve to the global registry.  It panics
 // if the name is already registered, so that a later call cannot
-// replace a curve that is in use.
+// replace a curve that is in use.  It also panics if a curve of the
+// same type is already registered.  GetCurveName finds a name by the
+// curve type, so a second name for one type makes that name random.
 func RegisterCurve(name CurveName, curve elliptic.Curve) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, exist := registry[name]; exist {
 		panic(fmt.Errorf("RegisterCurve: curve %q is already registered", name))
+	}
+	for other, e := range registry {
+		if reflect.TypeOf(curve) == reflect.TypeOf(e) {
+			panic(fmt.Errorf("RegisterCurve: curve type %T is already registered as %q", curve, other))
+		}
 	}
 	registry[name] = curve
 }

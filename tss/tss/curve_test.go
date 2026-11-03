@@ -6,10 +6,8 @@ package tss
 
 import (
 	"crypto/elliptic"
-	"fmt"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestEdwardsSingleton(t *testing.T) {
@@ -56,12 +54,27 @@ func TestSetCurveNilPanics(t *testing.T) {
 	SetCurve(nil)
 }
 
+// registerTestCurve registers curve as name and removes it when the
+// test ends, so that other tests and -count=2 see the built-in
+// registry only.
+func registerTestCurve(t *testing.T, name CurveName, curve elliptic.Curve) {
+	t.Helper()
+	RegisterCurve(name, curve)
+	t.Cleanup(func() {
+		mu.Lock()
+		delete(registry, name)
+		mu.Unlock()
+	})
+}
+
+// testCurve is a curve type that the registry does not hold.
+type testCurve struct {
+	elliptic.Curve
+}
+
 func TestRegisterCurveAndGet(t *testing.T) {
 	c := elliptic.P256()
-	// RegisterCurve panics on a second call, for example with -count=2.
-	if _, ok := GetCurveByName("test-p256"); !ok {
-		RegisterCurve("test-p256", c)
-	}
+	registerTestCurve(t, "test-p256", c)
 
 	got, ok := GetCurveByName("test-p256")
 	if !ok || got != c {
@@ -123,7 +136,22 @@ func TestRegisterCurveRefusesOverwrite(t *testing.T) {
 	RegisterCurve(Secp256k1, elliptic.P256())
 }
 
-// TestCurveRegistryConcurrent registers curves while other goroutines
+// TestRegisterCurveRefusesSecondName verifies that a registered curve
+// type cannot get a second name.
+func TestRegisterCurveRefusesSecondName(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("RegisterCurve registered ed25519 as a second name")
+		}
+		name, ok := GetCurveName(Edwards())
+		if !ok || name != Ed25519 {
+			t.Fatalf("GetCurveName(Edwards): want %s, got %q", Ed25519, name)
+		}
+	}()
+	RegisterCurve("test-ed25519", edwardsCurve)
+}
+
+// TestCurveRegistryConcurrent registers a curve while other goroutines
 // read the registry.  The race detector must not report a race.
 func TestCurveRegistryConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
@@ -137,9 +165,11 @@ func TestCurveRegistryConcurrent(t *testing.T) {
 			}
 		}()
 	}
-	// The registry keeps each entry, so register only a few.
-	for i := 0; i < 5; i++ {
-		RegisterCurve(CurveName(fmt.Sprintf("test-race-%d-%d", time.Now().UnixNano(), i)), elliptic.P256())
+	for i := 0; i < 200; i++ {
+		RegisterCurve("test-race", testCurve{elliptic.P256()})
+		mu.Lock()
+		delete(registry, "test-race")
+		mu.Unlock()
 	}
 	wg.Wait()
 }
