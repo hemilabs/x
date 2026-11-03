@@ -25,7 +25,8 @@ type DGRound1Message struct {
 	SSID        []byte
 }
 
-// ValidateBasic checks that required fields of DGRound1Message are non-nil.
+// ValidateBasic checks that the required fields of DGRound1Message are
+// set and that the public key is a valid point.
 func (m *DGRound1Message) ValidateBasic() bool {
 	return m != nil && m.ECDSAPub.ValidateBasic() &&
 		m.VCommitment != nil && m.VCommitment.Sign() > 0 &&
