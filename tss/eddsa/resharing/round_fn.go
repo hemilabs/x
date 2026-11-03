@@ -67,6 +67,8 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 // and broadcasts a commitment.
 //
 // New committee parties call this too but get a no-op (nil messages).
+// An old committee party works on a copy of input, so input does not
+// change.  The caller destroys the old share after Round 5.
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
 	// Ks and the own index must match the old committee that takes
 	// part, which can be only t+1 of the old holders.
@@ -76,7 +78,7 @@ func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySave
 		}
 		subset, err := keygen.BuildLocalSaveDataSubset(*input, params.OldParties().IDs())
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("round 1 subset: %w", err)
 		}
 		input = &subset
 	}
