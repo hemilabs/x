@@ -194,8 +194,9 @@ func (saveData LocalPartySaveData) ValidateSaveData() error {
 	}
 
 	// Signing uses the own values, and the other parties use the
-	// public values at ownIndex.  They must be the same.
-	if !saveData.LocalPreParams.Validate() || saveData.PaillierSK.N == nil {
+	// public values at ownIndex.  They must be the same.  Validate is
+	// the nil check of the own pre-params.
+	if !saveData.Validate() || saveData.PaillierSK.N == nil {
 		return errors.New("ValidateSaveData: own Paillier or Pedersen value is nil")
 	}
 	if saveData.PaillierSK.N.Cmp(saveData.PaillierPKs[ownIdx].N) != 0 {
