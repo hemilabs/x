@@ -3011,20 +3011,28 @@ func TestDB_GetDuringClose(t *testing.T) {
 		if err := db.CompactRange(util.Range{}); err != nil {
 			t.Fatal(err)
 		}
-		// Read until Close stops the reads, so reads are in flight
-		// while Close runs.
-		var wg sync.WaitGroup
+		// Read until Close stops the reads.  Close starts after each
+		// reader has done one Get, so reads are in flight while Close
+		// runs.
+		var started, wg sync.WaitGroup
+		started.Add(8)
 		for g := 0; g < 8; g++ {
 			wg.Go(func() {
 				for i := 0; ; i++ {
-					if _, err := db.Get([]byte(fmt.Sprintf("k%03d", i%100)), nil); err != nil && err != ErrNotFound {
+					_, err := db.Get([]byte(fmt.Sprintf("k%03d", i%100)), nil)
+					if i == 0 {
+						started.Done()
+					}
+					if err != nil && err != ErrNotFound {
 						return
 					}
 				}
 			})
 		}
-		time.Sleep(time.Millisecond)
-		_ = db.Close()
+		started.Wait()
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
 		wg.Wait()
 	}
 }
