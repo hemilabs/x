@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
 )
 
 type dropper struct {
@@ -894,29 +896,36 @@ func TestTornTail(t *testing.T) {
 
 	small := []byte("small")
 	big := bytes.Repeat([]byte("x"), 40000)
+	smallBig := write(small, big)
+	oneSmall := write(small)
+	twoSmall := write(small, small)
+	zeroBlock := append(append([]byte{}, oneSmall...), make([]byte, blockSize-len(oneSmall))...)
 
-	// The second block of the big record is missing.
-	data := write(small, big)
-	if n, err := read(data[:blockSize]); n != 1 || err != ErrTornTail {
-		t.Fatalf("cut record: got %d records, %v; want 1, ErrTornTail", n, err)
+	tests := []struct {
+		name    string
+		data    []byte
+		want    int
+		wantErr error // nil means corruption
+	}{
+		{"second block missing", smallBig[:blockSize], 1, ErrTornTail},
+		{"second chunk cut", smallBig[:blockSize+100], 1, ErrTornTail},
+		{"header cut at record start", append(append([]byte{}, oneSmall...), 1, 2, 3), 1, io.EOF},
+		{"payload cut at record start", twoSmall[:len(twoSmall)-2], 1, io.EOF},
+		{"zero tail", append(append([]byte{}, oneSmall...), make([]byte, 100)...), 1, io.EOF},
+		{"data after zero tail", append(zeroBlock, oneSmall...), 1, nil},
 	}
-
-	// A header that runs past the end is a torn tail at a record start.
-	data = write(small)
-	if n, err := read(append(data, 1, 2, 3)); n != 1 || err != io.EOF {
-		t.Fatalf("torn header: got %d records, %v; want 1, EOF", n, err)
-	}
-
-	// A zero tail ends the journal.
-	zero := append(append([]byte{}, data...), make([]byte, 100)...)
-	if n, err := read(zero); n != 1 || err != io.EOF {
-		t.Fatalf("zero tail: got %d records, %v; want 1, EOF", n, err)
-	}
-
-	// A zero tail that fills the block, then more data, is corrupt.
-	zero = append(append([]byte{}, data...), make([]byte, blockSize-len(data))...)
-	zero = append(zero, write(small)...)
-	if _, err := read(zero); err == nil || err == io.EOF {
-		t.Fatalf("data after zero tail: got %v, want corruption", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n, err := read(tt.data)
+			if n != tt.want {
+				t.Errorf("got %d records, want %d", n, tt.want)
+			}
+			switch {
+			case tt.wantErr == nil && !errors.IsCorrupted(err):
+				t.Errorf("got %v, want corruption", err)
+			case tt.wantErr != nil && err != tt.wantErr:
+				t.Errorf("got %v, want %v", err, tt.wantErr)
+			}
+		})
 	}
 }

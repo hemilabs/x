@@ -3064,8 +3064,8 @@ func TestDB_CorruptManifestKeepsTables(t *testing.T) {
 	}
 	if db, err := OpenFile(torn, o); err != nil {
 		t.Fatalf("Open with a torn last record: %v", err)
-	} else {
-		db.Close()
+	} else if err := db.Close(); err != nil {
+		t.Fatal(err)
 	}
 
 	// A flipped byte in the record that adds a table must fail Open.
@@ -3103,7 +3103,10 @@ func TestDB_TornManifestRecordNotApplied(t *testing.T) {
 	rec.setJournalNum(5)
 	rec.setNextFileNum(10)
 	rec.setSeqNum(0)
-	w, _ := jw.Next()
+	w, err := jw.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := rec.encode(w); err != nil {
 		t.Fatal(err)
 	}
@@ -3115,7 +3118,10 @@ func TestDB_TornManifestRecordNotApplied(t *testing.T) {
 	for i := 0; i < 400; i++ {
 		rec.addTable(0, int64(i+1), 1, key, key)
 	}
-	w, _ = jw.Next()
+	w, err = jw.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := rec.encode(w); err != nil {
 		t.Fatal(err)
 	}
@@ -3134,7 +3140,9 @@ func TestDB_TornManifestRecordNotApplied(t *testing.T) {
 	if _, err := mw.Write(buf.Bytes()[:32*1024]); err != nil {
 		t.Fatal(err)
 	}
-	mw.Close()
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if err := stor.SetMeta(fd); err != nil {
 		t.Fatal(err)
 	}
