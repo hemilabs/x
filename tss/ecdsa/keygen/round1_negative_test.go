@@ -59,7 +59,7 @@ func TestRound1WithInvalidPreParamsGeneratesFresh(t *testing.T) {
 		t.Fatal("expected zero-value preParams to fail ValidateWithProof()")
 	}
 
-	state, out, err := Round1(context.Background(), params, emptyPreParams)
+	state, out, err := Round1(t.Context(), params, emptyPreParams)
 	if err != nil {
 		t.Fatalf("Round1 with empty preParams should generate fresh ones, got error: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestRound1RejectsStalePreParams(t *testing.T) {
 		t.Fatal("stale preParams should fail ValidateWithProof()")
 	}
 
-	_, _, err := Round1(context.Background(), params, stale)
+	_, _, err := Round1(t.Context(), params, stale)
 	if err == nil {
 		t.Fatal("expected error for stale preParams, got nil")
 	}
@@ -136,7 +136,7 @@ func TestRound1RejectsContextCancellation(t *testing.T) {
 	// Use a very short timeout to trigger the generation timeout path.
 	params.SetSafePrimeGenTimeout(1 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // pre-cancel
 
 	// Zero-value pre-params forces the generation branch.
@@ -175,7 +175,7 @@ func TestRound1ExportsCorrectSSIDNonce(t *testing.T) {
 		params.SetNoProofFac()
 		params.SetSSIDNonce(nonce)
 
-		state, _, err := Round1(context.Background(), params, *pp)
+		state, _, err := Round1(t.Context(), params, *pp)
 		if err != nil {
 			t.Fatalf("Round1 with nonce=%d: %v", nonce, err)
 		}
@@ -230,7 +230,7 @@ func TestRound1WithCeremonyID(t *testing.T) {
 			params.SetCeremonyID(ceremonyID)
 		}
 
-		state, _, err := Round1(context.Background(), params, *pp)
+		state, _, err := Round1(t.Context(), params, *pp)
 		if err != nil {
 			t.Fatalf("Round1 with ceremonyID=%x: %v", ceremonyID, err)
 		}
@@ -294,7 +294,7 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 			params.SetCeremonyID([]byte("ceremony-B"))
 		}
 
-		st, _, err := Round1(context.Background(), params, preParams[i])
+		st, _, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}

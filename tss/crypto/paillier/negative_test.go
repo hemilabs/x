@@ -5,7 +5,6 @@
 package paillier
 
 import (
-	"context"
 	"crypto/rand"
 	"math/big"
 	"testing"
@@ -91,7 +90,7 @@ func TestHomoAddC2GCDFails(t *testing.T) {
 // --- EncryptAndReturnRandomness error path ---
 
 func TestEncryptNegativeMessage(t *testing.T) {
-	sk, pk, err := GenerateKeyPair(context.Background(), rand.Reader, 512)
+	sk, pk, err := GenerateKeyPair(t.Context(), rand.Reader, 512)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair: %v", err)
 	}
@@ -105,7 +104,7 @@ func TestEncryptNegativeMessage(t *testing.T) {
 // --- Decrypt error path ---
 
 func TestDecryptOutOfRange(t *testing.T) {
-	sk, _, err := GenerateKeyPair(context.Background(), rand.Reader, 512)
+	sk, _, err := GenerateKeyPair(t.Context(), rand.Reader, 512)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair: %v", err)
 	}
@@ -120,11 +119,11 @@ func TestDecryptOutOfRange(t *testing.T) {
 // --- Proof/Verify with wrong key ---
 
 func TestVerifyWithWrongKey(t *testing.T) {
-	sk1, pk1, err := GenerateKeyPair(context.Background(), rand.Reader, 512)
+	sk1, pk1, err := GenerateKeyPair(t.Context(), rand.Reader, 512)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair 1: %v", err)
 	}
-	_, pk2, err := GenerateKeyPair(context.Background(), rand.Reader, 512)
+	_, pk2, err := GenerateKeyPair(t.Context(), rand.Reader, 512)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair 2: %v", err)
 	}
@@ -153,7 +152,7 @@ func TestVerifyWithWrongKey(t *testing.T) {
 
 func TestGenerateKeyPairSmallBits(t *testing.T) {
 	// Very small modulus, just verify it doesn't hang.
-	sk, pk, err := GenerateKeyPair(context.Background(), rand.Reader, 128)
+	sk, pk, err := GenerateKeyPair(t.Context(), rand.Reader, 128)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair: %v", err)
 	}

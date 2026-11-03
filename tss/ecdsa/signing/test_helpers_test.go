@@ -5,7 +5,6 @@
 package signing
 
 import (
-	"context"
 	"crypto/sha256"
 	"errors"
 	"math/big"
@@ -60,7 +59,7 @@ func doKeygen(t *testing.T) []keygen.LocalPartySaveData {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, testThreshold)
-		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
+		st, out, err := keygen.Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("doKeygen: Round1[%d]: %v", i, err)
 		}
@@ -74,7 +73,7 @@ func doKeygen(t *testing.T) []keygen.LocalPartySaveData {
 		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
+		out, err := keygen.Round2(t.Context(), kgStates[i], kgR1)
 		if err != nil {
 			t.Fatalf("doKeygen: Round2[%d]: %v", i, err)
 		}
@@ -96,7 +95,7 @@ func doKeygen(t *testing.T) []keygen.LocalPartySaveData {
 
 	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
+		out, err := keygen.Round3(t.Context(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("doKeygen: Round3[%d]: %v", i, err)
 		}
@@ -105,7 +104,7 @@ func doKeygen(t *testing.T) []keygen.LocalPartySaveData {
 
 	saves := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round4(context.Background(), kgStates[i], kgR3)
+		out, err := keygen.Round4(t.Context(), kgStates[i], kgR3)
 		if err != nil {
 			t.Fatalf("doKeygen: Round4[%d]: %v", i, err)
 		}
@@ -235,7 +234,7 @@ func setupThroughRound2(t *testing.T) *SignFixture {
 		r2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := SignRound2(context.Background(), f.States[i], f.R1P2P[i], f.R1Bcast)
+		out, err := SignRound2(t.Context(), f.States[i], f.R1P2P[i], f.R1Bcast)
 		if err != nil {
 			t.Fatalf("setupThroughRound2: SignRound2[%d]: %v", i, err)
 		}
@@ -265,7 +264,7 @@ func setupThroughRound3(t *testing.T) *SignFixture {
 
 	r3Bcast := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := SignRound3(context.Background(), f.States[i], f.R2P2P[i])
+		out, err := SignRound3(t.Context(), f.States[i], f.R2P2P[i])
 		if err != nil {
 			t.Fatalf("setupThroughRound3: SignRound3[%d]: %v", i, err)
 		}

@@ -5,7 +5,6 @@
 package keygen
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -32,7 +31,7 @@ func TestRoundFnKeygenThreeParties(t *testing.T) {
 	r1Msgs := make([][]*tss.Message, n) // r1Msgs[i] = party i's broadcasts
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -54,7 +53,7 @@ func TestRoundFnKeygenThreeParties(t *testing.T) {
 	// -- Round 2 --
 	r2Outputs := make([]*RoundOutput, n)
 	for i := 0; i < n; i++ {
-		out, err := Round2(context.Background(), states[i], allR1)
+		out, err := Round2(t.Context(), states[i], allR1)
 		if err != nil {
 			t.Fatalf("Round2[%d]: %v", i, err)
 		}
@@ -96,7 +95,7 @@ func TestRoundFnKeygenThreeParties(t *testing.T) {
 	// -- Round 3 --
 	r3Outputs := make([]*RoundOutput, n)
 	for i := 0; i < n; i++ {
-		out, err := Round3(context.Background(), states[i], allR2P2P[i], allR2Bcast)
+		out, err := Round3(t.Context(), states[i], allR2P2P[i], allR2Bcast)
 		if err != nil {
 			t.Fatalf("Round3[%d]: %v", i, err)
 		}
@@ -112,7 +111,7 @@ func TestRoundFnKeygenThreeParties(t *testing.T) {
 	// -- Round 4 --
 	saves := make([]*LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
-		out, err := Round4(context.Background(), states[i], allR3)
+		out, err := Round4(t.Context(), states[i], allR3)
 		if err != nil {
 			t.Fatalf("Round4[%d]: %v", i, err)
 		}
@@ -191,7 +190,7 @@ func TestRoundFnKeygenNoProofFlags(t *testing.T) {
 		params.SetNoProofMod()
 		params.SetNoProofFac()
 		params.SetNoProofDLN()
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -205,7 +204,7 @@ func TestRoundFnKeygenNoProofFlags(t *testing.T) {
 		r2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := Round2(context.Background(), states[i], r1)
+		out, err := Round2(t.Context(), states[i], r1)
 		if err != nil {
 			t.Fatalf("Round2[%d]: %v", i, err)
 		}
@@ -227,7 +226,7 @@ func TestRoundFnKeygenNoProofFlags(t *testing.T) {
 
 	r3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := Round3(context.Background(), states[i], r2P2P[i], r2Bcast)
+		out, err := Round3(t.Context(), states[i], r2P2P[i], r2Bcast)
 		if err != nil {
 			t.Fatalf("Round3[%d]: %v", i, err)
 		}
@@ -235,7 +234,7 @@ func TestRoundFnKeygenNoProofFlags(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		out, err := Round4(context.Background(), states[i], r3)
+		out, err := Round4(t.Context(), states[i], r3)
 		if err != nil {
 			t.Fatalf("Round4[%d]: %v", i, err)
 		}

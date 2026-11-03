@@ -5,7 +5,6 @@
 package keygen
 
 import (
-	"context"
 	"math/big"
 	"strings"
 	"testing"
@@ -47,7 +46,7 @@ func setupRound1ForNegativeTests(t *testing.T) *round1Fixture {
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -98,7 +97,7 @@ func cloneR1MsgContent(msg *tss.Message) *tss.Message {
 // identifies the correct culprit party.
 func expectRound2Error(t *testing.T, fix *round1Fixture, msgs []*tss.Message, wantErrSubstr string, wantCulpritIdx int) {
 	t.Helper()
-	_, err := Round2(context.Background(), fix.states[0], msgs)
+	_, err := Round2(t.Context(), fix.states[0], msgs)
 	if err == nil {
 		t.Fatalf("expected error containing %q, got nil", wantErrSubstr)
 	}
