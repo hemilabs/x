@@ -232,8 +232,9 @@ func (s *session) commit(r *sessionRecord, trivial bool) (err error) {
 		// manifest journal writer not yet created, create one
 		err = s.newManifest(r, nv)
 	} else if s.manifestUnknown || s.manifest.Size() >= s.o.GetMaxManifestFileSize() {
-		// pass nil sessionRecord to avoid over-reference table file
-		err = s.newManifest(nil, nv)
+		// Pass only the session fields of r.  nv has the tables of r,
+		// and a second copy in r over-references the table files.
+		err = s.newManifest(r.sessionFields(), nv)
 		if err == nil {
 			s.manifestUnknown = false
 		}

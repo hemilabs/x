@@ -101,6 +101,34 @@ func (p *sessionRecord) addCompPtr(level int, ikey internalKey) {
 	p.compPtrs = append(p.compPtrs, cpRecord{level, ikey})
 }
 
+func (p *sessionRecord) hasCompPtr(level int) bool {
+	for _, cp := range p.compPtrs {
+		if cp.level == level {
+			return true
+		}
+	}
+	return false
+}
+
+// sessionFields returns a record with the journal numbers, the sequence
+// number and the compaction pointers of p, and without its table changes.
+func (p *sessionRecord) sessionFields() *sessionRecord {
+	r := &sessionRecord{}
+	if p.has(recJournalNum) {
+		r.setJournalNum(p.journalNum)
+	}
+	if p.has(recPrevJournalNum) {
+		r.setPrevJournalNum(p.prevJournalNum)
+	}
+	if p.has(recSeqNum) {
+		r.setSeqNum(p.seqNum)
+	}
+	for _, cp := range p.compPtrs {
+		r.addCompPtr(cp.level, cp.ikey)
+	}
+	return r
+}
+
 func (p *sessionRecord) resetCompPtrs() {
 	p.hasRec &= ^(1 << recCompPtr)
 	p.compPtrs = p.compPtrs[:0]
