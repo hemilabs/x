@@ -16,7 +16,9 @@ import (
 // TaskName identifies the keygen protocol in error messages.
 const TaskName = "ecdsa-keygen"
 
-const paillierBitsLen = 2048
+// PaillierBitsLen is the bit length of each Paillier N and each NTilde.
+// Keygen and resharing reject a modulus of any other length.
+const PaillierBitsLen = 2048
 
 type (
 	localMessageStore struct {

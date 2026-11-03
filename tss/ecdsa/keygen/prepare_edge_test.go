@@ -242,7 +242,7 @@ func TestGeneratePreParamsResultValidates(t *testing.T) {
 	}
 
 	// Paillier modulus should be 2048 bits
-	if !reflect.DeepEqual(paillierModulusLen, preParams.PaillierSK.N.BitLen()) {
+	if !reflect.DeepEqual(PaillierBitsLen, preParams.PaillierSK.N.BitLen()) {
 		t.Fatalf("Paillier modulus should be exactly 2048 bits")
 	}
 }
