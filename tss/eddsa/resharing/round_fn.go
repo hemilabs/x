@@ -66,7 +66,8 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 // Lagrange-interpolated wi, creates VSS shares for the new committee,
 // and broadcasts a commitment.
 //
-// New committee parties call this too but get a no-op (nil messages).
+// New committee parties call this too.  They compute the session ID
+// and send no messages.
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
