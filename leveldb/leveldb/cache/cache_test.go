@@ -560,11 +560,16 @@ func TestGetEvictVsClose(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			var wg sync.WaitGroup
+			// Close starts after each reader has done one Get.
+			var started, wg sync.WaitGroup
+			started.Add(4)
 			for g := range 4 {
 				wg.Go(func() {
 					for i := uint64(g) << 32; ; i++ {
 						h := c.Get(0, i, func() (int, Value) { return 1, i })
+						if i == uint64(g)<<32 {
+							started.Done()
+						}
 						if h == nil {
 							return
 						}
@@ -572,7 +577,7 @@ func TestGetEvictVsClose(t *testing.T) {
 					}
 				})
 			}
-			time.Sleep(time.Millisecond)
+			started.Wait()
 			c.Close(false)
 			wg.Wait()
 		}()
