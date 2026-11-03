@@ -9,6 +9,7 @@ package leveldb
 import (
 	"bytes"
 	"container/list"
+	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -3030,9 +3031,11 @@ func within(t *testing.T, d time.Duration, what string, fn func()) {
 		defer close(done)
 		fn()
 	}()
+	ctx, cancel := context.WithTimeout(t.Context(), d)
+	defer cancel()
 	select {
 	case <-done:
-	case <-time.After(d):
+	case <-ctx.Done():
 		t.Fatalf("%s did not return within %v", what, d)
 	}
 }
