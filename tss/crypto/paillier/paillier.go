@@ -233,9 +233,9 @@ func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error)
 		}
 	}
 	// A nil k or ecdsaPub panics in the GenerateXs goroutine, where the
-	// caller cannot recover.  GenerateXs draws values of a multiple of 256 bits and keeps those
-	// below N, so an N of another bit length can make it loop for a very
-	// long time.
+	// caller cannot recover.  GenerateXs draws values of a multiple of
+	// 256 bits and keeps those below N, so an N of another bit length
+	// can make it loop for a very long time.
 	if pkN == nil || pkN.Sign() != 1 || pkN.BitLen()%256 != 0 ||
 		k == nil || ecdsaPub == nil || !ecdsaPub.ValidateBasic() {
 		return false, errors.New("paillier proof verify: invalid input")
