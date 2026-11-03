@@ -103,8 +103,9 @@ func TestECDSAKeygenSignReshare(t *testing.T) {
 			t.Fatalf("new party %d: pub key changed", i)
 		}
 	}
-	// The subset helper copies Xi, so resharing does not change the
-	// caller's key.  The caller retires the old share.
+	if oldSaves[0].Xi.Sign() == 0 {
+		t.Fatal("reshare changed the caller's Xi")
+	}
 	t.Log("reshare complete, pub key preserved")
 
 	// ------------------------------------------------------------------

@@ -88,7 +88,9 @@ func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySav
 // broadcast message.  Only old committee members produce output.
 //
 // key is the existing key share.  preParams is for the new committee
-// (may be zero-value if this party is old-only).
+// (may be zero-value if this party is old-only).  An old committee
+// party works on a copy of key, so key does not change.  The caller
+// destroys the old share after Round 5.
 func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveData, preParams keygen.LocalPreParams) (*ReshareState, *ReshareRoundOutput, error) {
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
@@ -638,7 +640,7 @@ func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*Reshare
 		out.Save = save
 	}
 
-	// Zero old Xi
+	// Zero the copy of the old Xi.  The caller's key does not change.
 	if params.IsOldCommittee() {
 		input.Xi.SetInt64(0)
 	}

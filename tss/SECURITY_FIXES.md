@@ -202,7 +202,8 @@ silence.
 copies the secrets.  `ValidateSaveData` checks that Xi is in [1, q),
 that BigXj interpolates to the group key and that the own Paillier and
 Pedersen values match.  The child key must be ECDSAPub + delta*G.
-ReshareRound1 rejects stale pre-params as keygen does.
+ReshareRound1 rejects stale pre-params as keygen does.  Resharing no
+longer zeroes the Xi of the caller.  The caller destroys the old share.
 
 **Where:** `ecdsa/keygen/save_data.go`, `eddsa/keygen/save_data.go`,
 `crypto/vss/feldman_vss.go`, `ecdsa/signing/key_derivation_util.go`,
