@@ -56,6 +56,10 @@ func run(ctx context.Context) error {
 		pflag.Usage()
 		return errors.New("expected exactly one <message> argument")
 	}
+	if *jsonFlag && *rawFlag {
+		pflag.Usage()
+		return errors.New("use --json or --raw, not both")
+	}
 	message := args[0]
 
 	cfg, err := configFromEnv(*channelID)
