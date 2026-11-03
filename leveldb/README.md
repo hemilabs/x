@@ -25,6 +25,8 @@ commit, "leveldb: fix table file leaks when manifest is rotated").
 
 Fixes in this fork on the transaction path:
 
+- `Close` and a transaction that finishes at the same time do not race
+  on the open transaction.
 - `Commit` releases the compaction commit lock when the MANIFEST commit
   fails, so a retry and later compactions do not block.
 - `OpenTransaction` releases the write lock on its error returns, and it
