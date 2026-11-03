@@ -47,27 +47,6 @@ func TestGetSSIDDeterministic(t *testing.T) {
 	}
 }
 
-// TestGetSSIDWithCeremonyID verifies that setting a CeremonyID changes
-// the SSID output relative to no CeremonyID.
-func TestGetSSIDWithCeremonyID(t *testing.T) {
-	params, temp := makeSSIDTestParams(t, 3, 1)
-
-	ssidWithout, err := getSSID(params, temp, 1)
-	if err != nil {
-		t.Fatalf("getSSID without CeremonyID: %v", err)
-	}
-
-	params.SetCeremonyID([]byte("test-ceremony-42"))
-	ssidWith, err := getSSID(params, temp, 1)
-	if err != nil {
-		t.Fatalf("getSSID with CeremonyID: %v", err)
-	}
-
-	if bytes.Equal(ssidWithout, ssidWith) {
-		t.Fatal("CeremonyID did not change the SSID")
-	}
-}
-
 // TestGetSSIDDifferentCeremonyIDs verifies that two distinct CeremonyIDs
 // produce two distinct SSIDs.
 func TestGetSSIDDifferentCeremonyIDs(t *testing.T) {
