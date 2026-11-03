@@ -29,6 +29,7 @@ func buildTestResharingFixture(t *testing.T) (params *tss.ReSharingParameters, i
 
 	// Parameters from the perspective of old party 0.
 	params = tss.NewReSharingParameters(ec, oldCtx, newCtx, oldPIDs[0], 3, 1, 3, 1)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	// Build minimal LocalPartySaveData with BigXj, NTildej, H1j, H2j.
 	n := 3
@@ -90,10 +91,10 @@ func TestGetReshareSSIDDeterministic(t *testing.T) {
 func TestGetReshareSSIDWithCeremonyID(t *testing.T) {
 	params, input, temp, _, _ := buildTestResharingFixture(t)
 
-	// Baseline: no ceremony ID.
-	ssidNoCID, err := getReshareSSID(params, input, temp, 1)
+	// Baseline: the ceremony ID of the fixture.
+	ssidBase, err := getReshareSSID(params, input, temp, 1)
 	if err != nil {
-		t.Fatalf("getReshareSSID (no CID): %v", err)
+		t.Fatalf("getReshareSSID (fixture CID): %v", err)
 	}
 
 	// Set a ceremony ID and recompute.
@@ -103,7 +104,7 @@ func TestGetReshareSSIDWithCeremonyID(t *testing.T) {
 		t.Fatalf("getReshareSSID (with CID): %v", err)
 	}
 
-	if bytes.Equal(ssidNoCID, ssidWithCID) {
+	if bytes.Equal(ssidBase, ssidWithCID) {
 		t.Fatal("CeremonyID must change the SSID, but got identical values")
 	}
 
@@ -182,12 +183,14 @@ func TestGetReshareSSIDDifferentThresholds(t *testing.T) {
 	temp := &localTempData{ssidNonce: big.NewInt(1)}
 
 	params1 := tss.NewReSharingParameters(ec, oldCtx, newCtx, oldPIDs[0], 4, 1, 4, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	ssid1, err := getReshareSSID(params1, &save, temp, 1)
 	if err != nil {
 		t.Fatalf("getReshareSSID(threshold=1): %v", err)
 	}
 
 	params2 := tss.NewReSharingParameters(ec, oldCtx, newCtx, oldPIDs[0], 4, 2, 4, 2)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	ssid2, err := getReshareSSID(params2, &save, temp, 1)
 	if err != nil {
 		t.Fatalf("getReshareSSID(threshold=2): %v", err)
@@ -411,6 +414,7 @@ func TestGetReshareSSIDDifferentOldPartyKeys(t *testing.T) {
 	oldPIDs1 := makeDeterministicPartyIDs(3, 100)
 	oldCtx1 := tss.NewPeerContext(oldPIDs1)
 	params1 := tss.NewReSharingParameters(ec, oldCtx1, newCtx, oldPIDs1[0], 3, 1, 3, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	ssid1, err := getReshareSSID(params1, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("old keys A: %v", err)
@@ -419,6 +423,7 @@ func TestGetReshareSSIDDifferentOldPartyKeys(t *testing.T) {
 	oldPIDs2 := makeDeterministicPartyIDs(3, 500) // different base → different keys
 	oldCtx2 := tss.NewPeerContext(oldPIDs2)
 	params2 := tss.NewReSharingParameters(ec, oldCtx2, newCtx, oldPIDs2[0], 3, 1, 3, 1)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	ssid2, err := getReshareSSID(params2, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("old keys B: %v", err)
@@ -451,6 +456,7 @@ func TestGetReshareSSIDDifferentNewPartyKeys(t *testing.T) {
 	newPIDs1 := makeDeterministicPartyIDs(3, 200)
 	newCtx1 := tss.NewPeerContext(newPIDs1)
 	params1 := tss.NewReSharingParameters(ec, oldCtx, newCtx1, oldPIDs[0], 3, 1, 3, 1)
+	params1.SetCeremonyID([]byte("test-ceremony"))
 	ssid1, err := getReshareSSID(params1, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("new keys A: %v", err)
@@ -459,6 +465,7 @@ func TestGetReshareSSIDDifferentNewPartyKeys(t *testing.T) {
 	newPIDs2 := makeDeterministicPartyIDs(3, 600) // different base → different keys
 	newCtx2 := tss.NewPeerContext(newPIDs2)
 	params2 := tss.NewReSharingParameters(ec, oldCtx, newCtx2, oldPIDs[0], 3, 1, 3, 1)
+	params2.SetCeremonyID([]byte("test-ceremony"))
 	ssid2, err := getReshareSSID(params2, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("new keys B: %v", err)
@@ -492,6 +499,7 @@ func TestGetReshareSSIDDifferentPartyCount(t *testing.T) {
 	params3 := tss.NewReSharingParameters(ec,
 		tss.NewPeerContext(oldPIDs3), tss.NewPeerContext(newPIDs3),
 		oldPIDs3[0], 3, 1, 3, 1)
+	params3.SetCeremonyID([]byte("test-ceremony"))
 	ssid3, err := getReshareSSID(params3, makeSave(3), temp, 1)
 	if err != nil {
 		t.Fatalf("3→3: %v", err)
@@ -502,6 +510,7 @@ func TestGetReshareSSIDDifferentPartyCount(t *testing.T) {
 	params4 := tss.NewReSharingParameters(ec,
 		tss.NewPeerContext(oldPIDs4), tss.NewPeerContext(newPIDs3),
 		oldPIDs4[0], 4, 1, 3, 1)
+	params4.SetCeremonyID([]byte("test-ceremony"))
 	ssid4, err := getReshareSSID(params4, makeSave(4), temp, 1)
 	if err != nil {
 		t.Fatalf("4→3: %v", err)

@@ -30,7 +30,7 @@ func TestNewDGRound1MessageFields(t *testing.T) {
 	vct := big.NewInt(777)
 	ssid := []byte("test-ssid-round1")
 
-	msg := NewDGRound1Message(to, from, ecdsaPub, vct, ssid)
+	msg := NewDGRound1Message(to, from, ecdsaPub, vct, ssid, []byte("key-hash"))
 
 	// Envelope checks.
 	if msg.From != from {

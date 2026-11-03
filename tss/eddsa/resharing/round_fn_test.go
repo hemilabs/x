@@ -44,6 +44,7 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 		params := tss.NewReSharingParameters(
 			tss.Edwards(), oldPeerCtx, newPeerCtx,
 			oldPIDs[i], oldN, oldT, newN, newT)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := ReshareRound1(params, &oldSaves[i])
 		if err != nil {
 			t.Fatalf("ReshareRound1[old %d]: %v", i, err)
@@ -60,6 +61,7 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 		params := tss.NewReSharingParameters(
 			tss.Edwards(), oldPeerCtx, newPeerCtx,
 			newPIDs[i], oldN, oldT, newN, newT)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, _, err := ReshareRound1(params, nil)
 		if err != nil {
 			t.Fatalf("ReshareRound1[new %d]: %v", i, err)
@@ -175,6 +177,7 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 	sr1 := make([]*tss.Message, newN)
 	for i := 0; i < newN; i++ {
 		params := tss.NewParameters(tss.Edwards(), newPeerCtx, newPIDs[i], newN, newT)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := signing.SignRound1(params, newSaves[i], m, 0)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
@@ -226,6 +229,7 @@ func doKeygen(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(params)
 		if err != nil {
 			t.Fatalf("keygen.Round1[%d]: %v", i, err)

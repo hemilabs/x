@@ -24,6 +24,7 @@ func TestSignRound1RejectsNegativeMessage(t *testing.T) {
 	keys := doKeygen(t)
 	pIDs, peerCtx := setupPartyIDs()
 	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+	params.SetCeremonyID([]byte("test-ceremony"))
 
 	negMsg := big.NewInt(-1)
 	_, _, err := SignRound1(params, keys[0], negMsg, nil, 0)
@@ -44,6 +45,7 @@ func TestSignRound1RejectsMessageEqualToN(t *testing.T) {
 	keys := doKeygen(t)
 	pIDs, peerCtx := setupPartyIDs()
 	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	curveOrder := tss.S256().Params().N
 
 	// msg == N
@@ -76,6 +78,7 @@ func TestSignRound1RejectsKeyCountMismatch(t *testing.T) {
 	keys := doKeygen(t)
 	pIDs, peerCtx := setupPartyIDs()
 	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	m := testMsg()
 
 	// Truncate key data so len(Ks) = 2 but params.PartyCount() = 3.

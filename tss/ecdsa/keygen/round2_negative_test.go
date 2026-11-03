@@ -45,6 +45,7 @@ func setupRound1ForNegativeTests(t *testing.T) *round1Fixture {
 	allR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -453,6 +454,7 @@ func TestRound2LeavesNoDLNGoroutine(t *testing.T) {
 	r1 := make([]*tss.Message, negN)
 	for i := 0; i < negN; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], negN, negThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
