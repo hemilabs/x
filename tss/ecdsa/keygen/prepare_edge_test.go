@@ -152,12 +152,14 @@ func TestGeneratePreParamsReturnsWhenRandBlocks(t *testing.T) {
 		_, err := GeneratePreParamsWithContextAndRandom(ctx, r, 1)
 		done <- err
 	}()
+	wctx, wcancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer wcancel()
 	select {
 	case err := <-done:
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("expected context.DeadlineExceeded, got %v", err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-wctx.Done():
 		t.Fatal("no return after ctx was done")
 	}
 }
