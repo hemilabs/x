@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
+	"slices"
 	"sort"
 )
 
@@ -387,14 +388,7 @@ func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 	if len(m.hashes) == 0 {
 		return ErrNoMatch
 	}
-	found := false
-	for _, h := range m.hashes {
-		if h == *leaf {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(m.hashes, *leaf) {
 		return ErrLeafNotFound
 	}
 
