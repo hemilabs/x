@@ -53,6 +53,14 @@ func (mi *modInt) i() *big.Int {
 	return (*big.Int)(mi)
 }
 
+// CopyInt returns a copy of x, or nil for a nil x.
+func CopyInt(x *big.Int) *big.Int {
+	if x == nil {
+		return nil
+	}
+	return new(big.Int).Set(x)
+}
+
 // [FORK] Nil guard: upstream panics on nil b or bound. These inputs can be
 // attacker-controlled (e.g., received proof fields in ZK verification), so we
 // return false instead of crashing.
