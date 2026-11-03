@@ -11,52 +11,62 @@ package storage
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"sync"
 	"syscall"
 )
 
-// An fcntl lock belongs to the process.  A second open of the same path
+// An fcntl lock belongs to the process.  A second open of the same file
 // in this process gets the lock too, and its close drops the lock for
-// other processes.  lockedPaths refuses a second open, except a
+// other processes.  lockedFiles refuses a second open, except a
 // read-only open next to other read-only opens.  The value is the
-// number of read-only opens, or -1 for a writable open.
+// number of read-only opens, or -1 for a writable open.  The key is the
+// file, not the path, so a symlink does not get past it.
 var (
 	lockedMu    sync.Mutex
-	lockedPaths = make(map[string]int)
+	lockedFiles = make(map[fileID]int)
 )
 
+type fileID struct {
+	dev, ino uint64
+}
+
+func fileIDOf(fi os.FileInfo) fileID {
+	st := fi.Sys().(*syscall.Stat_t)
+	return fileID{dev: st.Dev, ino: st.Ino}
+}
+
 type unixFileLock struct {
-	f    *os.File
-	path string
+	f  *os.File
+	id fileID
 }
 
 func (fl *unixFileLock) release() error {
 	err := setFileLock(fl.f, false, false)
-	// Close before the path leaves the registry.  Any close of the file
+	// Close before the file leaves the registry.  Any close of the file
 	// drops every lock that this process holds on it.
 	if cerr := fl.f.Close(); err == nil {
 		err = cerr
 	}
 	lockedMu.Lock()
-	if n := lockedPaths[fl.path]; n > 1 {
-		lockedPaths[fl.path] = n - 1
+	if n := lockedFiles[fl.id]; n > 1 {
+		lockedFiles[fl.id] = n - 1
 	} else {
-		delete(lockedPaths, fl.path)
+		delete(lockedFiles, fl.id)
 	}
 	lockedMu.Unlock()
 	return err
 }
 
 func newFileLock(path string, readOnly bool) (fl fileLock, err error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
 	lockedMu.Lock()
 	defer lockedMu.Unlock()
-	if n, ok := lockedPaths[abs]; ok && (!readOnly || n < 0) {
-		return nil, errors.New("leveldb/storage: file already locked by this process")
+	// Check before the open.  The close of a refused descriptor would
+	// drop the lock of the first open.
+	if fi, err := os.Stat(path); err == nil {
+		n, ok := lockedFiles[fileIDOf(fi)]
+		if ok && (!readOnly || n < 0) {
+			return nil, errors.New("leveldb/storage: file already locked by this process")
+		}
 	}
 	var flag int
 	if readOnly {
@@ -71,17 +81,23 @@ func newFileLock(path string, readOnly bool) (fl fileLock, err error) {
 	if err != nil {
 		return
 	}
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return
+	}
 	err = setFileLock(f, readOnly, true)
 	if err != nil {
 		f.Close()
 		return
 	}
+	id := fileIDOf(fi)
 	if readOnly {
-		lockedPaths[abs]++
+		lockedFiles[id]++
 	} else {
-		lockedPaths[abs] = -1
+		lockedFiles[id] = -1
 	}
-	fl = &unixFileLock{f: f, path: abs}
+	fl = &unixFileLock{f: f, id: id}
 	return
 }
 
