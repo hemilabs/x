@@ -213,45 +213,11 @@ func (tr *Transaction) Commit() error {
 		return err
 	}
 	if len(tr.tables) != 0 {
-		// Committing transaction.
-		tr.rec.setSeqNum(tr.seq)
-		tr.db.compCommitLk.Lock()
-		tr.stats.startTimer()
-		var cerr error
-		for retry := range 3 {
-			cerr = tr.db.s.commit(&tr.rec, false)
-			if cerr != nil {
-				tr.db.logf("transaction@commit error R·%d %q", retry, cerr)
-				select {
-				case <-time.After(time.Second):
-				case <-tr.db.closeC:
-					tr.db.logf("transaction@commit exiting")
-					tr.commitFailed = true
-					tr.db.compCommitLk.Unlock()
-					return cerr
-				}
-			} else {
-				// Success. Set db.seq.
-				tr.db.setSeq(tr.seq)
-				break
-			}
+		if err := tr.commitRecord(); err != nil {
+			// Return error, lets user decide either to retry or discard
+			// transaction.
+			return err
 		}
-		tr.stats.stopTimer()
-		if cerr != nil {
-			// Release compCommitLk, or a retry and the next compaction
-			// commit block forever.  Return error, lets user decide
-			// either to retry or discard transaction.
-			tr.commitFailed = true
-			tr.db.compCommitLk.Unlock()
-			return cerr
-		}
-
-		// Update compaction stats. This is safe as long as we hold compCommitLk.
-		tr.db.compStats.addStat(0, &tr.stats)
-
-		// Trigger table auto-compaction.
-		tr.db.compTrigger(tr.db.tcompCmdC)
-		tr.db.compCommitLk.Unlock()
 
 		// Additionally, wait compaction when certain threshold reached.
 		// Ignore error, returns error only if transaction can't be committed.
@@ -259,6 +225,44 @@ func (tr *Transaction) Commit() error {
 	}
 	// Only mark as done if transaction committed successfully.
 	tr.setDone()
+	return nil
+}
+
+// commitRecord writes the transaction record to the MANIFEST.  It holds
+// compCommitLk for the whole commit, so every return releases it.
+func (tr *Transaction) commitRecord() error {
+	tr.db.compCommitLk.Lock()
+	defer tr.db.compCommitLk.Unlock()
+
+	tr.rec.setSeqNum(tr.seq)
+	tr.stats.startTimer()
+	var cerr error
+	for retry := range 3 {
+		cerr = tr.db.s.commit(&tr.rec, false)
+		if cerr == nil {
+			break
+		}
+		tr.db.logf("transaction@commit error R·%d %q", retry, cerr)
+		select {
+		case <-time.After(time.Second):
+		case <-tr.db.closeC:
+			tr.db.logf("transaction@commit exiting")
+			tr.commitFailed = true
+			return cerr
+		}
+	}
+	tr.stats.stopTimer()
+	if cerr != nil {
+		tr.commitFailed = true
+		return cerr
+	}
+	tr.db.setSeq(tr.seq)
+
+	// Update compaction stats. This is safe as long as we hold compCommitLk.
+	tr.db.compStats.addStat(0, &tr.stats)
+
+	// Trigger table auto-compaction.
+	tr.db.compTrigger(tr.db.tcompCmdC)
 	return nil
 }
 
