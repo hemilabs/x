@@ -52,7 +52,8 @@ func NewZKProof(Session []byte, x *big.Int, X *crypto.ECPoint, rand io.Reader) (
 	return &ZKProof{Alpha: alpha, T: t}, nil
 }
 
-// NewZKProof verifies a new Schnorr ZK proof of knowledge of the discrete logarithm (GG18Spec Fig. 16)
+// Verify verifies a Schnorr ZK proof of knowledge of the discrete logarithm (GG18Spec Fig. 16).
+// It rejects the identity and, on Ed25519, a point outside the prime-order subgroup.
 func (pf *ZKProof) Verify(Session []byte, X *crypto.ECPoint) bool {
 	if pf == nil || !pf.ValidateBasic() || X == nil || !X.ValidateBasic() {
 		return false
