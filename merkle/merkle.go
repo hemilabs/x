@@ -18,12 +18,27 @@ import (
 	"sort"
 )
 
+// Errors that VerifyAuthPath returns.
 var (
-	ErrEmpty        = errors.New("empty merkle branch")
-	ErrNoMatch      = errors.New("merkle branch matches no leaf")
+	// ErrEmpty is returned when the branch has no leaves or no hashes.
+	ErrEmpty = errors.New("empty merkle branch")
+
+	// ErrNoMatch is returned when the branch reaches the root but
+	// marks no leaf as a match.
+	ErrNoMatch = errors.New("merkle branch matches no leaf")
+
+	// ErrLeafNotFound is returned when the branch marks leaves as
+	// matches, but the given leaf is not one of them.
 	ErrLeafNotFound = errors.New("leaf not proven by merkle branch")
+
+	// ErrRootMismatch is returned when the root of the branch is not
+	// the given root.
 	ErrRootMismatch = errors.New("merkle root mismatch")
-	ErrMalformed    = errors.New("malformed merkle branch")
+
+	// ErrMalformed is returned when a branch, root or leaf does not
+	// have the correct format.  An example is a branch with too few
+	// flag bits or hashes for NumLeaves.
+	ErrMalformed = errors.New("malformed merkle branch")
 
 	// ErrNilLeaf is returned by Sorted and Ordered when a leaf is nil.
 	ErrNilLeaf = errors.New("nil merkle leaf")
@@ -170,7 +185,6 @@ func tree(hashes []*[sha256.Size]byte, sorted bool) ([]*[sha256.Size]byte, error
 	nextPoT := nextPowerOfTwo(len(hashes))
 	arraySize := nextPoT*2 - 1
 
-	// Populate the array with the leaf hashes.
 	merkles := make([]*[sha256.Size]byte, arraySize)
 	for i, h := range hashes {
 		merkles[i] = leafHash(h)
@@ -268,14 +282,13 @@ func (a *authPath) traverseAndBuild(height, pos uint32) {
 	}
 	a.bits = append(a.bits, isParent)
 
-	// When the node is a leaf node or not a parent of a matched node,
-	// append the hash to the list that will be part of the final merkle
-	// block.
 	// A leaf goes in as the leaf itself; the verifier hashes it.
 	if height == 0 {
 		a.finalHashes = append(a.finalHashes, a.allHashes[pos])
 		return
 	}
+
+	// A subtree without a matched leaf goes in as its node hash.
 	if isParent == 0x00 {
 		a.finalHashes = append(a.finalHashes, a.calcHash(height, pos))
 		return
@@ -293,9 +306,16 @@ func (a *authPath) traverseAndBuild(height, pos uint32) {
 
 // Branch is a cooked merkle authentication path that can be transmitted
 // over a wire and can be verified on the other end.
+//
+// Hashes holds, in depth-first order, the leaf itself for each leaf in the
+// branch, and the node hash for each subtree without a matched leaf.
+//
+// One proof can have more than one valid encoding.  For example, a subtree
+// without the matched leaf can go in as one hash or as the hashes of its
+// two children.  Do not identify or compare proofs by their bytes.
 type Branch struct {
 	NumLeaves uint32              // Nuber of leaves
-	Hashes    [][sha256.Size]byte // Merkle branch
+	Hashes    [][sha256.Size]byte // Leaves and node hashes
 	Flags     []byte              // Bitmap of merkle tree
 }
 
@@ -407,7 +427,9 @@ func (m *merkleBranch) extract(height, pos uint32) (*[sha256.Size]byte, error) {
 
 // VerifyAuthPath verifies that the Branch proves leaf under root.  The root
 // and NumLeaves must come from a trusted source.  It proves membership only,
-// not the position of the leaf.
+// not the position of the leaf.  It returns nil when the proof is valid.  It
+// returns ErrRootMismatch, ErrNoMatch or ErrLeafNotFound when the branch
+// does not prove leaf under root, and another error for a malformed branch.
 func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 	if mb == nil || mb.NumLeaves == 0 || len(mb.Hashes) == 0 {
 		return ErrEmpty
@@ -455,14 +477,7 @@ func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 	if len(m.hashes) == 0 {
 		return ErrNoMatch
 	}
-	found := false
-	for _, h := range m.hashes {
-		if h == *leaf {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(m.hashes, *leaf) {
 		return ErrLeafNotFound
 	}
 
