@@ -238,6 +238,10 @@ func (a *authPath) traverseAndBuild(height, pos uint32) {
 
 // Branch is a cooked merkle authentication path that can be transmitted
 // over a wire and can be verified on the other end.
+//
+// One proof can have more than one valid encoding.  For example, a subtree
+// without the matched leaf can go in as one hash or as the hashes of its
+// two children.  Do not identify or compare proofs by their bytes.
 type Branch struct {
 	NumLeaves uint32              // Nuber of leaves
 	Hashes    [][sha256.Size]byte // Merkle branch
@@ -379,10 +383,13 @@ func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 		return err
 	}
 
-	// Validate that we consumed all bits and bobs.
-	flagByte := int(m.bitsUsed / 8)
-	if flagByte+1 < len(mb.Flags) && mb.Flags[flagByte] > 1<<m.bitsUsed%8 {
-		return fmt.Errorf("%w: did not consume all flag bits", ErrMalformed)
+	// Validate that we consumed all flag bytes, and that the unused high
+	// bits of the last byte are zero.
+	if uint64(len(mb.Flags)) != (uint64(m.bitsUsed)+7)/8 {
+		return fmt.Errorf("%w: did not consume all flag bytes", ErrMalformed)
+	}
+	if rem := m.bitsUsed % 8; rem != 0 && mb.Flags[len(mb.Flags)-1]>>rem != 0 {
+		return fmt.Errorf("%w: non-zero flag padding", ErrMalformed)
 	}
 
 	if m.hashUsed != uint32(len(mb.Hashes)) {
