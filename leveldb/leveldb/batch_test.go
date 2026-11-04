@@ -8,6 +8,7 @@ package leveldb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -175,4 +176,19 @@ func benchmarkBatchWrite(b *testing.B, config *BatchConfig) {
 		}
 	}
 	b.ReportAllocs()
+}
+
+// TestDecodeBatchHugeLength verifies that a key or value length of
+// 2^63 or more gives an error and not a panic.
+func TestDecodeBatchHugeLength(t *testing.T) {
+	huge := binary.AppendUvarint(nil, 1<<63)
+	for name, data := range map[string][]byte{
+		"key":   append([]byte{byte(keyTypeVal)}, huge...),
+		"value": append(append([]byte{byte(keyTypeVal), 1, 'k'}, huge...), 'v'),
+	} {
+		err := decodeBatch(data, func(int, batchIndex) error { return nil })
+		if err == nil {
+			t.Fatalf("%s: expected an error", name)
+		}
+	}
 }
