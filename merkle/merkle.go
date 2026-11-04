@@ -14,15 +14,31 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
+	"slices"
 	"sort"
 )
 
+// Errors that VerifyAuthPath returns.
 var (
-	ErrEmpty        = errors.New("empty merkle branch")
-	ErrNoMatch      = errors.New("merkle branch matches no leaf")
+	// ErrEmpty is returned when the branch has no leaves or no hashes.
+	ErrEmpty = errors.New("empty merkle branch")
+
+	// ErrNoMatch is returned when the branch reaches the root but
+	// marks no leaf as a match.
+	ErrNoMatch = errors.New("merkle branch matches no leaf")
+
+	// ErrLeafNotFound is returned when the branch marks leaves as
+	// matches, but the given leaf is not one of them.
 	ErrLeafNotFound = errors.New("leaf not proven by merkle branch")
+
+	// ErrRootMismatch is returned when the root of the branch is not
+	// the given root.
 	ErrRootMismatch = errors.New("merkle root mismatch")
-	ErrMalformed    = errors.New("malformed merkle branch")
+
+	// ErrMalformed is returned when a branch, root or leaf does not
+	// have the correct format.  An example is a branch with too few
+	// flag bits or hashes for NumLeaves.
+	ErrMalformed = errors.New("malformed merkle branch")
 )
 
 // XXX debate wrapping this in type and make the merkle tree opaque.
@@ -338,7 +354,9 @@ func (m *merkleBranch) extract(height, pos uint32) (*[sha256.Size]byte, error) {
 
 // VerifyAuthPath verifies that the Branch proves leaf under root.  The root
 // and NumLeaves must come from a trusted source.  It proves membership only,
-// not the position of the leaf.
+// not the position of the leaf.  It returns nil when the proof is valid.  It
+// returns ErrRootMismatch, ErrNoMatch or ErrLeafNotFound when the branch
+// does not prove leaf under root, and another error for a malformed branch.
 func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 	if mb == nil || mb.NumLeaves == 0 || len(mb.Hashes) == 0 {
 		return ErrEmpty
@@ -386,14 +404,7 @@ func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 	if len(m.hashes) == 0 {
 		return ErrNoMatch
 	}
-	found := false
-	for _, h := range m.hashes {
-		if h == *leaf {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(m.hashes, *leaf) {
 		return ErrLeafNotFound
 	}
 

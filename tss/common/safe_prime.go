@@ -131,6 +131,9 @@ func GetRandomSafePrimesConcurrent(ctx context.Context, bitLen, numPrimes int, c
 	if numPrimes < 1 {
 		return nil, errors.New("numPrimes should be > 0")
 	}
+	if concurrency < 1 {
+		return nil, errors.New("concurrency should be > 0")
+	}
 
 	primeCh := make(chan *GermainSafePrime, concurrency*numPrimes)
 	errCh := make(chan error, concurrency)
@@ -309,7 +312,13 @@ func runGenPrimeRoutine(ctx context.Context, primeCh chan<- *GermainSafePrime, e
 					isPocklingtonCriterionSatisfied(p) &&
 					q.BitLen() == qBitLen {
 					if sgp := (&GermainSafePrime{p: p, q: q}); sgp.Validate() {
-						primeCh <- &GermainSafePrime{p: p, q: q}
+						// A plain send blocks forever when the
+						// buffer is full and the caller returned.
+						select {
+						case primeCh <- sgp:
+						case <-ctx.Done():
+							return
+						}
 					}
 					p, q = new(big.Int), new(big.Int)
 				}

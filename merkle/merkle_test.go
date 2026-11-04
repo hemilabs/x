@@ -241,22 +241,25 @@ func TestVerifyAuthPathMalformed(t *testing.T) {
 	tests := []struct {
 		name string
 		mb   *Branch
+		root *[sha256.Size]byte
+		leaf *[sha256.Size]byte
 		want error
 	}{
-		{"nil branch", nil, ErrEmpty},
-		{"no flags", &Branch{NumLeaves: 4, Hashes: good.Hashes[:1]}, ErrMalformed},
-		{"short flags", &Branch{NumLeaves: 1 << 20, Hashes: good.Hashes, Flags: []byte{0xff}}, ErrMalformed},
-		{"short hashes", &Branch{NumLeaves: 10, Hashes: good.Hashes[:1], Flags: good.Flags}, ErrMalformed},
-		{"too many hashes", &Branch{NumLeaves: 1, Hashes: good.Hashes, Flags: good.Flags}, ErrMalformed},
-		{"too many flags", &Branch{NumLeaves: 10, Hashes: good.Hashes, Flags: make([]byte, 1<<20)}, ErrMalformed},
+		{"nil branch", nil, root, leaves[3], ErrEmpty},
+		{"nil root", good, nil, leaves[3], ErrMalformed},
+		{"nil leaf", good, root, nil, ErrMalformed},
+		{"no flags", &Branch{NumLeaves: 4, Hashes: good.Hashes[:1]}, root, leaves[3], ErrMalformed},
+		{"short flags", &Branch{NumLeaves: 1 << 20, Hashes: good.Hashes, Flags: []byte{0xff}}, root, leaves[3], ErrMalformed},
+		{"short hashes", &Branch{NumLeaves: 10, Hashes: good.Hashes[:1], Flags: good.Flags}, root, leaves[3], ErrMalformed},
+		{"too many hashes", &Branch{NumLeaves: 1, Hashes: good.Hashes, Flags: good.Flags}, root, leaves[3], ErrMalformed},
 	}
 	for _, tt := range tests {
-		if err := VerifyAuthPath(tt.mb, root, leaves[3]); !errors.Is(err, tt.want) {
-			t.Errorf("%s: got %v, want %v", tt.name, err, tt.want)
-		}
-	}
-	if err := VerifyAuthPath(good, nil, leaves[3]); !errors.Is(err, ErrMalformed) {
-		t.Errorf("nil root: got %v, want %v", err, ErrMalformed)
+		t.Run(tt.name, func(t *testing.T) {
+			err := VerifyAuthPath(tt.mb, tt.root, tt.leaf)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("got %v, want %v", err, tt.want)
+			}
+		})
 	}
 	if mb := AuthPath(nil, &h); mb != nil {
 		t.Errorf("empty leaves: got a branch, want nil")
