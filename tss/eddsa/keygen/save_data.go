@@ -8,8 +8,8 @@ package keygen
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
+	"github.com/hemilabs/x/tss/v3/common"
 	"github.com/hemilabs/x/tss/v3/crypto"
 	"github.com/hemilabs/x/tss/v3/crypto/vss"
 	"github.com/hemilabs/x/tss/v3/tss"
@@ -85,8 +85,8 @@ func BuildLocalSaveDataSubset(sourceData LocalPartySaveData, sortedIDs tss.Sorte
 	}
 	newData := NewLocalPartySaveData(sortedIDs.Len())
 	newData.LocalSecrets = LocalSecrets{
-		Xi:      cloneInt(sourceData.Xi),
-		ShareID: cloneInt(sourceData.ShareID),
+		Xi:      common.CopyInt(sourceData.Xi),
+		ShareID: common.CopyInt(sourceData.ShareID),
 	}
 	newData.EDDSAPub = sourceData.EDDSAPub
 	for j, id := range sortedIDs {
@@ -98,12 +98,4 @@ func BuildLocalSaveDataSubset(sourceData LocalPartySaveData, sortedIDs tss.Sorte
 		newData.BigXj[j] = sourceData.BigXj[savedIdx]
 	}
 	return newData, nil
-}
-
-// cloneInt returns a copy of x, or nil for a nil x.
-func cloneInt(x *big.Int) *big.Int {
-	if x == nil {
-		return nil
-	}
-	return new(big.Int).Set(x)
 }

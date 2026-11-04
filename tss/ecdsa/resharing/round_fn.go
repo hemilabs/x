@@ -88,8 +88,13 @@ func getReshareSSID(params *tss.ReSharingParameters, input *keygen.LocalPartySav
 // broadcast message.  Only old committee members produce output.
 //
 // key is the existing key share.  preParams is for the new committee
-// (may be zero-value if this party is old-only).
+// (may be zero-value if this party is old-only).  An old committee
+// party works on a copy of key, so key does not change.  The caller
+// destroys the old share after Round 5.
 func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveData, preParams keygen.LocalPreParams) (*ReshareState, *ReshareRoundOutput, error) {
+	if err := params.CheckCommittees(); err != nil {
+		return nil, nil, err
+	}
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
 	input := key
@@ -101,12 +106,12 @@ func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveDat
 		}
 	}
 	save := keygen.NewLocalPartySaveData(newPC)
-	// Reject stale pre-params as keygen does, and do not drop them
-	// in silence.
-	if preParams.Validate() && !preParams.ValidateWithProof() {
-		return nil, nil, errors.New("preParams failed validation")
-	}
-	if preParams.ValidateWithProof() {
+	// Present pre-params must pass the full check here.  Round 2 makes
+	// new primes only when there are none.
+	if preParams.Validate() {
+		if !preParams.ValidateWithProof() {
+			return nil, nil, errors.New("preParams failed validation")
+		}
 		save.LocalPreParams = preParams
 	}
 
@@ -339,7 +344,7 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 	wg := new(sync.WaitGroup)
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
-	for j, msg := range r2NewMsgs {
+	for _, msg := range r2NewMsgs {
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
 			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
@@ -402,7 +407,13 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 4, Pi, msg.From)
 		}
 		modulusMap[ntHex] = struct{}{}
+	}
 
+	// An early return above must leave no goroutine.
+	for j, msg := range r2NewMsgs {
+		r2msg1 := msg.Content.(*DGRound2Message1)
+		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
+			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
 		nTasks := 1
 		if !params.NoProofDLN() {
 			nTasks = 3
@@ -638,7 +649,7 @@ func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*Reshare
 		out.Save = save
 	}
 
-	// Zero old Xi
+	// Zero the copy of the old Xi.  The caller's key does not change.
 	if params.IsOldCommittee() {
 		input.Xi.SetInt64(0)
 	}

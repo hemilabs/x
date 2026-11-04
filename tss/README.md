@@ -94,7 +94,8 @@ r2out, _ := resharing.ReshareRound2(state, r1Msgs)
 r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
 r4out, _ := resharing.ReshareRound4(ctx, state, r2Msgs, r3p2p, r3bcast)
 r5out, _ := resharing.ReshareRound5(state, r4p2p, r4bcast)
-// r5out.Save = new key share (new committee), old Xi zeroed
+// r5out.Save = new key share (new committee)
+// keyShare does not change: the caller destroys the old share
 ```
 
 ## EdDSA — Keygen / Sign / Reshare

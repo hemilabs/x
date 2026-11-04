@@ -378,7 +378,6 @@ func TestValidateSaveData(t *testing.T) {
 }
 
 func TestBuildLocalSaveDataSubset(t *testing.T) {
-	// BuildLocalSaveDataSubset returns an error on a missing key.
 	sd := NewLocalPartySaveData(2)
 	sd.Ks = []*big.Int{big.NewInt(1), big.NewInt(2)}
 	// Pass an ID whose key doesn't match anything in Ks.

@@ -116,7 +116,7 @@ func TestCreateReconstructSuccess(t *testing.T) {
 }
 
 // TestInterpolateAtZero verifies the value at zero, and that bad input
-// gives an error and not a panic.
+// gives an error.
 func TestInterpolateAtZero(t *testing.T) {
 	ec := tss.EC()
 	// P(x) = 5 + 3x, so P(0)*G = 5*G.
@@ -136,6 +136,7 @@ func TestInterpolateAtZero(t *testing.T) {
 		"length":    {ks[:2], pts},
 		"collision": {[]*big.Int{big.NewInt(1), big.NewInt(1)}, pts[:2]},
 		"zero key":  {[]*big.Int{big.NewInt(0), big.NewInt(1)}, pts[:2]},
+		"nil key":   {[]*big.Int{nil, big.NewInt(1)}, pts[:2]},
 		"nil point": {ks[:2], []*crypto.ECPoint{pts[0], nil}},
 	} {
 		if _, err := InterpolateAtZero(ec, in.ks, in.pts); err == nil {
