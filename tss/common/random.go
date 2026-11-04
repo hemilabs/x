@@ -35,12 +35,8 @@ func MustGetRandomInt(rand io.Reader, bits int) *big.Int {
 	return n
 }
 
-// [FORK] Two fixes vs upstream:
-//  1. Guard: upstream checks `zero.Cmp(lessThan) != -1` which allows lessThan=1
-//     through, then returns 0 (not positive). We require lessThan >= 2 so the
-//     interval [1, lessThan) is non-empty.
-//  2. Loop condition: upstream only checks `try.Cmp(lessThan) < 0` and can
-//     return zero (which is not positive). We add `try.Sign() > 0`.
+// GetRandomPositiveInt returns a random int in [1, lessThan). It returns nil
+// if lessThan is nil or less than 2, because the interval is then empty.
 func GetRandomPositiveInt(rand io.Reader, lessThan *big.Int) *big.Int {
 	if lessThan == nil || lessThan.Cmp(two) < 0 {
 		return nil

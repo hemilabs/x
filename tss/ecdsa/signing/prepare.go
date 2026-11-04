@@ -17,8 +17,6 @@ import (
 // PrepareForSigning(), GG18Spec (11) Fig. 14
 func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int, bigXs []*crypto.ECPoint) (wi *big.Int, bigWs []*crypto.ECPoint) {
 	modQ := common.ModInt(ec.Params().N)
-	// Precondition panics (same as upstream). The [FORK] changes in this file are the
-	// Set() copy on line 36 and the nil-checks on ModInverse below.
 	if len(ks) != len(bigXs) {
 		panic(fmt.Errorf("PrepareForSigning: len(ks) != len(bigXs) (%d != %d)", len(ks), len(bigXs)))
 	}
@@ -30,8 +28,7 @@ func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int
 	}
 
 	// 2-4.
-	// [FORK] Upstream: `wi = xi` aliases the pointer, so subsequent Mul() calls
-	// mutate the caller's xi in-place, corrupting the key share. Use Set() to copy.
+	// Later Mul() calls change wi in place. An alias of xi would corrupt the key share.
 	wi = new(big.Int).Set(xi) // explicit copy to avoid mutating key material
 	for j := 0; j < pax; j++ {
 		if j == i {
@@ -45,8 +42,8 @@ func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int
 		// big.Int Div is calculated as: a/b = a * modInv(b,q)
 		diff := new(big.Int).Sub(ksj, ksi)
 		inv := modQ.ModInverse(diff)
-		// [FORK] Nil-check on ModInverse: upstream does not check. If two party keys
-		// collide mod q, ModInverse returns nil, causing a nil-pointer panic in Mul().
+		// If two party keys collide mod q, ModInverse returns nil, causing a nil-pointer
+		// panic in Mul().
 		if inv == nil {
 			panic(fmt.Errorf("PrepareForSigning: ModInverse(ks[%d]-ks[%d]) is nil; keys may collide mod q", j, i))
 		}
@@ -54,13 +51,13 @@ func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int
 		wi = modQ.Mul(wi, coef)
 	}
 
-	// [FORK] Defense-in-depth: wi == 0 means this party's secret share contribution
+	// Defense-in-depth: wi == 0 means this party's secret share contribution
 	// is annihilated, which would silently corrupt the threshold signature (zero
 	// signature share propagates through MtA, producing k*w = 0 regardless of nonce).
 	//
 	// This condition is unreachable under normal operation for the following reasons:
-	//   1. xi != 0 is validated at keygen (round_3.go:48-50) and resharing
-	//      (round_4_new_step_2.go:257-259), and VSS Share.Verify() rejects zero shares.
+	//   1. xi != 0 is validated at keygen and resharing (round_fn.go), and VSS
+	//      Share.Verify() rejects zero shares.
 	//   2. ks[j] != 0 mod q is validated by vss.CheckIndexes() during keygen/reshare,
 	//      which checks v mod q != 0 for all party indices.
 	//   3. Since q is prime, Z/qZ is a field where the product of non-zero elements
@@ -91,7 +88,6 @@ func PrepareForSigning(ec elliptic.Curve, i, pax int, xi *big.Int, ks []*big.Int
 			// big.Int Div is calculated as: a/b = a * modInv(b,q)
 			diff := new(big.Int).Sub(ksc, ksj)
 			inv := modQ.ModInverse(diff)
-			// [FORK] Same nil-check as above for the BigXj Lagrange interpolation loop.
 			if inv == nil {
 				panic(fmt.Errorf("PrepareForSigning: ModInverse(ks[%d]-ks[%d]) is nil; keys may collide mod q", c, j))
 			}

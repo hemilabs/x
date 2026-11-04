@@ -139,7 +139,7 @@ func TestModProofRejectsSmallN(test *testing.T) {
 		test.Fatal("smallN must be less than 2048 bits")
 	}
 
-	// The [FORK] BitLen < 2048 check in Verify must reject smallN.
+	// The BitLen < 2048 check in Verify must reject smallN.
 	ok = proof.Verify(Session, smallN)
 	if ok {
 		test.Fatal("proof must be rejected when N.BitLen() < 2048")

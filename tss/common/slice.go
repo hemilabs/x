@@ -52,9 +52,6 @@ func NonEmptyMultiBytes(bzs [][]byte, expectLen ...int) bool {
 
 // PadToLengthBytesInPlace pad {0, ...} to the front of src if len(src) < length
 // output length is equal to the parameter length
-//
-// [FORK] Upstream uses an O(n^2) prepend loop (repeatedly prepending a zero byte
-// and re-allocating). Replaced with a single O(n) allocation + copy.
 func PadToLengthBytesInPlace(src []byte, length int) []byte {
 	if len(src) >= length {
 		return src

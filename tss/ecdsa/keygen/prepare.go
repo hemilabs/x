@@ -139,10 +139,10 @@ consumer:
 	f1 := common.GetRandomPositiveRelativelyPrimeInt(rand, NTildei)
 	alpha := common.GetRandomPositiveRelativelyPrimeInt(rand, NTildei)
 	beta := modPQ.ModInverse(alpha)
-	// [FORK] Nil check on ModInverse result: upstream did not check. ModInverse returns nil
-	// when alpha is not coprime with p*q, which would cause a nil-pointer panic downstream
-	// when computing DLN proofs. This is astronomically unlikely with random alpha but
-	// defense-in-depth against degenerate RNG output.
+	// ModInverse returns nil when alpha is not coprime with p*q, which would
+	// cause a nil-pointer panic downstream when computing DLN proofs. This is
+	// astronomically unlikely with random alpha but defense-in-depth against
+	// degenerate RNG output.
 	if beta == nil {
 		return nil, fmt.Errorf("alpha modular inverse failed: alpha not coprime with p*q")
 	}
