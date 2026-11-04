@@ -78,3 +78,22 @@ func TestNewProofFromBytesTruncated(t *testing.T) {
 		t.Fatal("expected error for truncated bytes")
 	}
 }
+
+// TestChallengeCoversZN verifies that the challenges are not limited
+// to 256 bits for a 2048-bit N.
+func TestChallengeCoversZN(t *testing.T) {
+	N := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 2048), big.NewInt(1))
+	wide := 0
+	for i := 0; i < 8; i++ {
+		y := challenge([]byte("session"), N, big.NewInt(int64(i+2)), nil)
+		if y.Cmp(N) >= 0 {
+			t.Fatal("challenge is not reduced mod N")
+		}
+		if y.BitLen() > 256 {
+			wide++
+		}
+	}
+	if wide == 0 {
+		t.Fatal("all challenges are below 2^256")
+	}
+}

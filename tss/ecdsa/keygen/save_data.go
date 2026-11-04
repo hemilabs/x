@@ -71,7 +71,10 @@ func (preParams LocalPreParams) Validate() bool {
 // [FORK] ValidateWithProof: upstream only checked for nil fields. This hardened version
 // adds algebraic consistency checks to verify that the pre-params are internally consistent:
 // (1) NTilde = (2P+1)(2Q+1) — ensures NTilde is the product of safe primes derived from P, Q.
-// (2) H2 = H1^Alpha mod NTilde — ensures the discrete-log relationship needed for DLN proofs.
+// (2) H2 = H1^Alpha and H1 = H2^Beta mod NTilde — the discrete-log relationships for DLN proofs.
+// (3) NTilde and the Paillier N are 2048 bits, and N = PaillierSK.P * PaillierSK.Q.
+// (4) P, Q, 2P+1, 2Q+1, PaillierSK.P and PaillierSK.Q are prime.
+// The primality tests make this check slow, so call it one time per set of pre-params.
 // Without these checks, corrupted or tampered pre-params could silently produce invalid proofs
 // that would be rejected by honest verifiers, wasting an entire keygen ceremony.
 func (preParams LocalPreParams) ValidateWithProof() bool {
@@ -105,7 +108,27 @@ func (preParams LocalPreParams) ValidateWithProof() bool {
 	}
 	// Verify H2 = H1^Alpha mod NTilde
 	expectedH2 := new(big.Int).Exp(preParams.H1i, preParams.Alpha, preParams.NTildei)
-	return expectedH2.Cmp(preParams.H2i) == 0
+	if expectedH2.Cmp(preParams.H2i) != 0 {
+		return false
+	}
+	// Also verify H1 = H2^Beta, the sizes, that P, Q and the
+	// safe primes are prime, and that the Paillier key is N = P*Q of
+	// two primes.  The proofs depend on all of these.
+	expectedH1 := new(big.Int).Exp(preParams.H2i, preParams.Beta, preParams.NTildei)
+	if expectedH1.Cmp(preParams.H1i) != 0 {
+		return false
+	}
+	sk := preParams.PaillierSK
+	if sk.N == nil || preParams.NTildei.BitLen() != paillierBitsLen || sk.N.BitLen() != paillierBitsLen ||
+		new(big.Int).Mul(sk.P, sk.Q).Cmp(sk.N) != 0 {
+		return false
+	}
+	for _, p := range []*big.Int{preParams.P, preParams.Q, safeP, safeQ, sk.P, sk.Q} {
+		if !p.ProbablyPrime(20) {
+			return false
+		}
+	}
+	return true
 }
 
 // [FORK] ValidateSaveData performs comprehensive validation of loaded ECDSA save data,
