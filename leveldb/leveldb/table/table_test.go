@@ -8,6 +8,10 @@ package table
 
 import (
 	"bytes"
+	"context"
+	"sync"
+	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -129,3 +133,54 @@ var _ = testutil.Defer(func() {
 		})
 	})
 })
+
+// TestReaderGetVsRelease runs Get against Release.  Get holds the read
+// lock and must not take it again, or it deadlocks against a waiting
+// Release.
+func TestReaderGetVsRelease(t *testing.T) {
+	o := &opt.Options{BlockSize: 1024, Compression: opt.NoCompression}
+	buf := &bytes.Buffer{}
+	tw := NewWriter(buf, o, nil, 0)
+	if err := tw.Append([]byte("k"), []byte("v")); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for range 300 {
+		tr, err := NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()), storage.FileDesc{}, nil, nil, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			// Release starts after each reader has done one Get.
+			var started, wg sync.WaitGroup
+			started.Add(8)
+			for range 8 {
+				wg.Go(func() {
+					for i := 0; ; i++ {
+						_, err := tr.Get([]byte("k"), nil)
+						if i == 0 {
+							started.Done()
+						}
+						if err != nil {
+							return
+						}
+					}
+				})
+			}
+			started.Wait()
+			tr.Release()
+			wg.Wait()
+		}()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		select {
+		case <-done:
+		case <-ctx.Done():
+			t.Fatal("Get and Release deadlocked")
+		}
+		cancel()
+	}
+}
