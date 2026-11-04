@@ -114,3 +114,18 @@ func TestCreateReconstructSuccess(t *testing.T) {
 		t.Fatal("reconstructed secret doesn't match original")
 	}
 }
+
+// TestShareVerifyBadVsNoPanic verifies that Share.Verify returns false
+// for a negative threshold with no commitments, and for a nil
+// commitment.
+func TestShareVerifyBadVsNoPanic(t *testing.T) {
+	ec := tss.EC()
+	share := &Share{Threshold: -1, ID: big.NewInt(1), Share: big.NewInt(1)}
+	if share.Verify(ec, -1, Vs{}) {
+		t.Fatal("Verify accepted threshold -1")
+	}
+	share.Threshold = 1
+	if share.Verify(ec, 1, Vs{nil, nil}) {
+		t.Fatal("Verify accepted nil commitments")
+	}
+}
