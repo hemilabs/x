@@ -28,6 +28,7 @@ type localTempData struct {
 	shares vss.Shares
 
 	deCommitPolyG []*big.Int
+	echo          []byte // round1Echo of the received round 1 broadcasts
 }
 
 type localMessageStore struct {

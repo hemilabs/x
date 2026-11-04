@@ -46,5 +46,6 @@ type (
 
 		ssid      []byte
 		ssidNonce *big.Int
+		echo      []byte // reshareEcho of the received broadcasts
 	}
 )

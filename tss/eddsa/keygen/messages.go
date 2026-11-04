@@ -59,25 +59,29 @@ func NewKGRound2Message1(to, from *tss.PartyID, share *vss.Share) *tss.Message {
 	}
 }
 
-// KGRound2Message2 is broadcast: decommitment + Schnorr proof.
+// KGRound2Message2 is broadcast: decommitment + Schnorr proof + the
+// echo of the round 1 broadcasts that this party received.
 type KGRound2Message2 struct {
 	DeCommitment cmt.HashDeCommitment
 	ZKProof      *schnorr.ZKProof
+	Echo         []byte // round1Echo of the received round 1 broadcasts
 }
 
 // ValidateBasic checks that required fields of KGRound2Message2 are non-nil.
 func (m *KGRound2Message2) ValidateBasic() bool {
-	return m != nil && len(m.DeCommitment) >= 2 && m.ZKProof != nil
+	return m != nil && len(m.DeCommitment) >= 2 && m.ZKProof != nil &&
+		len(m.Echo) > 0
 }
 
 // NewKGRound2Message2 constructs a *tss.Message with the given content.
-func NewKGRound2Message2(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *schnorr.ZKProof) *tss.Message {
+func NewKGRound2Message2(from *tss.PartyID, deCommitment cmt.HashDeCommitment, proof *schnorr.ZKProof, echo []byte) *tss.Message {
 	return &tss.Message{
 		From:        from,
 		IsBroadcast: true,
 		Content: &KGRound2Message2{
 			DeCommitment: deCommitment,
 			ZKProof:      proof,
+			Echo:         echo,
 		},
 	}
 }

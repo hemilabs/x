@@ -335,7 +335,8 @@ func TestDGRound4Message2_ValidateBasic(t *testing.T) {
 		msg  *DGRound4Message2
 		want bool
 	}{
-		{"valid", &DGRound4Message2{}, true},
+		{"valid", &DGRound4Message2{Echo: []byte{1}}, true},
+		{"missing_echo", &DGRound4Message2{}, false},
 		{"nil_receiver", nil, false},
 	}
 

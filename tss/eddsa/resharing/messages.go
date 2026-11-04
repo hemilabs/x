@@ -102,19 +102,22 @@ func NewDGRound3Message2(to []*tss.PartyID, from *tss.PartyID, vdct cmt.HashDeCo
 	}
 }
 
-// DGRound4Message is an ACK broadcast to both committees.
-type DGRound4Message struct{}
+// DGRound4Message is an ACK broadcast to both committees.  It holds
+// the echo of the round 1 broadcasts that the new party received.
+type DGRound4Message struct {
+	Echo []byte // reshareEcho of the received round 1 broadcasts
+}
 
-// ValidateBasic checks that the receiver is non-nil.
-func (m *DGRound4Message) ValidateBasic() bool { return m != nil }
+// ValidateBasic checks that the receiver is non-nil and the echo is set.
+func (m *DGRound4Message) ValidateBasic() bool { return m != nil && len(m.Echo) > 0 }
 
 // NewDGRound4Message constructs a *tss.Message with the given content.
-func NewDGRound4Message(to []*tss.PartyID, from *tss.PartyID) *tss.Message {
+func NewDGRound4Message(to []*tss.PartyID, from *tss.PartyID, echo []byte) *tss.Message {
 	return &tss.Message{
 		From:                    from,
 		To:                      to,
 		IsBroadcast:             true,
 		IsToOldAndNewCommittees: true,
-		Content:                 &DGRound4Message{},
+		Content:                 &DGRound4Message{Echo: echo},
 	}
 }
