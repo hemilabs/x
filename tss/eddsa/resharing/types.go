@@ -24,6 +24,7 @@ type localTempData struct {
 	ssid      []byte
 
 	// Round 1 (old committee)
+	VC        *big.Int   // commitment
 	VD        []*big.Int // decommitment
 	NewShares vss.Shares // shares for new committee
 
@@ -39,6 +40,7 @@ type localMessageStore struct {
 	dgRound3Message1s []*tss.Message
 	dgRound3Message2s []*tss.Message
 	dgRound4Messages  []*tss.Message
+	dgRound5Messages  []*tss.Message
 }
 
 // ReshareState holds mutable state across all resharing rounds.

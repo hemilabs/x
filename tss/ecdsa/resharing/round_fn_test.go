@@ -224,8 +224,9 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 		}
 	}
 
-	// Round 5: new committee finalizes
+	// Round 5: new committee finalizes and confirms to the old committee
 	newKeys := make([]keygen.LocalPartySaveData, n)
+	newR5Msgs := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		out, err := ReshareRound5(newStates[i], newR4P2P[i], newR4Bcast)
 		if err != nil {
@@ -235,12 +236,20 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 			t.Fatalf("ReshareRound5(new)[%d]: no Save", i)
 		}
 		newKeys[i] = *out.Save
+		newR5Msgs[i] = out.Messages[0]
 	}
-	// Old committee: Round5 zeros Xi
+	// Old committee: Round5 keeps Xi; ReshareConfirm allows retirement
 	for i := 0; i < n; i++ {
 		_, err := ReshareRound5(oldStates[i], nil, newR4Bcast)
 		if err != nil {
 			t.Fatalf("ReshareRound5(old)[%d]: %v", i, err)
+		}
+		if oldKeys[i].Xi.Sign() == 0 {
+			t.Fatalf("old party %d Xi zeroed before confirmation", i)
+		}
+		ok, err := ReshareConfirm(oldStates[i], newR5Msgs)
+		if err != nil || !ok {
+			t.Fatalf("ReshareConfirm(old)[%d] = %v, %v; want true", i, ok, err)
 		}
 	}
 

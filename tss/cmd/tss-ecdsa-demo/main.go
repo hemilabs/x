@@ -337,7 +337,8 @@ func bcastRound(n int, states []*signing.SigningState, fn func(int) (*signing.Si
 // Round 2: new → Paillier/DLN params (broadcast to new) + ACK (to old)
 // Round 3: old → P2P shares + decommitment (to new)
 // Round 4: new → verify shares, FacProof P2P + ACK broadcast
-// Round 5: save new key material, zero old Xi
+// Round 5: new → save new key material, confirm (to old)
+// Confirm: old may retire Xi after min(2t+1, n) confirmations
 // -------------------------------------------------------------------
 
 func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldPP, newPP []keygen.LocalPreParams, oldT, newT int) ([]keygen.LocalPartySaveData, error) {
@@ -474,6 +475,7 @@ func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldC
 
 	// -- Round 5 --
 	newSaves := make([]keygen.LocalPartySaveData, newN)
+	r5Msgs := make([]*tss.Message, newN)
 	for _, p := range all {
 		var myR4P2P []*tss.Message
 		if p.newIdx >= 0 {
@@ -485,6 +487,21 @@ func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldC
 		}
 		if p.newIdx >= 0 {
 			newSaves[p.newIdx] = *out.Save
+			r5Msgs[p.newIdx] = out.Messages[0]
+		}
+	}
+
+	// -- Confirm: old parties may retire their old share --
+	for _, p := range all {
+		if p.oldIdx < 0 {
+			continue
+		}
+		ok, err := resharing.ReshareConfirm(p.state, r5Msgs)
+		if err != nil {
+			return nil, fmt.Errorf("reshareConfirm[%s]: %w", p.pid.Id, err)
+		}
+		if !ok {
+			return nil, fmt.Errorf("reshareConfirm[%s]: no quorum", p.pid.Id)
 		}
 	}
 	return newSaves, nil
