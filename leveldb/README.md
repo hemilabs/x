@@ -23,6 +23,25 @@ base for correctness fixes, particularly around the `OpenTransaction` /
 The import point is upstream commit `126854a` (the final upstream master
 commit, "leveldb: fix table file leaks when manifest is rotated").
 
+Fixes in this fork on the transaction path:
+
+- `Close` and a transaction that finishes at the same time do not race
+  on the open transaction.
+- `Commit` releases the compaction commit lock when the MANIFEST commit
+  fails, so a retry and later compactions do not block.
+- `OpenTransaction` releases the write lock on its error returns, and it
+  does not open a transaction on a database that is closing.
+- A large `DB.Write` that goes through a transaction discards the
+  transaction when its commit fails.
+- After a failed MANIFEST record write, the next commit writes a fresh
+  MANIFEST.  `Discard` after a failed commit forces this rewrite before
+  it removes the tables.  If the rewrite fails too, it keeps the tables
+  until the next `Open` removes them, which costs disk space until then.
+- A fresh MANIFEST keeps the sequence number, the journal numbers and
+  the compaction pointers of the commit that writes it.
+- A commit that makes a fresh MANIFEST current succeeds, also when the
+  old MANIFEST cannot be removed.  The next `Open` removes it.
+
 ## Module path
 
 ```
