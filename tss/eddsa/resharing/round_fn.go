@@ -69,6 +69,9 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 // New committee parties call this too.  They compute the session ID
 // and send no messages.
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
+	if err := params.CheckCommittees(); err != nil {
+		return nil, nil, err
+	}
 	oldPC := params.OldPartyCount()
 	newPC := params.NewPartyCount()
 
