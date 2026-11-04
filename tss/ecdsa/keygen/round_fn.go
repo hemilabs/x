@@ -60,6 +60,9 @@ func getSSID(params *tss.Parameters, temp *localTempData, roundNumber int) ([]by
 // GeneratePreParams / ValidateWithProof.  If preParams is zero-value
 // (Validate() returns false), Round1 generates fresh safe primes.
 func Round1(ctx context.Context, params *tss.Parameters, preParams LocalPreParams) (*KeygenState, *RoundOutput, error) {
+	if err := params.CheckSelf(); err != nil {
+		return nil, nil, err
+	}
 	partyCount := params.PartyCount()
 	save := NewLocalPartySaveData(partyCount)
 	temp := &localTempData{
@@ -184,7 +187,7 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 	dlnProof1FailCulprits := make([]*tss.PartyID, len(r1Msgs))
 	dlnProof2FailCulprits := make([]*tss.PartyID, len(r1Msgs))
 	wg := new(sync.WaitGroup)
-	for j, msg := range r1Msgs {
+	for _, msg := range r1Msgs {
 		r1msg := msg.Content.(*KGRound1Message)
 		H1j, H2j, NTildej, paillierPKj := r1msg.H1,
 			r1msg.H2,
@@ -249,7 +252,12 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		modulusMap[nTildeHex] = struct{}{}
+	}
 
+	// An early return above must leave no goroutine.
+	for j, msg := range r1Msgs {
+		r1msg := msg.Content.(*KGRound1Message)
+		H1j, H2j, NTildej := r1msg.H1, r1msg.H2, r1msg.NTilde
 		if !params.NoProofDLN() {
 			wg.Add(2)
 			_j := j
