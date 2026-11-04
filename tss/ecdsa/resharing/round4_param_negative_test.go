@@ -7,6 +7,7 @@ package resharing
 import (
 	"context"
 	"math/big"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -326,4 +327,25 @@ func TestRound4RejectsCrossPartyNTildeEqualsPaillierN(t *testing.T) {
 	bad.Content.(*DGRound2Message1).NTilde = new(big.Int).Set(party0Content.PaillierPK.N)
 	msgs[2] = bad
 	expectRound4ParamError(t, fix, msgs, "duplicate modulus (NTilde)", 2)
+}
+
+// TestRound4LeavesNoProofGoroutine verifies that a bad peer stops
+// ReshareRound4 before it starts a proof verification.
+func TestRound4LeavesNoProofGoroutine(t *testing.T) {
+	fix := setupThroughRound3(t)
+	msgs := copyR2Msg1Slice(fix.NewR2Msg1s)
+	bad := cloneDGRound2Message1(msgs[r4VictimIdx])
+	content := bad.Content.(*DGRound2Message1)
+	content.H2 = new(big.Int).Set(content.H1)
+	msgs[r4VictimIdx] = bad
+
+	// A proof verification takes far longer than the return, so a
+	// started one is still running when the test counts.
+	before := runtime.NumGoroutine()
+	if _, err := ReshareRound4(t.Context(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast); err == nil {
+		t.Fatal("ReshareRound4 accepted h1 == h2")
+	}
+	if after := runtime.NumGoroutine(); after > before {
+		t.Fatalf("%d goroutines still running after ReshareRound4 returned", after-before)
+	}
 }
