@@ -148,9 +148,9 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReshareRound5[old %d]: %v", i, err)
 		}
-		// Old Xi should be zeroed.
-		if oldSaves[i].Xi.Sign() != 0 {
-			t.Fatalf("old party %d Xi not zeroed", i)
+		// Round 1 copies the key, so the caller's Xi does not change.
+		if oldSaves[i].Xi.Sign() == 0 {
+			t.Fatalf("old party %d: caller's Xi changed", i)
 		}
 		_ = out
 	}
@@ -266,4 +266,80 @@ func doKeygen(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *
 		saves[i] = *out.Save
 	}
 	return saves
+}
+
+// TestReshareFromOldSubset reshares from 2 of the 3 original holders
+// (threshold 1).  The new shares must be valid shares of the same key.
+func TestReshareFromOldSubset(t *testing.T) {
+	const n, threshold = 3, 1
+	allPIDs := tss.GenerateTestPartyIDs(n)
+	saves := doKeygen(t, n, threshold, allPIDs, tss.NewPeerContext(allPIDs))
+
+	// The old committee is parties 0 and 2.  Each committee needs its
+	// own PartyID copies, because SortPartyIDs sets Index.
+	oldPIDs := tss.SortPartyIDs(tss.UnSortedPartyIDs{
+		tss.NewPartyID(allPIDs[0].Id, allPIDs[0].Moniker, allPIDs[0].KeyInt()),
+		tss.NewPartyID(allPIDs[2].Id, allPIDs[2].Moniker, allPIDs[2].KeyInt()),
+	})
+	oldSaves := []*keygen.LocalPartySaveData{&saves[0], &saves[2]}
+	newPIDs := tss.GenerateTestPartyIDs(n)
+	oldCtx, newCtx := tss.NewPeerContext(oldPIDs), tss.NewPeerContext(newPIDs)
+	oldN := len(oldPIDs)
+
+	oldStates := make([]*ReshareState, oldN)
+	r1 := make([]*tss.Message, oldN)
+	for i := range oldPIDs {
+		p := tss.NewReSharingParameters(tss.Edwards(), oldCtx, newCtx, oldPIDs[i], oldN, threshold, n, threshold)
+		st, out, err := ReshareRound1(p, oldSaves[i])
+		if err != nil {
+			t.Fatalf("ReshareRound1[old %d]: %v", i, err)
+		}
+		oldStates[i], r1[i] = st, out.Messages[0]
+	}
+	newStates := make([]*ReshareState, n)
+	for i := range newPIDs {
+		p := tss.NewReSharingParameters(tss.Edwards(), oldCtx, newCtx, newPIDs[i], oldN, threshold, n, threshold)
+		st, _, err := ReshareRound1(p, nil)
+		if err != nil {
+			t.Fatalf("ReshareRound1[new %d]: %v", i, err)
+		}
+		newStates[i] = st
+		if _, err := ReshareRound2(st, r1); err != nil {
+			t.Fatalf("ReshareRound2[new %d]: %v", i, err)
+		}
+	}
+	r3p2p := make([][]*tss.Message, n)
+	for i := range r3p2p {
+		r3p2p[i] = make([]*tss.Message, oldN)
+	}
+	r3bcast := make([]*tss.Message, oldN)
+	for i := range oldStates {
+		out, err := ReshareRound3(oldStates[i], nil)
+		if err != nil {
+			t.Fatalf("ReshareRound3[old %d]: %v", i, err)
+		}
+		for _, msg := range out.Messages {
+			switch msg.Content.(type) {
+			case *DGRound3Message2:
+				r3bcast[i] = msg
+			case *DGRound3Message1:
+				r3p2p[msg.To[0].Index][i] = msg
+			}
+		}
+	}
+	for i := range newStates {
+		if _, err := ReshareRound4(newStates[i], r1, r3p2p[i], r3bcast); err != nil {
+			t.Fatalf("ReshareRound4[new %d]: %v", i, err)
+		}
+		out, err := ReshareRound5(newStates[i], nil)
+		if err != nil {
+			t.Fatalf("ReshareRound5[new %d]: %v", i, err)
+		}
+		if !out.Save.EDDSAPub.Equals(saves[0].EDDSAPub) {
+			t.Fatalf("new party %d: EDDSAPub changed", i)
+		}
+		if err := out.Save.ValidateSaveData(); err != nil {
+			t.Fatalf("new party %d: %v", i, err)
+		}
+	}
 }
