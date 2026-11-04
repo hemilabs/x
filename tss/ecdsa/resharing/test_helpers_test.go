@@ -5,7 +5,6 @@
 package resharing
 
 import (
-	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -89,7 +88,7 @@ func doKeygen(t *testing.T, n, threshold int) ([]keygen.LocalPartySaveData, tss.
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
-		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
+		st, out, err := keygen.Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("doKeygen: Round1[%d]: %v", i, err)
 		}
@@ -104,7 +103,7 @@ func doKeygen(t *testing.T, n, threshold int) ([]keygen.LocalPartySaveData, tss.
 		r2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round2(context.Background(), states[i], r1)
+		out, err := keygen.Round2(t.Context(), states[i], r1)
 		if err != nil {
 			t.Fatalf("doKeygen: Round2[%d]: %v", i, err)
 		}
@@ -127,7 +126,7 @@ func doKeygen(t *testing.T, n, threshold int) ([]keygen.LocalPartySaveData, tss.
 	// Round 3
 	r3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round3(context.Background(), states[i], r2P2P[i], r2Bcast)
+		out, err := keygen.Round3(t.Context(), states[i], r2P2P[i], r2Bcast)
 		if err != nil {
 			t.Fatalf("doKeygen: Round3[%d]: %v", i, err)
 		}
@@ -137,7 +136,7 @@ func doKeygen(t *testing.T, n, threshold int) ([]keygen.LocalPartySaveData, tss.
 	// Round 4
 	keys := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round4(context.Background(), states[i], r3)
+		out, err := keygen.Round4(t.Context(), states[i], r3)
 		if err != nil {
 			t.Fatalf("doKeygen: Round4[%d]: %v", i, err)
 		}
@@ -221,7 +220,7 @@ func setupThroughRound2(t *testing.T) *ReshareFixture {
 	fix.NewR2Msg1s = make([]*tss.Message, n)
 	fix.NewR2Msg2s = make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := ReshareRound2(fix.NewStates[i], fix.OldR1Msgs)
+		out, err := ReshareRound2(t.Context(), fix.NewStates[i], fix.OldR1Msgs)
 		if err != nil {
 			t.Fatalf("setupThroughRound2: ReshareRound2(new)[%d]: %v", i, err)
 		}
@@ -238,7 +237,7 @@ func setupThroughRound2(t *testing.T) *ReshareFixture {
 
 	// Old committee: Round2 is a no-op.
 	for i := 0; i < n; i++ {
-		_, err := ReshareRound2(fix.OldStates[i], fix.OldR1Msgs)
+		_, err := ReshareRound2(t.Context(), fix.OldStates[i], fix.OldR1Msgs)
 		if err != nil {
 			t.Fatalf("setupThroughRound2: ReshareRound2(old)[%d]: %v", i, err)
 		}
@@ -313,7 +312,7 @@ func setupThroughRound4(t *testing.T) *ReshareFixture {
 		fix.NewR4P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := ReshareRound4(context.Background(), fix.NewStates[i], fix.NewR2Msg1s, fix.OldR3P2P[i], fix.OldR3Bcast)
+		out, err := ReshareRound4(t.Context(), fix.NewStates[i], fix.NewR2Msg1s, fix.OldR3P2P[i], fix.OldR3Bcast)
 		if err != nil {
 			t.Fatalf("setupThroughRound4: ReshareRound4(new)[%d]: %v", i, err)
 		}
@@ -332,7 +331,7 @@ func setupThroughRound4(t *testing.T) *ReshareFixture {
 
 	// Old committee: Round4 is a no-op.
 	for i := 0; i < n; i++ {
-		_, err := ReshareRound4(context.Background(), fix.OldStates[i], fix.NewR2Msg1s, nil, nil)
+		_, err := ReshareRound4(t.Context(), fix.OldStates[i], fix.NewR2Msg1s, nil, nil)
 		if err != nil {
 			t.Fatalf("setupThroughRound4: ReshareRound4(old)[%d]: %v", i, err)
 		}
@@ -678,7 +677,7 @@ func setupThroughRound3WithModProof(t *testing.T) *ReshareFixture {
 	fix.NewR2Msg1s = make([]*tss.Message, n)
 	fix.NewR2Msg2s = make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := ReshareRound2(fix.NewStates[i], fix.OldR1Msgs)
+		out, err := ReshareRound2(t.Context(), fix.NewStates[i], fix.OldR1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2(new)[%d]: %v", i, err)
 		}
@@ -692,7 +691,7 @@ func setupThroughRound3WithModProof(t *testing.T) *ReshareFixture {
 		}
 	}
 	for i := 0; i < n; i++ {
-		_, err := ReshareRound2(fix.OldStates[i], fix.OldR1Msgs)
+		_, err := ReshareRound2(t.Context(), fix.OldStates[i], fix.OldR1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2(old)[%d]: %v", i, err)
 		}

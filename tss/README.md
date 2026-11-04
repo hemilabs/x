@@ -47,7 +47,7 @@ go test -tags tssexamples -v -run TestECDSAKeygenSignReshare ./ecdsa/ -timeout 1
 import "github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 
 // Generate Paillier pre-params (CPU-intensive, do out-of-band).
-preParams, _ := keygen.GeneratePreParams(5 * time.Minute)
+preParams, _ := keygen.GeneratePreParams(ctx, 5*time.Minute)
 
 params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
 state, r1out, _ := keygen.Round1(ctx, params, *preParams)
@@ -90,7 +90,7 @@ params := tss.NewReSharingParameters(
     oldN, oldT, newN, newT)
 
 state, r1out, _ := resharing.ReshareRound1(params, keyShare, newPreParams)
-r2out, _ := resharing.ReshareRound2(state, r1Msgs)
+r2out, _ := resharing.ReshareRound2(ctx, state, r1Msgs)
 r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
 r4out, _ := resharing.ReshareRound4(ctx, state, r2Msgs, r3p2p, r3bcast)
 r5out, _ := resharing.ReshareRound5(state, r4p2p, r4bcast)

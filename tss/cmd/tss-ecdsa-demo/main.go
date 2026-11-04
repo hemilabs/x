@@ -30,17 +30,16 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := run(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "FAIL: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(ctx context.Context) error {
 	const minSigners = 2 // 2-of-3
 	// tss-lib threshold parameter is t where t+1 parties sign.
 	const threshold = minSigners - 1
-	ctx := context.Background()
 
 	// ----------------------------------------------------------------
 	// Party setup.  4 parties total — 3 old, 1 new joiner.
@@ -71,7 +70,7 @@ func run() error {
 	allPreParams := make([]keygen.LocalPreParams, 4)
 	for i := range allPreParams {
 		start := time.Now()
-		pp, err := keygen.GeneratePreParams(5 * time.Minute)
+		pp, err := keygen.GeneratePreParams(ctx, 5*time.Minute)
 		if err != nil {
 			return fmt.Errorf("pre-params[%d]: %w", i, err)
 		}
@@ -402,7 +401,7 @@ func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldC
 	r2Msg1s := make([]*tss.Message, newN) // DGRound2Message1 (to new)
 	r2Msg2s := make([]*tss.Message, newN) // DGRound2Message2 (ACK to old)
 	for _, p := range all {
-		out, err := resharing.ReshareRound2(p.state, r1Msgs)
+		out, err := resharing.ReshareRound2(ctx, p.state, r1Msgs)
 		if err != nil {
 			return nil, fmt.Errorf("reshareR2[%s]: %w", p.pid.Id, err)
 		}

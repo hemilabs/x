@@ -5,7 +5,6 @@
 package mta_test
 
 import (
-	"context"
 	"crypto/rand"
 	"math/big"
 	"testing"
@@ -38,12 +37,12 @@ func setup(t *testing.T) *testParams {
 	t.Helper()
 	ec := tss.S256()
 
-	skA, pkA, err := paillier.GenerateKeyPair(context.Background(),
+	skA, pkA, err := paillier.GenerateKeyPair(t.Context(),
 		rand.Reader, testSafePrimeBits*2)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair(A): %v", err)
 	}
-	skB, pkB, err := paillier.GenerateKeyPair(context.Background(),
+	skB, pkB, err := paillier.GenerateKeyPair(t.Context(),
 		rand.Reader, testSafePrimeBits*2)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair(B): %v", err)
@@ -721,7 +720,7 @@ func TestRangeProofAliceRejectsSmallPaillierN(t *testing.T) {
 	}
 
 	// Generate a small (512-bit) Paillier key.
-	_, smallPK, err := paillier.GenerateKeyPair(context.Background(), rand.Reader, 512)
+	_, smallPK, err := paillier.GenerateKeyPair(t.Context(), rand.Reader, 512)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair(small): %v", err)
 	}
@@ -769,7 +768,7 @@ func TestProofBobRejectsSmallPaillierN(t *testing.T) {
 	}
 
 	// Generate a small (512-bit) Paillier key.
-	_, smallPK, err := paillier.GenerateKeyPair(context.Background(), rand.Reader, 512)
+	_, smallPK, err := paillier.GenerateKeyPair(t.Context(), rand.Reader, 512)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair(small): %v", err)
 	}
@@ -893,7 +892,7 @@ func aliceProofFixture(t *testing.T) (*mta.RangeProofAlice, *paillier.PublicKey,
 	ec := tss.S256()
 	q := ec.Params().N
 
-	_, pk, err := paillier.GenerateKeyPair(context.Background(), rand.Reader, testPaillierKeyLength)
+	_, pk, err := paillier.GenerateKeyPair(t.Context(), rand.Reader, testPaillierKeyLength)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair: %v", err)
 	}
@@ -928,7 +927,7 @@ func bobProofFixture(t *testing.T) (*mta.ProofBob, *paillier.PublicKey, *big.Int
 	ec := tss.S256()
 	q := ec.Params().N
 
-	_, pk, err := paillier.GenerateKeyPair(context.Background(), rand.Reader, testPaillierKeyLength)
+	_, pk, err := paillier.GenerateKeyPair(t.Context(), rand.Reader, testPaillierKeyLength)
 	if err != nil {
 		t.Fatalf("GenerateKeyPair: %v", err)
 	}

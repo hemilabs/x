@@ -171,7 +171,10 @@ func ReshareRound1(params *tss.ReSharingParameters, key keygen.LocalPartySaveDat
 //
 // r1Msgs are DGRound1Message broadcasts from old committee.
 // Only new committee members produce output.
-func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOutput, error) {
+//
+// ctx bounds the safe-prime generation when the party has no
+// pre-params.
+func ReshareRound2(ctx context.Context, state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOutput, error) {
 	params, save, temp := state.params, state.save, state.temp
 	tss.MergeMsgs(temp.dgRound1Messages, r1Msgs)
 	out := &ReshareRoundOutput{}
@@ -225,7 +228,7 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 		preParams = &save.LocalPreParams
 	} else {
 		var err error
-		preParams, err = keygen.GeneratePreParams(params.SafePrimeGenTimeout(), params.Concurrency())
+		preParams, err = keygen.GeneratePreParams(ctx, params.SafePrimeGenTimeout(), params.Concurrency())
 		if err != nil {
 			return nil, errors.New("pre-params generation failed")
 		}
