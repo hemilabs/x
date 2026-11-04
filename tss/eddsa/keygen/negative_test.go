@@ -247,3 +247,14 @@ func TestBuildLocalSaveDataSubsetEdDSA(t *testing.T) {
 		t.Fatal("expected an error for a missing signer key")
 	}
 }
+
+// TestRound1RejectsBadOwnPartyID verifies that Round1 returns an error
+// when the own PartyID is not in the party list.
+func TestRound1RejectsBadOwnPartyID(t *testing.T) {
+	pIDs := tss.GenerateTestPartyIDs(3)
+	stray := tss.NewPartyID("x", "x", big.NewInt(99)) // Index stays -1
+	params := tss.NewParameters(tss.Edwards(), tss.NewPeerContext(pIDs), stray, 3, 1)
+	if _, _, err := Round1(params); err == nil {
+		t.Fatal("Round1 accepted a PartyID that is not in the list")
+	}
+}
