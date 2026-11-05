@@ -30,12 +30,9 @@ This repository contains code under **multiple licenses**:
 | `tss`           | MIT, with the Binance notice             | bnb-chain tss-lib              |
 | `leveldb`       | BSD 2-Clause                             | syndtr/goleveldb               |
 | `merkle`        | ISC                                      | decred dcrtime                 |
-| `eth-trie`      | LGPL-3.0 (which includes the GPL-3.0)    | go-ethereum `trie`, `triedb`   |
+| `eth-trie`      | LGPL-3.0                                 | go-ethereum `trie`, `triedb`   |
 | `tools/slacker` | MIT (the root [LICENSE](LICENSE))        | Hemi Labs                      |
 
 The default license for new code is the [MIT License](LICENSE).
 
-A binary that links `eth-trie` must obey the LGPL-3.0 conditions. See
-[eth-trie/README.md](eth-trie/README.md).
-
-For more information, see the `LICENSE` and `COPYING` files of each module.
+For more information, see the `LICENSE` or `COPYING` files of each module.
