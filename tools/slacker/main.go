@@ -5,8 +5,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/spf13/pflag"
 )
@@ -14,28 +19,34 @@ import (
 const slackerHelp = `Slacker is a CLI tool to send messages to slack through an app.
 
 Usage:
-  slacker --channel <id> [--json] <message>
+  slacker --channel <id> [--json | --raw] <message>
 
 Environment Variables:
 
 [SLACK_OAUTH_TOKEN]      (Required) App OAuth Token.
-[SLACK_URL]              (Optional) Slack url for the client. Useful for testing.
+[SLACK_URL]              (Optional) Slack API url, https or loopback http. Useful for testing.
 
 Flags:`
 
+// sendTimeout limits the time to send the message to Slack.
+const sendTimeout = 30 * time.Second
+
 func main() {
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := run(ctx)
+	stop()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	jsonFlag := pflag.Bool("json", false, "treat <message> as a JSON Block Kit payload")
+func run(ctx context.Context) error {
+	jsonFlag := pflag.Bool("json", false, "treat <message> as a JSON Block Kit payload, sent as is")
+	rawFlag := pflag.Bool("raw", false, "do not escape markup such as mentions and links in <message>")
 	channelID := pflag.StringP("channel", "c", "", "slack channel id to send the message in")
 	pflag.Usage = func() {
-		_, _ = fmt.Fprintf(os.Stderr, "%s", slackerHelp)
-		fmt.Println()
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", slackerHelp)
 		pflag.PrintDefaults()
 	}
 	pflag.Parse()
@@ -43,7 +54,11 @@ func run() error {
 	args := pflag.Args()
 	if len(args) != 1 {
 		pflag.Usage()
-		return nil
+		return errors.New("expected exactly one <message> argument")
+	}
+	if *jsonFlag && *rawFlag {
+		pflag.Usage()
+		return errors.New("--json and --raw are mutually exclusive")
 	}
 	message := args[0]
 
@@ -53,10 +68,16 @@ func run() error {
 		return err
 	}
 
-	client := newClient(cfg)
+	client, err := newClient(cfg)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, sendTimeout)
+	defer cancel()
 
 	if *jsonFlag {
-		return sendBlocks(client, cfg.SlackChannel, []byte(message))
+		return sendBlocks(ctx, client, cfg.SlackChannel, []byte(message))
 	}
-	return sendText(client, cfg.SlackChannel, message)
+	return sendText(ctx, client, cfg.SlackChannel, message, *rawFlag)
 }
