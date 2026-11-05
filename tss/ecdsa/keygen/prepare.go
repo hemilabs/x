@@ -20,10 +20,8 @@ import (
 )
 
 const (
-	// Using a modulus length of 2048 is recommended in the GG18 spec
-	paillierModulusLen = 2048
-	// Two 1024-bit safe primes to produce NTilde
-	safePrimeBitLen = 1024
+	// NTilde is the product of two safe primes of this length
+	safePrimeBitLen = PaillierBitsLen / 2
 	// Ticker for printing log statements while generating primes/modulus
 	logProgressTickInterval = 8 * time.Second
 	// Safe big len using random for ssid
@@ -75,7 +73,7 @@ func GeneratePreParamsWithContextAndRandom(ctx context.Context, rand io.Reader, 
 		common.Logger.Info("generating the Paillier modulus, please wait...")
 		start := time.Now()
 		// more concurrency weight is assigned here because the paillier primes have a requirement of having "large" P-Q
-		PiPaillierSk, _, err := paillier.GenerateKeyPair(ctx, rand, paillierModulusLen, concurrency*2)
+		PiPaillierSk, _, err := paillier.GenerateKeyPair(ctx, rand, PaillierBitsLen, concurrency*2)
 		if err != nil {
 			ch <- nil
 			return

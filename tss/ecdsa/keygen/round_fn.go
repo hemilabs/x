@@ -192,7 +192,7 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 			r1msg.H2,
 			r1msg.NTilde,
 			r1msg.PaillierPK
-		if paillierPKj.N.BitLen() != paillierBitsLen {
+		if paillierPKj.N.BitLen() != PaillierBitsLen {
 			return nil, tss.NewError(errors.New("paillier modulus insufficient bits"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if paillierPKj.N.Bit(0) == 0 {
@@ -211,7 +211,7 @@ func Round2(ctx context.Context, state *KeygenState, r1Msgs []*tss.Message) (*Ro
 		if H1j.Cmp(big.NewInt(1)) == 0 || H2j.Cmp(big.NewInt(1)) == 0 {
 			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 2, params.PartyID(), msg.From)
 		}
-		if NTildej.BitLen() != paillierBitsLen {
+		if NTildej.BitLen() != PaillierBitsLen {
 			return nil, tss.NewError(errors.New("NTildej insufficient bits"), TaskName, 2, params.PartyID(), msg.From)
 		}
 		if NTildej.Bit(0) == 0 {
