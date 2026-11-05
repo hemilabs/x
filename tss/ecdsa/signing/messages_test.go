@@ -34,7 +34,7 @@ func TestValidateBasicAllSignMessages(t *testing.T) {
 		},
 		{
 			"SignRound2Message",
-			&SignRound2Message{C1: big.NewInt(1), C2: big.NewInt(2), ProofBob: &mta.ProofBob{}, ProofBobWC: &mta.ProofBobWC{}, ReceiverID: []byte("r")},
+			validR2(),
 			&SignRound2Message{},
 		},
 		{

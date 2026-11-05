@@ -190,10 +190,17 @@ func ProofBobFromBytes(bzs [][]byte) (*ProofBob, error) {
 	}, nil
 }
 
-// ProveBobWC.Verify implements verification of Bob's proof with check "VerifyMtawc_Bob" used in the MtA protocol from GG18Spec (9) Fig. 10.
+// Verify implements verification of Bob's proof with check "VerifyMtawc_Bob" used in the MtA protocol from GG18Spec (9) Fig. 10.
 // an absent `X` verifies a proof generated without the X consistency check X = g^x
+// Verify returns false for a nil proof or a proof with a nil field.
 func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2 *big.Int, X *crypto.ECPoint) bool {
-	if pf == nil || pf.ProofBob == nil {
+	// Reject proofs with nil fields before any of them is
+	// dereferenced. Verify runs in library-started goroutines during
+	// SignRound3, where a panic cannot be recovered by the caller.
+	if pf == nil || !pf.ProofBob.ValidateBasic() {
+		return false
+	}
+	if X != nil && !pf.U.ValidateBasic() {
 		return false
 	}
 	if pk == nil || NTilde == nil || h1 == nil || h2 == nil || c1 == nil || c2 == nil {
@@ -410,17 +417,18 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	return true
 }
 
-// ProveBob.Verify implements verification of Bob's proof without check "VerifyMta_Bob" used in the MtA protocol from GG18Spec (9) Fig. 11.
+// Verify implements verification of Bob's proof without check "VerifyMta_Bob" used in the MtA protocol from GG18Spec (9) Fig. 11.
+// Verify returns false for a nil proof or a proof with a nil field.
 func (pf *ProofBob) Verify(Session []byte, ec elliptic.Curve, pk *paillier.PublicKey, NTilde, h1, h2, c1, c2 *big.Int) bool {
-	if pf == nil {
-		return false
-	}
 	pfWC := &ProofBobWC{ProofBob: pf, U: nil}
 	return pfWC.Verify(Session, ec, pk, NTilde, h1, h2, c1, c2, nil)
 }
 
+// ValidateBasic reports whether pf is not nil and all of its fields
+// are set.
 func (pf *ProofBob) ValidateBasic() bool {
-	return pf.Z != nil &&
+	return pf != nil &&
+		pf.Z != nil &&
 		pf.ZPrm != nil &&
 		pf.T != nil &&
 		pf.V != nil &&
@@ -432,8 +440,10 @@ func (pf *ProofBob) ValidateBasic() bool {
 		pf.T2 != nil
 }
 
+// ValidateBasic reports whether pf is not nil, its ProofBob is valid
+// and U is a point on the curve.
 func (pf *ProofBobWC) ValidateBasic() bool {
-	return pf.ProofBob.ValidateBasic() && pf.U != nil
+	return pf != nil && pf.ProofBob.ValidateBasic() && pf.U.ValidateBasic()
 }
 
 func (pf *ProofBob) Bytes() [ProofBobBytesParts][]byte {
