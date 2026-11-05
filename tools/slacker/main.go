@@ -58,7 +58,7 @@ func run(ctx context.Context) error {
 	}
 	if *jsonFlag && *rawFlag {
 		pflag.Usage()
-		return errors.New("use --json or --raw, not both")
+		return errors.New("--json and --raw are mutually exclusive")
 	}
 	message := args[0]
 
