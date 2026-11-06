@@ -169,13 +169,13 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 
 	// --- Sign with new committee ---
 	msgHash := sha256.Sum256([]byte("hello reshared eddsa"))
-	m := new(big.Int).SetBytes(msgHash[:])
+	m := msgHash[:]
 
 	sigStates := make([]*signing.SigningState, newN)
 	sr1 := make([]*tss.Message, newN)
 	for i := 0; i < newN; i++ {
 		params := tss.NewParameters(tss.Edwards(), newPeerCtx, newPIDs[i], newN, newT)
-		st, out, err := signing.SignRound1(params, newSaves[i], m, 0)
+		st, out, err := signing.SignRound1(params, newSaves[i], m)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
 		}

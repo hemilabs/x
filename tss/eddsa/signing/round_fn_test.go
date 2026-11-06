@@ -5,6 +5,7 @@
 package signing
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"math/big"
 	"testing"
@@ -26,15 +27,17 @@ func TestRoundFnEdDSASignThreeParties(t *testing.T) {
 	saves := doKeygen(t, n, threshold, pIDs, peerCtx)
 
 	// --- Sign ---
+	// The message starts with a zero byte.  The library must sign
+	// all of its bytes.
 	msgHash := sha256.Sum256([]byte("hello eddsa v3"))
-	m := new(big.Int).SetBytes(msgHash[:])
+	m := append([]byte{0}, msgHash[:]...)
 
 	// -- SignRound1 --
 	sigStates := make([]*SigningState, n)
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
-		st, out, err := SignRound1(params, saves[i], m, 0)
+		st, out, err := SignRound1(params, saves[i], m)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
 		}
@@ -76,8 +79,12 @@ func TestRoundFnEdDSASignThreeParties(t *testing.T) {
 		}
 		r := new(big.Int).SetBytes(out.Signature.R)
 		s := new(big.Int).SetBytes(out.Signature.S)
-		if !edwards.Verify(&pk, msgHash[:], r, s) {
+		if !edwards.Verify(&pk, m, r, s) {
 			t.Fatalf("party %d: EdDSA signature verification failed", i)
+		}
+		stdPK := ed25519.PublicKey(ecPointToEncodedBytes(pk.X, pk.Y)[:])
+		if !ed25519.Verify(stdPK, m, out.Signature.Signature) {
+			t.Fatalf("party %d: crypto/ed25519 rejects the signature", i)
 		}
 		t.Logf("party %d: sig verified (r=%x, s=%x)", i,
 			out.Signature.R[:8], out.Signature.S[:8])

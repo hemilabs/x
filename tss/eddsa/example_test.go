@@ -74,7 +74,7 @@ func TestEdDSAKeygenSignReshare(t *testing.T) {
 	// Step 3: Sign with old committee
 	// ------------------------------------------------------------------
 	msg1 := sha256.Sum256([]byte("pre-reshare message"))
-	sig1 := eddsaSign(t, oldN, threshold, oldPIDs, oldCtx, oldSaves, new(big.Int).SetBytes(msg1[:]))
+	sig1 := eddsaSign(t, oldN, threshold, oldPIDs, oldCtx, oldSaves, msg1[:])
 	verifyEdDSA(t, pubKey, msg1[:], sig1)
 	t.Log("pre-reshare signature verified")
 
@@ -107,7 +107,7 @@ func TestEdDSAKeygenSignReshare(t *testing.T) {
 	// Step 5: Sign with new committee
 	// ------------------------------------------------------------------
 	msg2 := sha256.Sum256([]byte("post-reshare message"))
-	sig2 := eddsaSign(t, newN, threshold, newPIDs, newCtx, newSaves, new(big.Int).SetBytes(msg2[:]))
+	sig2 := eddsaSign(t, newN, threshold, newPIDs, newCtx, newSaves, msg2[:])
 	verifyEdDSA(t, pubKey, msg2[:], sig2)
 	t.Log("post-reshare signature verified")
 }
@@ -178,13 +178,13 @@ func eddsaKeygen(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *t
 	return saves
 }
 
-func eddsaSign(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, saves []keygen.LocalPartySaveData, m *big.Int) *signing.SignatureData {
+func eddsaSign(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, saves []keygen.LocalPartySaveData, m []byte) *signing.SignatureData {
 	t.Helper()
 	states := make([]*signing.SigningState, n)
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), ctx, pIDs[i], n, threshold)
-		st, out, err := signing.SignRound1(params, saves[i], m, 0)
+		st, out, err := signing.SignRound1(params, saves[i], m)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
 		}

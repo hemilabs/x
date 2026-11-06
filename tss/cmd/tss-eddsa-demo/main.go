@@ -84,7 +84,7 @@ func run() error {
 	fmt.Println("\n=== EdDSA Sign (3 rounds + finalize) ===")
 	msg1 := sha256.Sum256([]byte("pre-reshare message"))
 	sig1, err := eddsaSign(oldN, threshold, oldPIDs, oldCtx, saves,
-		new(big.Int).SetBytes(msg1[:]))
+		msg1[:])
 	if err != nil {
 		return fmt.Errorf("sign: %w", err)
 	}
@@ -126,7 +126,7 @@ func run() error {
 	fmt.Println("\n=== EdDSA Sign (new committee) ===")
 	msg2 := sha256.Sum256([]byte("post-reshare message"))
 	sig2, err := eddsaSign(newN, threshold, newPIDs, newCtx, newSaves,
-		new(big.Int).SetBytes(msg2[:]))
+		msg2[:])
 	if err != nil {
 		return fmt.Errorf("sign2: %w", err)
 	}
@@ -215,13 +215,13 @@ func eddsaKeygen(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext
 // Finalize: sum partial sigs, verify EdDSA signature
 // -------------------------------------------------------------------
 
-func eddsaSign(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, saves []keygen.LocalPartySaveData, m *big.Int) (*signing.SignatureData, error) {
+func eddsaSign(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, saves []keygen.LocalPartySaveData, m []byte) (*signing.SignatureData, error) {
 	// -- Round 1 --
 	states := make([]*signing.SigningState, n)
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), ctx, pIDs[i], n, threshold)
-		st, out, err := signing.SignRound1(params, saves[i], m, 0)
+		st, out, err := signing.SignRound1(params, saves[i], m)
 		if err != nil {
 			return nil, fmt.Errorf("signRound1[%d]: %w", i, err)
 		}
