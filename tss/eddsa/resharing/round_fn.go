@@ -66,7 +66,8 @@ func getReshareSSID(params *tss.ReSharingParameters, temp *localTempData) ([]byt
 // Lagrange-interpolated wi, creates VSS shares for the new committee,
 // and broadcasts a commitment.
 //
-// New committee parties call this too but get a no-op (nil messages).
+// New committee parties call this too.  They compute the session ID
+// and send no messages.
 func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySaveData) (*ReshareState, *ReshareRoundOutput, error) {
 	if err := params.CheckCommittees(); err != nil {
 		return nil, nil, err
@@ -89,15 +90,17 @@ func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySave
 
 	state := &ReshareState{params: params, input: input, save: &save, temp: *temp}
 
-	if !params.IsOldCommittee() {
-		return state, &ReshareRoundOutput{}, nil
-	}
-
+	// Every party computes the SSID.  The old committee binds its
+	// commitment to it, and the new committee checks it in Round 4.
 	ssid, err := getReshareSSID(params, &state.temp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("round 1 SSID: %w", err)
 	}
 	state.temp.ssid = ssid
+
+	if !params.IsOldCommittee() {
+		return state, &ReshareRoundOutput{}, nil
+	}
 
 	Pi := params.PartyID()
 	i := oldIndex(params)
@@ -121,7 +124,8 @@ func ReshareRound1(params *tss.ReSharingParameters, input *keygen.LocalPartySave
 	if err != nil {
 		return nil, nil, fmt.Errorf("round 1 flatten: %w", err)
 	}
-	vCmt := commitments.NewHashCommitment(params.Rand(), flatVis...)
+	sid := new(big.Int).SetBytes(ssid)
+	vCmt := commitments.NewHashCommitment(params.Rand(), append([]*big.Int{sid}, flatVis...)...)
 
 	state.temp.VD = vCmt.D
 	state.temp.NewShares = shares
@@ -222,6 +226,7 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 	modQ := common.ModInt(params.EC().Params().N)
 
 	// Verify decommitments, shares, accumulate newXi.
+	sid := new(big.Int).SetBytes(state.temp.ssid)
 	newXi := big.NewInt(0)
 	vjc := make([][]*crypto.ECPoint, oldPC)
 
@@ -231,11 +236,15 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 
 		vCmtDeCmt := commitments.HashCommitDecommit{C: r1msg.VCommitment, D: r3msg2.VDeCommitment}
 		ok, flatVs := vCmtDeCmt.DeCommit()
-		if !ok || len(flatVs) != (params.NewThreshold()+1)*2 {
+		if !ok || len(flatVs) != 1+(params.NewThreshold()+1)*2 {
 			return nil, tss.NewError(errors.New("de-commitment of v_j0..v_jt failed"),
 				TaskName, 4, Pi, params.OldParties().IDs()[j])
 		}
-		vj, err := crypto.UnFlattenECPoints(params.EC(), flatVs)
+		if flatVs[0].Cmp(sid) != 0 {
+			return nil, tss.NewError(errors.New("commitment not bound to this session"),
+				TaskName, 4, Pi, params.OldParties().IDs()[j])
+		}
+		vj, err := crypto.UnFlattenECPoints(params.EC(), flatVs[1:])
 		if err != nil {
 			return nil, tss.NewError(fmt.Errorf("unflatten: %w", err),
 				TaskName, 4, Pi, params.OldParties().IDs()[j])
