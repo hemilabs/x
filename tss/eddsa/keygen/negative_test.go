@@ -6,6 +6,7 @@ package keygen
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/hemilabs/x/tss/v3/crypto/schnorr"
@@ -89,6 +90,62 @@ func TestRound2InvalidR1Message(t *testing.T) {
 	_, err := Round2(states[0], r1Bad)
 	if err == nil {
 		t.Fatal("expected error for invalid round 1 message")
+	}
+}
+
+// TestRound3RejectsEquivocatedRound1 has party 2 send a different
+// round 1 commitment to party 1.  Party 0 must abort in Round 3,
+// because party 1's echo does not match its own.
+func TestRound3RejectsEquivocatedRound1(t *testing.T) {
+	const n = 3
+	const threshold = 1
+	pIDs := tss.GenerateTestPartyIDs(n)
+	peerCtx := tss.NewPeerContext(pIDs)
+
+	states := make([]*KeygenState, n)
+	r1 := make([]*tss.Message, n)
+	for i := 0; i < n; i++ {
+		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		st, out, err := Round1(params)
+		if err != nil {
+			t.Fatalf("Round1[%d]: %v", i, err)
+		}
+		states[i] = st
+		r1[i] = out.Messages[0]
+	}
+	r1Party1 := make([]*tss.Message, n)
+	copy(r1Party1, r1)
+	c := r1[2].Content.(*KGRound1Message).Commitment
+	r1Party1[2] = &tss.Message{
+		From:    r1[2].From,
+		Content: &KGRound1Message{Commitment: new(big.Int).Add(c, big.NewInt(1))},
+	}
+
+	r2p2p := make([]*tss.Message, n)
+	r2bcast := make([]*tss.Message, n)
+	for i := 0; i < n; i++ {
+		view := r1
+		if i == 1 {
+			view = r1Party1
+		}
+		out, err := Round2(states[i], view)
+		if err != nil {
+			t.Fatalf("Round2[%d]: %v", i, err)
+		}
+		for _, msg := range out.Messages {
+			if msg.To == nil {
+				r2bcast[i] = msg
+			} else if msg.To[0].Index == 0 {
+				r2p2p[i] = msg
+			}
+		}
+	}
+	r2p2p[0] = states[0].ExportR2P2PSelf()
+	r2bcast[0] = states[0].ExportR2BcastSelf()
+
+	_, err := Round3(states[0], r2p2p, r2bcast)
+	if err == nil || !strings.Contains(err.Error(), "echo mismatch") {
+		t.Fatalf("Round3 error = %v, want echo mismatch", err)
 	}
 }
 

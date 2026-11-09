@@ -170,19 +170,22 @@ func NewDGRound4Message1(to *tss.PartyID, from *tss.PartyID, proof *facproof.Pro
 	}
 }
 
-// DGRound4Message2 is an ACK broadcast to both committees.
-type DGRound4Message2 struct{}
+// DGRound4Message2 is an ACK broadcast to both committees.  It holds
+// the echo of the broadcasts that the new party received.
+type DGRound4Message2 struct {
+	Echo []byte // reshareEcho of the received round 1 and round 2 broadcasts
+}
 
 // ValidateBasic checks that required fields of DGRound4Message2 are non-nil.
-func (m *DGRound4Message2) ValidateBasic() bool { return m != nil }
+func (m *DGRound4Message2) ValidateBasic() bool { return m != nil && len(m.Echo) > 0 }
 
 // NewDGRound4Message2 constructs a *tss.Message with the given content.
-func NewDGRound4Message2(to []*tss.PartyID, from *tss.PartyID) *tss.Message {
+func NewDGRound4Message2(to []*tss.PartyID, from *tss.PartyID, echo []byte) *tss.Message {
 	return &tss.Message{
 		From:                    from,
 		To:                      to,
 		IsBroadcast:             true,
 		IsToOldAndNewCommittees: true,
-		Content:                 &DGRound4Message2{},
+		Content:                 &DGRound4Message2{Echo: echo},
 	}
 }

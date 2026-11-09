@@ -933,3 +933,29 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 		newStates: newStates,
 	}
 }
+
+// TestReshareRound5RejectsEquivocatedRound1 gives new party 1 the
+// echo it would send if old party 2 had sent it a different round 1
+// commitment.  New party 0 must abort in Round 5.
+func TestReshareRound5RejectsEquivocatedRound1(t *testing.T) {
+	fix := buildReshareFixture(t)
+
+	forged := make([]*tss.Message, fix.n)
+	copy(forged, fix.oldR1Msgs)
+	c := forged[2].Content.(*DGRound1Message)
+	forged[2] = &tss.Message{From: forged[2].From, Content: &DGRound1Message{
+		ECDSAPub: c.ECDSAPub, SSID: c.SSID,
+		VCommitment: new(big.Int).Add(c.VCommitment, big.NewInt(1)),
+	}}
+	st1 := fix.newStates[1]
+	echo := reshareEcho(st1.temp.ssid, forged, st1.temp.dgRound2Message1s)
+
+	r4Bcast := make([]*tss.Message, fix.n)
+	copy(r4Bcast, fix.newR4Bcast)
+	r4Bcast[1] = &tss.Message{From: r4Bcast[1].From, Content: &DGRound4Message2{Echo: echo}}
+
+	_, err := ReshareRound5(fix.newStates[0], fix.newR4P2P[0], r4Bcast)
+	if err == nil || !strings.Contains(err.Error(), "echo mismatch") {
+		t.Fatalf("ReshareRound5 error = %v, want echo mismatch", err)
+	}
+}
