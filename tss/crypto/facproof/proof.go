@@ -166,6 +166,21 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 		return false
 	}
 
+	// Bound the other exponents before any Exp, because the CPU time
+	// of Exp grows with the exponent size.  The bounds follow from the
+	// ranges that NewProof samples from, with e < q:
+	//   W1, W2 = e*mu + x, e*nu + y      in [0, 2*q^3*NCap)
+	//   Sigma                            in [0, q*N0*NCap)
+	//   V      = e*(sigma - nu*p) + r    in (-2*q^3*N0*NCap, 2*q^3*N0*NCap)
+	q3NCap := new(big.Int).Mul(q3, NCap)
+	wMax := new(big.Int).Lsh(q3NCap, 1)
+	sigmaMax := new(big.Int).Mul(new(big.Int).Mul(q, N0), NCap)
+	vMax := new(big.Int).Lsh(new(big.Int).Mul(q3NCap, N0), 1)
+	if !common.IsInInterval(pf.W1, wMax) || !common.IsInInterval(pf.W2, wMax) ||
+		!common.IsInInterval(pf.Sigma, sigmaMax) || pf.V.CmpAbs(vMax) >= 0 {
+		return false
+	}
+
 	var e *big.Int
 	{
 		eHash := common.SHA512_256i_TAGGED(Session, N0, NCap, s, t, pf.P, pf.Q, pf.A, pf.B, pf.T, pf.Sigma)
