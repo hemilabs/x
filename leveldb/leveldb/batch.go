@@ -283,10 +283,14 @@ func decodeBatch(data []byte, fn func(i int, index batchIndex) error) error {
 		}
 		o++
 
-		// Key.
+		// Key.  Check the length in uint64 against the bytes that are
+		// left, before the conversion to int.
 		x, n := binary.Uvarint(data[o:])
+		if n <= 0 {
+			return newErrBatchCorrupted("bad record: invalid key length")
+		}
 		o += n
-		if n <= 0 || o+int(x) > len(data) {
+		if x > uint64(len(data)-o) {
 			return newErrBatchCorrupted("bad record: invalid key length")
 		}
 		index.keyPos = o
@@ -296,8 +300,11 @@ func decodeBatch(data []byte, fn func(i int, index batchIndex) error) error {
 		// Value.
 		if index.keyType == keyTypeVal {
 			x, n = binary.Uvarint(data[o:])
+			if n <= 0 {
+				return newErrBatchCorrupted("bad record: invalid value length")
+			}
 			o += n
-			if n <= 0 || o+int(x) > len(data) {
+			if x > uint64(len(data)-o) {
 				return newErrBatchCorrupted("bad record: invalid value length")
 			}
 			index.valuePos = o
