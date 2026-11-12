@@ -142,6 +142,11 @@ func (pf *ProofMod) Verify(Session []byte, N *big.Int) bool {
 	if N == nil || N.BitLen() < 2048 {
 		return false
 	}
+	// isQuadraticResidue calls big.Jacobi, which panics for an
+	// even N.
+	if N.Sign() != 1 || N.Bit(0) == 0 {
+		return false
+	}
 	if isQuadraticResidue(pf.W, N) {
 		return false
 	}

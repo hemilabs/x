@@ -145,3 +145,11 @@ func TestGobDecodeRoundTrip(t *testing.T) {
 		t.Fatal("round-tripped point should equal original")
 	}
 }
+
+// TestECPointUnmarshalJSONNull verifies that JSON null gives an error.
+func TestECPointUnmarshalJSONNull(t *testing.T) {
+	var p crypto.ECPoint
+	if err := p.UnmarshalJSON([]byte("null")); err == nil {
+		t.Fatal("expected an error for JSON null")
+	}
+}

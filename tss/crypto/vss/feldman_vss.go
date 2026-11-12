@@ -100,8 +100,13 @@ func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.In
 }
 
 func (share *Share) Verify(ec elliptic.Curve, threshold int, vs Vs) bool {
-	if share.Threshold != threshold || vs == nil || len(vs) != threshold+1 {
+	if threshold < 0 || share.Threshold != threshold || len(vs) != threshold+1 {
 		return false
+	}
+	for _, v := range vs {
+		if v == nil {
+			return false
+		}
 	}
 	// [FORK] Reject shares that are zero or out of range [1, q-1].
 	// Upstream does not validate share values, allowing zero shares (which map to the
