@@ -5,7 +5,6 @@
 package resharing
 
 import (
-	"context"
 	"math/big"
 	"strings"
 	"testing"
@@ -52,7 +51,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
-		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
+		st, out, err := keygen.Round1(t.Context(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
@@ -66,7 +65,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
+		out, err := keygen.Round2(t.Context(), kgStates[i], kgR1)
 		if err != nil {
 			t.Fatalf("keygen Round2[%d]: %v", i, err)
 		}
@@ -88,7 +87,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 
 	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
+		out, err := keygen.Round3(t.Context(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("keygen Round3[%d]: %v", i, err)
 		}
@@ -97,7 +96,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 
 	oldKeys := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round4(context.Background(), kgStates[i], kgR3)
+		out, err := keygen.Round4(t.Context(), kgStates[i], kgR3)
 		if err != nil {
 			t.Fatalf("keygen Round4[%d]: %v", i, err)
 		}
@@ -144,7 +143,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 	newR2Msg1s := make([]*tss.Message, n)
 	newR2Msg2s := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := ReshareRound2(newStates[i], oldR1Msgs)
+		out, err := ReshareRound2(t.Context(), newStates[i], oldR1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2(new)[%d]: %v", i, err)
 		}
@@ -159,7 +158,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 		}
 	}
 	for i := 0; i < n; i++ {
-		_, err := ReshareRound2(oldStates[i], oldR1Msgs)
+		_, err := ReshareRound2(t.Context(), oldStates[i], oldR1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2(old)[%d]: %v", i, err)
 		}
@@ -207,7 +206,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 		newR4P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := ReshareRound4(context.Background(), newStates[i], newR2Msg1s, oldR3P2P[i], oldR3Bcast)
+		out, err := ReshareRound4(t.Context(), newStates[i], newR2Msg1s, oldR3P2P[i], oldR3Bcast)
 		if err != nil {
 			t.Fatalf("ReshareRound4(new)[%d]: %v", i, err)
 		}
@@ -224,7 +223,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 		}
 	}
 	for i := 0; i < n; i++ {
-		_, _ = ReshareRound4(context.Background(), oldStates[i], newR2Msg1s, nil, nil)
+		_, _ = ReshareRound4(t.Context(), oldStates[i], newR2Msg1s, nil, nil)
 	}
 	for i := 0; i < n; i++ {
 		if newR4Bcast[i] == nil {
@@ -404,7 +403,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
-		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
+		st, out, err := keygen.Round1(t.Context(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
@@ -417,7 +416,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
+		out, err := keygen.Round2(t.Context(), kgStates[i], kgR1)
 		if err != nil {
 			t.Fatalf("keygen Round2[%d]: %v", i, err)
 		}
@@ -438,7 +437,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 	}
 	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
+		out, err := keygen.Round3(t.Context(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("keygen Round3[%d]: %v", i, err)
 		}
@@ -446,7 +445,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 	}
 	oldKeys := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round4(context.Background(), kgStates[i], kgR3)
+		out, err := keygen.Round4(t.Context(), kgStates[i], kgR3)
 		if err != nil {
 			t.Fatalf("keygen Round4[%d]: %v", i, err)
 		}
@@ -492,7 +491,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 	newR2Msg1s := make([]*tss.Message, n)
 	newR2Msg2s := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := ReshareRound2(newStates[i], oldR1Msgs)
+		out, err := ReshareRound2(t.Context(), newStates[i], oldR1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2(new)[%d]: %v", i, err)
 		}
@@ -507,7 +506,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 		}
 	}
 	for i := 0; i < n; i++ {
-		_, err := ReshareRound2(oldStates[i], oldR1Msgs)
+		_, err := ReshareRound2(t.Context(), oldStates[i], oldR1Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound2(old)[%d]: %v", i, err)
 		}
@@ -555,7 +554,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 		newR4P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := ReshareRound4(context.Background(), newStates[i], newR2Msg1s, oldR3P2P[i], oldR3Bcast)
+		out, err := ReshareRound4(t.Context(), newStates[i], newR2Msg1s, oldR3P2P[i], oldR3Bcast)
 		if err != nil {
 			t.Fatalf("ReshareRound4(new)[%d]: %v", i, err)
 		}
@@ -572,7 +571,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 		}
 	}
 	for i := 0; i < n; i++ {
-		_, _ = ReshareRound4(context.Background(), oldStates[i], newR2Msg1s, nil, nil)
+		_, _ = ReshareRound4(t.Context(), oldStates[i], newR2Msg1s, nil, nil)
 	}
 	for i := 0; i < n; i++ {
 		if newR4Bcast[i] == nil {
@@ -619,7 +618,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
-		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
+		st, out, err := keygen.Round1(t.Context(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
@@ -632,7 +631,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
+		out, err := keygen.Round2(t.Context(), kgStates[i], kgR1)
 		if err != nil {
 			t.Fatalf("keygen Round2[%d]: %v", i, err)
 		}
@@ -653,7 +652,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 	}
 	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
+		out, err := keygen.Round3(t.Context(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("keygen Round3[%d]: %v", i, err)
 		}
@@ -661,7 +660,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 	}
 	oldKeys := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round4(context.Background(), kgStates[i], kgR3)
+		out, err := keygen.Round4(t.Context(), kgStates[i], kgR3)
 		if err != nil {
 			t.Fatalf("keygen Round4[%d]: %v", i, err)
 		}
@@ -725,7 +724,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 	}
 
 	// Round 2 on new party 0 should reject the mismatch.
-	_, err := ReshareRound2(newStates[0], corruptedR1Msgs)
+	_, err := ReshareRound2(t.Context(), newStates[0], corruptedR1Msgs)
 	if err == nil {
 		t.Fatal("expected error for ECDSAPub mismatch, got nil")
 	}
@@ -757,7 +756,7 @@ func TestReshareRound2RejectsNilECDSAPub(t *testing.T) {
 		},
 	}
 
-	_, err := ReshareRound2(fix.newStates[0], corruptedR1)
+	_, err := ReshareRound2(t.Context(), fix.newStates[0], corruptedR1)
 	if err == nil {
 		t.Fatal("expected error for nil ECDSAPub, got nil")
 	}
@@ -790,7 +789,7 @@ func TestReshareRound2RejectsSSIDMismatch(t *testing.T) {
 		},
 	}
 
-	_, err := ReshareRound2(fix.newStates[0], corruptedR1)
+	_, err := ReshareRound2(t.Context(), fix.newStates[0], corruptedR1)
 	if err == nil {
 		t.Fatal("expected error for SSID mismatch, got nil")
 	}
@@ -812,7 +811,7 @@ func TestReshareRound2RejectsStalePreParams(t *testing.T) {
 	// fails (it additionally checks Alpha, Beta, P, Q).
 	fix.newStates[0].save.Alpha = nil
 
-	_, err := ReshareRound2(fix.newStates[0], fix.oldR1Msgs)
+	_, err := ReshareRound2(t.Context(), fix.newStates[0], fix.oldR1Msgs)
 	if err == nil {
 		t.Fatal("expected error for stale preParams, got nil")
 	}
@@ -845,7 +844,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
-		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
+		st, out, err := keygen.Round1(t.Context(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
 		}
@@ -858,7 +857,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 		kgR2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round2(context.Background(), kgStates[i], kgR1)
+		out, err := keygen.Round2(t.Context(), kgStates[i], kgR1)
 		if err != nil {
 			t.Fatalf("keygen Round2[%d]: %v", i, err)
 		}
@@ -879,7 +878,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	}
 	kgR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round3(context.Background(), kgStates[i], kgR2P2P[i], kgR2Bcast)
+		out, err := keygen.Round3(t.Context(), kgStates[i], kgR2P2P[i], kgR2Bcast)
 		if err != nil {
 			t.Fatalf("keygen Round3[%d]: %v", i, err)
 		}
@@ -887,7 +886,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	}
 	oldKeys := make([]keygen.LocalPartySaveData, n)
 	for i := 0; i < n; i++ {
-		out, err := keygen.Round4(context.Background(), kgStates[i], kgR3)
+		out, err := keygen.Round4(t.Context(), kgStates[i], kgR3)
 		if err != nil {
 			t.Fatalf("keygen Round4[%d]: %v", i, err)
 		}

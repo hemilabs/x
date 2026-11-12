@@ -35,7 +35,7 @@ func setUp(t *testing.T) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 
 	var err error

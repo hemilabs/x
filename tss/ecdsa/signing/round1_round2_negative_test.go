@@ -117,7 +117,7 @@ func TestSignRound2RejectsReceiverIDMismatch(t *testing.T) {
 	corruptContent := corruptP2P[0][1].Content.(*SignRound1Message1)
 	corruptContent.ReceiverID = []byte("wrong-receiver-id")
 
-	_, err := SignRound2(context.Background(), f.States[0], corruptP2P[0], f.R1Bcast)
+	_, err := SignRound2(t.Context(), f.States[0], corruptP2P[0], f.R1Bcast)
 	if err == nil {
 		t.Fatal("expected error for receiverId mismatch, got nil")
 	}
@@ -142,7 +142,7 @@ func TestSignRound2RejectsNilRangeProofAlice(t *testing.T) {
 	corruptContent := corruptP2P[0][1].Content.(*SignRound1Message1)
 	corruptContent.RangeProofAlice = nil
 
-	_, err := SignRound2(context.Background(), f.States[0], corruptP2P[0], f.R1Bcast)
+	_, err := SignRound2(t.Context(), f.States[0], corruptP2P[0], f.R1Bcast)
 	if err == nil {
 		t.Fatal("expected error for nil RangeProofAlice, got nil")
 	}
@@ -161,7 +161,7 @@ func TestSignRound2ContextCancellation(t *testing.T) {
 	f := setupSignRound1(t, keys)
 
 	// Create an already-cancelled context.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	_, err := SignRound2(ctx, f.States[0], f.R1P2P[0], f.R1Bcast)
