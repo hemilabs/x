@@ -119,6 +119,11 @@ func TestRoundFnKeygenThreeParties(t *testing.T) {
 		if out.Save == nil {
 			t.Fatalf("Round4[%d]: Save is nil", i)
 		}
+		// Real keygen output must pass ValidateSaveData, including the
+		// interpolation of BigXj to the group key.
+		if err := out.Save.ValidateSaveData(); err != nil {
+			t.Fatalf("Round4[%d]: ValidateSaveData: %v", i, err)
+		}
 		saves[i] = out.Save
 	}
 

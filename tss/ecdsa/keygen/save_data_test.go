@@ -10,6 +10,7 @@ import (
 
 	"github.com/hemilabs/x/tss/v3/crypto"
 	"github.com/hemilabs/x/tss/v3/crypto/paillier"
+	"github.com/hemilabs/x/tss/v3/crypto/vss"
 	"github.com/hemilabs/x/tss/v3/tss"
 )
 
@@ -32,7 +33,12 @@ func validSaveData(t *testing.T) LocalPartySaveData {
 	sd.BigXj[0] = crypto.ScalarBaseMult(ec, xi)
 	sd.BigXj[1] = crypto.ScalarBaseMult(ec, big.NewInt(13))
 
-	sd.ECDSAPub = crypto.ScalarBaseMult(ec, big.NewInt(42))
+	// ECDSAPub is the value at zero of the line through the shares.
+	pub, err := vss.InterpolateAtZero(ec, sd.Ks, sd.BigXj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd.ECDSAPub = pub
 
 	for i := 0; i < 2; i++ {
 		sd.NTildej[i] = big.NewInt(int64(1000 + i))
@@ -40,6 +46,12 @@ func validSaveData(t *testing.T) LocalPartySaveData {
 		sd.H2j[i] = big.NewInt(int64(3000 + i))
 		sd.PaillierPKs[i] = &paillier.PublicKey{N: big.NewInt(int64(4000 + i))}
 	}
+
+	// Own values equal the public values at index 0.
+	sd.PaillierSK = &paillier.PrivateKey{PublicKey: paillier.PublicKey{N: big.NewInt(4000)}}
+	sd.NTildei = big.NewInt(1000)
+	sd.H1i = big.NewInt(2000)
+	sd.H2i = big.NewInt(3000)
 	return sd
 }
 
@@ -188,12 +200,24 @@ func TestBuildLocalSaveDataSubsetSuccess(t *testing.T) {
 	ec := tss.S256()
 	sd.BigXj[0] = crypto.ScalarBaseMult(ec, sd.Xi)
 
-	result := BuildLocalSaveDataSubset(sd, ids)
+	// A key with a leading zero byte must match the same party.
+	ids[0].Key = append([]byte{0}, ids[0].Key...)
+
+	result, err := BuildLocalSaveDataSubset(sd, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(result.Ks) != 2 {
 		t.Fatalf("expected 2 Ks, got %d", len(result.Ks))
 	}
 	if result.Ks[0].Cmp(sd.Ks[0]) != 0 {
 		t.Fatal("Ks[0] mismatch")
+	}
+
+	// The subset must not share the secret with the source.
+	result.Xi.SetInt64(0)
+	if sd.Xi.Sign() == 0 {
+		t.Fatal("subset shares Xi with the source")
 	}
 }
 
@@ -390,5 +414,35 @@ func TestValidateHappyPath(t *testing.T) {
 	pp := validPreParams()
 	if !pp.Validate() {
 		t.Fatal("valid pre-params should pass Validate")
+	}
+}
+
+// TestValidateSaveDataRejectsTampering verifies that ValidateSaveData
+// rejects a wrong group key, an Xi out of range, a missing own Paillier
+// key, and own values of another party.  Xi = q must not panic.
+func TestValidateSaveDataRejectsTampering(t *testing.T) {
+	ec := tss.S256()
+	tests := []struct {
+		name   string
+		tamper func(sd *LocalPartySaveData)
+	}{
+		{"wrong ECDSAPub", func(sd *LocalPartySaveData) { sd.ECDSAPub = crypto.ScalarBaseMult(ec, big.NewInt(42)) }},
+		{"Xi = q", func(sd *LocalPartySaveData) { sd.Xi = new(big.Int).Set(ec.Params().N) }},
+		{"nil PaillierSK", func(sd *LocalPartySaveData) { sd.PaillierSK = nil }},
+		{"other PaillierSK", func(sd *LocalPartySaveData) {
+			sd.PaillierSK = &paillier.PrivateKey{PublicKey: paillier.PublicKey{N: big.NewInt(4001)}}
+		}},
+		{"other NTildei", func(sd *LocalPartySaveData) { sd.NTildei = big.NewInt(1001) }},
+		{"other H1i", func(sd *LocalPartySaveData) { sd.H1i = big.NewInt(2001) }},
+		{"other H2i", func(sd *LocalPartySaveData) { sd.H2i = big.NewInt(3001) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sd := validSaveData(t)
+			tt.tamper(&sd)
+			if err := sd.ValidateSaveData(); err == nil {
+				t.Fatal("ValidateSaveData accepted tampered data")
+			}
+		})
 	}
 }
