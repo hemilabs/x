@@ -889,13 +889,10 @@ func (r *Reader) find(key []byte, filtered bool, ro *opt.ReadOptions, noValue bo
 	// Key doesn't use block buffer, no need to copy the buffer.
 	rkey = data.Key()
 	if !noValue {
-		if r.bpool == nil {
-			value = data.Value()
-		} else {
-			// Value does use block buffer, and since the buffer will be
-			// recycled, it need to be copied.
-			value = append([]byte(nil), data.Value()...)
-		}
+		// Always copy the value.  The block can be recycled, and without
+		// a buffer pool it still sits in the block cache.  A caller that
+		// changes the returned slice must not change the cache.
+		value = append([]byte(nil), data.Value()...)
 	}
 	data.Release()
 	return
