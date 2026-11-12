@@ -7,6 +7,7 @@ package keygen
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ func makeTestParams() (*tss.Parameters, tss.SortedPartyIDs, *tss.PeerContext) {
 	pIDs := tss.GenerateTestPartyIDs(testN)
 	peerCtx := tss.NewPeerContext(pIDs)
 	params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+	params.SetCeremonyID([]byte("test-ceremony"))
 	params.SetNoProofDLN()
 	params.SetNoProofMod()
 	params.SetNoProofFac()
@@ -170,6 +172,7 @@ func TestRound1ExportsCorrectSSIDNonce(t *testing.T) {
 
 	runRound1WithNonce := func(nonce uint) *KeygenState {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -205,10 +208,10 @@ func TestRound1ExportsCorrectSSIDNonce(t *testing.T) {
 	}
 }
 
-// TestRound1WithCeremonyID sets a CeremonyID on params, runs Round1,
-// and verifies that the SSID includes the ceremony ID by comparing
-// SSIDs with and without a CeremonyID set.  Uses the same party IDs
-// and pre-params for all runs so the only variable is the CeremonyID.
+// TestRound1WithCeremonyID runs Round1 with two ceremony IDs and
+// verifies that the SSID includes the ceremony ID.  Uses the same party
+// IDs and pre-params for both runs so the only variable is the
+// ceremony ID.
 func TestRound1WithCeremonyID(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping slow test in short mode")
@@ -223,47 +226,25 @@ func TestRound1WithCeremonyID(t *testing.T) {
 
 	runRound1WithCeremonyID := func(ceremonyID []byte) *KeygenState {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[0], testN, testThreshold)
+		params.SetCeremonyID(ceremonyID)
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
-		if ceremonyID != nil {
-			params.SetCeremonyID(ceremonyID)
-		}
 
-		state, _, err := Round1(context.Background(), params, *pp)
+		state, _, err := Round1(t.Context(), params, *pp)
 		if err != nil {
 			t.Fatalf("Round1 with ceremonyID=%x: %v", ceremonyID, err)
 		}
 		return state
 	}
 
-	// Run without CeremonyID.
-	stateNoCID := runRound1WithCeremonyID(nil)
-
-	// Run with CeremonyID = "test-ceremony-42".
-	stateWithCID := runRound1WithCeremonyID([]byte("test-ceremony-42"))
-
-	// Run with a different CeremonyID.
-	stateWithCID2 := runRound1WithCeremonyID([]byte("test-ceremony-99"))
-
-	ssidNone := stateNoCID.temp.ssid
-	ssidCID := stateWithCID.temp.ssid
-	ssidCID2 := stateWithCID2.temp.ssid
-
-	if ssidNone == nil || ssidCID == nil || ssidCID2 == nil {
+	ssidCID := runRound1WithCeremonyID([]byte("test-ceremony-42")).temp.ssid
+	ssidCID2 := runRound1WithCeremonyID([]byte("test-ceremony-99")).temp.ssid
+	if ssidCID == nil || ssidCID2 == nil {
 		t.Fatal("SSIDs should be non-nil after Round1")
-	}
-
-	// CeremonyID is included in the SSID hash.  Different CeremonyIDs
-	// (including nil vs non-nil) must produce different SSIDs.
-	if bytes.Equal(ssidNone, ssidCID) {
-		t.Fatal("SSID with no CeremonyID should differ from SSID with CeremonyID")
 	}
 	if bytes.Equal(ssidCID, ssidCID2) {
 		t.Fatal("SSIDs with different CeremonyIDs should differ")
-	}
-	if bytes.Equal(ssidNone, ssidCID2) {
-		t.Fatal("SSID with no CeremonyID should differ from SSID with CeremonyID 2")
 	}
 }
 
@@ -285,6 +266,7 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 	states := make([]*KeygenState, testN)
 	for i := 0; i < testN; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], testN, testThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -311,5 +293,16 @@ func TestRound1CeremonyIDCausesCrossPartyMismatch(t *testing.T) {
 	// only the full sorted party key list, which is shared.
 	if !bytes.Equal(states[0].temp.ssid, states[1].temp.ssid) {
 		t.Fatal("parties with the same CeremonyID should have the same SSID")
+	}
+}
+
+// TestRound1RequiresCeremonyID verifies that Round1 fails without a
+// ceremony ID, before it generates any primes.
+func TestRound1RequiresCeremonyID(t *testing.T) {
+	pIDs := tss.GenerateTestPartyIDs(3)
+	params := tss.NewParameters(tss.S256(), tss.NewPeerContext(pIDs), pIDs[0], 3, 1)
+	_, _, err := Round1(t.Context(), params, LocalPreParams{})
+	if !errors.Is(err, tss.ErrNoCeremonyID) {
+		t.Fatalf("Round1 error = %v, want ErrNoCeremonyID", err)
 	}
 }

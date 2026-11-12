@@ -31,6 +31,7 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -98,6 +99,7 @@ func TestRoundFnSignThreeParties(t *testing.T) {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := SignRound1(params, saves[i], m, nil, 0)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
@@ -245,6 +247,7 @@ func TestRoundFnSignSubset(t *testing.T) {
 	kgR1 := make([]*tss.Message, nKeygen)
 	for i := 0; i < nKeygen; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], nKeygen, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -326,6 +329,7 @@ func TestRoundFnSignSubset(t *testing.T) {
 
 	for i := 0; i < nSign; i++ {
 		params := tss.NewParameters(tss.S256(), signCtx, signPIDs[i], nSign, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		// Pass FULL key data — SignRound1 should auto-subset
 		st, out, err := SignRound1(params, allKeys[signerOrigIdx[i]], m, nil, 0)
 		if err != nil {
@@ -459,6 +463,7 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -516,6 +521,7 @@ func TestRoundFnSignLeadingZeroMsg(t *testing.T) {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := SignRound1(params, saves[i], m, nil, len(msgData))
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)

@@ -52,6 +52,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -116,6 +117,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -130,6 +132,7 @@ func buildReshareFixture(t *testing.T) *reshareFixture {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -404,6 +407,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -464,6 +468,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		// FacProof enabled (no SetNoProofFac call)
@@ -478,6 +483,7 @@ func buildReshareFixtureWithFacProof(t *testing.T) *reshareFixture {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		// FacProof enabled
@@ -619,6 +625,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -679,6 +686,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -693,6 +701,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -721,6 +730,7 @@ func TestReshareRound2RejectsECDSAPubMismatch(t *testing.T) {
 			ECDSAPub:    fakePoint,
 			VCommitment: origContent.VCommitment,
 			SSID:        origContent.SSID,
+			KeyHash:     origContent.KeyHash,
 		},
 	}
 
@@ -754,6 +764,7 @@ func TestReshareRound2RejectsNilECDSAPub(t *testing.T) {
 			ECDSAPub:    nil,
 			VCommitment: origContent.VCommitment,
 			SSID:        origContent.SSID,
+			KeyHash:     origContent.KeyHash,
 		},
 	}
 
@@ -845,6 +856,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -904,6 +916,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -918,6 +931,7 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -931,5 +945,25 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	return &round2SetupFixture{
 		oldR1Msgs: oldR1Msgs,
 		newStates: newStates,
+	}
+}
+
+// TestReshareRound2RejectsOtherCeremony gives a new party the round 1
+// messages of a ceremony with another ceremony ID.  The new party
+// computes its own SSID, so it must reject them.
+func TestReshareRound2RejectsOtherCeremony(t *testing.T) {
+	fix := buildReshareFixture(t)
+	oldCtx := tss.NewPeerContext(fix.oldPIDs)
+	newCtx := tss.NewPeerContext(fix.newPIDs)
+	params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, fix.newPIDs[0],
+		fix.n, fix.threshold, fix.n, fix.threshold)
+	params.SetCeremonyID([]byte("other-ceremony"))
+	st, _, err := ReshareRound1(params, keygen.NewLocalPartySaveData(fix.n), keygen.LocalPreParams{})
+	if err != nil {
+		t.Fatalf("ReshareRound1: %v", err)
+	}
+	_, err = ReshareRound2(st, fix.oldR1Msgs)
+	if err == nil || !strings.Contains(err.Error(), "ssid mismatch") {
+		t.Fatalf("ReshareRound2 error = %v, want ssid mismatch", err)
 	}
 }
