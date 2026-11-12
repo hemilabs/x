@@ -100,9 +100,7 @@ func NewProofFromBytes(bzs [][]byte) (*ProofFac, error) {
 	if !common.NonEmptyMultiBytes(bzs, ProofFacBytesParts) {
 		return nil, fmt.Errorf("expected %d byte parts to construct ProofFac", ProofFacBytesParts)
 	}
-	// [FORK] V uses sign-magnitude encoding: first byte is 0x00 (positive) or 0x01 (negative).
-	// Upstream uses SetBytes which cannot represent negative V, silently truncating
-	// to |V| and causing verification failures for ~50% of honest proofs.
+	// V uses sign-magnitude encoding: first byte is 0x00 (positive) or 0x01 (negative).
 	vBz := bzs[10] //nolint:gosec // len(bzs) >= 11 checked above
 	if len(vBz) < 1 {
 		return nil, fmt.Errorf("v field too short for sign-magnitude decoding")
@@ -140,13 +138,12 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 	if N0.Sign() != 1 {
 		return false
 	}
-	// [FORK] Reject undersized moduli — FacProof is only sound when N0 is the
-	// product of two large primes (>= 2048-bit modulus). Upstream does not check.
+	// Reject undersized moduli — FacProof is only sound when N0 is the
+	// product of two large primes (>= 2048-bit modulus).
 	if N0.BitLen() < 2048 {
 		return false
 	}
-	// [FORK] NCap (the Pedersen commitment modulus) must also be sufficiently large.
-	// Upstream does not check.
+	// NCap (the Pedersen commitment modulus) must also be sufficiently large.
 	if NCap.BitLen() < 2048 {
 		return false
 	}
@@ -194,8 +191,7 @@ func (pf *ProofFac) Verify(Session []byte, ec elliptic.Curve, N0, NCap, s, t *bi
 
 	{
 		R := modNCap.Mul(modNCap.Exp(s, N0), modNCap.Exp(t, pf.Sigma))
-		// [FORK] V can be negative (v = e*(sigma - nu*p) + r). Upstream silently drops the
-		// sign via SetBytes, causing ~50% of honest proofs to fail. We handle negative
+		// V can be negative (v = e*(sigma - nu*p) + r). We handle negative
 		// exponents explicitly: compute t^(-1) mod NCap then raise to |V|. The nil check
 		// on tInv prevents a panic if t is not invertible mod NCap.
 		var tExpV *big.Int
@@ -234,9 +230,8 @@ func (pf *ProofFac) ValidateBasic() bool {
 }
 
 func (pf *ProofFac) Bytes() [ProofFacBytesParts][]byte {
-	// [FORK] V can be negative (v = e*(sigma - nu*p) + r). Use sign-magnitude
-	// encoding: prefix 0x00 for non-negative, 0x01 for negative.
-	// Upstream uses big.Int.Bytes() which discards the sign, corrupting negative values.
+	// V can be negative (v = e*(sigma - nu*p) + r). big.Int.Bytes() discards the
+	// sign, so use sign-magnitude encoding: prefix 0x00 for non-negative, 0x01 for negative.
 	vBytes := pf.V.Bytes()
 	if pf.V.Sign() < 0 {
 		vBytes = append([]byte{0x01}, vBytes...)

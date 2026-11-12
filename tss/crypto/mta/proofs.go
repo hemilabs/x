@@ -206,16 +206,15 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	if pk == nil || NTilde == nil || h1 == nil || h2 == nil || c1 == nil || c2 == nil {
 		return false
 	}
-	// [FORK] Reject degenerate Pedersen parameters: h1=1 or h2=1 eliminates
-	// binding or hiding, making the range proof unsound. Upstream does not check.
+	// Reject degenerate Pedersen parameters: h1=1 or h2=1 eliminates
+	// binding or hiding, making the range proof unsound.
 	one := big.NewInt(1)
 	if h1.Cmp(one) == 0 || h2.Cmp(one) == 0 {
 		return false
 	}
 
-	// [FORK] Ciphertexts c1, c2 must be coprime to N (i.e. valid Paillier ciphertexts).
+	// Ciphertexts c1, c2 must be coprime to N (i.e. valid Paillier ciphertexts).
 	// A malicious ciphertext sharing a factor with N reveals N's factorization.
-	// Upstream does not check.
 	if new(big.Int).GCD(nil, nil, c1, pk.N).Cmp(one) != 0 {
 		return false
 	}
@@ -223,18 +222,16 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 		return false
 	}
 
-	// [FORK] NTilde (Pedersen commitment modulus) must be sufficiently large for soundness.
-	// Upstream does not check NTilde size in the proof verifier (only at keygen round 2).
+	// NTilde (Pedersen commitment modulus) must be sufficiently large for soundness.
 	// Defense-in-depth: proof verifiers should be self-contained against untrusted parameters.
 	if NTilde.BitLen() < 2048 {
 		return false
 	}
 
-	// [FORK] Paillier modulus must also be sufficiently large. Upstream does not check
-	// pk.N size in the proof verifier. A malicious party could use a small Paillier key
-	// to break range proof soundness, allowing extraction of the discrete log from the
-	// ciphertext. Defense-in-depth: keygen round 2 validates exact 2048 bits, but the
-	// proof verifier should not rely on that.
+	// Paillier modulus must also be sufficiently large. A malicious party could
+	// use a small Paillier key to break range proof soundness, allowing extraction
+	// of the discrete log from the ciphertext. Defense-in-depth: keygen round 2
+	// validates exact 2048 bits, but the proof verifier should not rely on that.
 	if pk.N.BitLen() < 2048 {
 		return false
 	}
@@ -245,7 +242,7 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	q7 := new(big.Int).Mul(q3, q3) // q^6
 	q7 = new(big.Int).Mul(q7, q)   // q^7
 
-	// Interval and coprimality checks on proof elements (present in both upstream and fork).
+	// Interval and coprimality checks on proof elements.
 	// Without them, a malicious prover can submit out-of-range or degenerate elements
 	// that cause modular arithmetic failures or weaken proof soundness.
 	if !common.IsInInterval(pf.Z, NTilde) {
@@ -320,7 +317,7 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	if pf.T1.Cmp(q7) > 0 {
 		return false
 	}
-	// [FORK] Defense-in-depth: s2 and t2 upper bounds.
+	// Defense-in-depth: s2 and t2 upper bounds.
 	// s2 = e·rho + rhoPrm where e ∈ [0, q), rho ∈ [1, q·NTilde), rhoPrm ∈ [1, q³·NTilde).
 	// t2 = e·sigma + tau where e ∈ [0, q), sigma ∈ [1, q·NTilde), tau ∈ [1, q³·NTilde).
 	// Both have the same maximum honest value:
@@ -329,7 +326,7 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	// This bound has EXACTLY ZERO false-rejection probability for honest provers.
 	// Without it, a malicious prover could submit arbitrarily large s2/t2 values,
 	// forcing the verifier to compute h2^s2 and h2^t2 with unbounded exponents,
-	// enabling DoS via expensive modular exponentiation. Upstream does not check.
+	// enabling DoS via expensive modular exponentiation.
 	q3NTilde := new(big.Int).Mul(q3, NTilde)
 	s2t2Bound := new(big.Int).Lsh(q3NTilde, 1) // 2 · q³ · NTilde
 	if pf.S2.Cmp(s2t2Bound) > 0 {
@@ -360,7 +357,7 @@ func (pf *ProofBobWC) Verify(Session []byte, ec elliptic.Curve, pk *paillier.Pub
 	// 4. runs only in the "with check" mode from Fig. 10
 	if X != nil {
 		s1ModQ := new(big.Int).Mod(pf.S1, ec.Params().N)
-		// [FORK] Guard s1ModQ=0 and e=0 before EC operations to prevent identity-point panic.
+		// Guard s1ModQ=0 and e=0 before EC operations to prevent identity-point panic.
 		if s1ModQ.Sign() == 0 {
 			return false
 		}

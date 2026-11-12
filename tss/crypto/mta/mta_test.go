@@ -828,11 +828,11 @@ func TestProofBobRejectsSmallPaillierN(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// B32: ProofBobWC rejects s1ModQ == 0 (proofs.go:361)
+// B32: ProofBobWC rejects s1ModQ == 0 (proofs.go)
 // ---------------------------------------------------------------------------
 
 // TestProofBobWCRejectsS1ModQZero verifies that the fork's s1ModQ=0 guard
-// (proofs.go:361) rejects a ProofBobWC whose S1 is set to the curve order q.
+// (proofs.go) rejects a ProofBobWC whose S1 is set to the curve order q.
 // When S1 = q, s1ModQ = q mod q = 0 and the EC scalar multiply would produce
 // the identity point, so the check fires first.
 func TestProofBobWCRejectsS1ModQZero(t *testing.T) {
@@ -879,10 +879,10 @@ func TestProofBobWCRejectsS1ModQZero(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// B33: ProofBobWC e == 0 guard (proofs.go:364)
+// B33: ProofBobWC e == 0 guard (proofs.go)
 // ---------------------------------------------------------------------------
 
-// TestProofBobWCRejectsEZero documents that the e=0 guard at proofs.go:364
+// TestProofBobWCRejectsEZero documents that the e=0 guard in proofs.go
 // exists as defense-in-depth. The challenge e is computed as
 // RejectionSample(q, SHA512_256i_TAGGED(Session, ...)), which outputs 0 only
 // if the hash maps to 0 mod q -- computationally infeasible (requires a
