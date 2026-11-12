@@ -48,7 +48,9 @@ func TestParametersSetters(t *testing.T) {
 	ctx := NewPeerContext(pIDs)
 	params := NewParameters(S256(), ctx, pIDs[0], 3, 1)
 
-	params.SetConcurrency(4)
+	if err := params.SetConcurrency(4); err != nil {
+		t.Fatal(err)
+	}
 	if params.Concurrency() != 4 {
 		t.Fatalf("SetConcurrency: want 4, got %d", params.Concurrency())
 	}
@@ -202,21 +204,39 @@ func TestCheckSelfAndConcurrency(t *testing.T) {
 	}
 	stray := NewPartyID("x", "x", big.NewInt(99))
 	stray.Index = 1
-	for name, p := range map[string]*Parameters{
-		"index -1":    NewParameters(S256(), ctx, NewPartyID("y", "y", big.NewInt(98)), 3, 1),
-		"wrong count": NewParameters(S256(), ctx, pIDs[1], 4, 1),
-		"not in list": NewParameters(S256(), ctx, stray, 3, 1),
-		"nil context": NewParameters(S256(), nil, pIDs[1], 3, 1),
-		"empty id":    NewParameters(S256(), ctx, &PartyID{}, 3, 1),
+	pastEnd := NewPartyID(pIDs[2].Id, pIDs[2].Moniker, pIDs[2].KeyInt())
+	pastEnd.Index = 3
+	withNil := NewPeerContext(SortedPartyIDs{pIDs[0], nil, pIDs[2]})
+	badIndex := NewPartyID("z", "z", big.NewInt(97))
+	badIndex.Index = 0
+	withBadIndex := NewPeerContext(SortedPartyIDs{pIDs[0], pIDs[1], badIndex})
+	for _, tc := range []struct {
+		name string
+		p    *Parameters
+	}{
+		{"index -1", NewParameters(S256(), ctx, NewPartyID("y", "y", big.NewInt(98)), 3, 1)},
+		{"index past end", NewParameters(S256(), ctx, pastEnd, 3, 1)},
+		{"wrong count", NewParameters(S256(), ctx, pIDs[1], 4, 1)},
+		{"not in list", NewParameters(S256(), ctx, stray, 3, 1)},
+		{"nil context", NewParameters(S256(), nil, pIDs[1], 3, 1)},
+		{"empty id", NewParameters(S256(), ctx, &PartyID{}, 3, 1)},
+		{"nil list entry", NewParameters(S256(), withNil, pIDs[0], 3, 1)},
+		{"list index not position", NewParameters(S256(), withBadIndex, pIDs[0], 3, 1)},
 	} {
-		if err := p.CheckSelf(); err == nil {
-			t.Fatalf("%s: expected an error", name)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.p.CheckSelf(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
 	}
 	p := NewParameters(S256(), ctx, pIDs[0], 3, 1)
-	p.SetConcurrency(0)
-	if p.Concurrency() != 1 {
-		t.Fatalf("SetConcurrency(0): got %d, want 1", p.Concurrency())
+	for _, c := range []int{0, -1} {
+		if err := p.SetConcurrency(c); err == nil {
+			t.Fatalf("SetConcurrency(%d): expected an error", c)
+		}
+	}
+	if p.Concurrency() < 1 {
+		t.Fatalf("a rejected SetConcurrency changed the level to %d", p.Concurrency())
 	}
 }
 
@@ -224,30 +244,44 @@ func TestCheckSelfAndConcurrency(t *testing.T) {
 func TestCheckCommittees(t *testing.T) {
 	oldIDs, newIDs := GenerateTestPartyIDs(3), GenerateTestPartyIDs(3)
 	oldCtx, newCtx := NewPeerContext(oldIDs), NewPeerContext(newIDs)
-	if err := NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 3, 1).CheckCommittees(); err != nil {
-		t.Fatalf("old party: %v", err)
-	}
-	if err := NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 2, 1).CheckCommittees(); err == nil {
-		t.Fatal("wrong new count: expected an error")
-	}
-	for name, p := range map[string]*ReSharingParameters{
-		"nil old": NewReSharingParameters(S256(), nil, newCtx, oldIDs[0], 3, 1, 3, 1),
-		"nil new": NewReSharingParameters(S256(), oldCtx, nil, oldIDs[0], 3, 1, 3, 1),
-		"empty":   NewReSharingParameters(S256(), oldCtx, newCtx, &PartyID{}, 3, 1, 3, 1),
-	} {
-		if err := p.CheckCommittees(); err == nil {
-			t.Fatalf("%s: expected an error", name)
-		}
-	}
-	stranger := NewPartyID("s", "s", big.NewInt(12345))
-	stranger.Index = 0
-	if err := NewReSharingParameters(S256(), oldCtx, newCtx, stranger, 3, 1, 3, 1).CheckCommittees(); err == nil {
-		t.Fatal("party in neither committee: expected an error")
-	}
+	// Reshare finds the own party by key, so an unsorted copy with
+	// Index -1 is valid.
+	unsorted := NewPartyID(oldIDs[0].Id, oldIDs[0].Moniker, oldIDs[0].KeyInt())
 	// A party in both committees has a separate PartyID copy for each.
 	both := NewPartyID(oldIDs[1].Id, oldIDs[1].Moniker, oldIDs[1].KeyInt())
 	dualNew := SortPartyIDs(UnSortedPartyIDs{both, newIDs[0], newIDs[1]})
-	if err := NewReSharingParameters(S256(), oldCtx, NewPeerContext(dualNew), oldIDs[1], 3, 1, 3, 1).CheckCommittees(); err != nil {
-		t.Fatalf("party in both committees: %v", err)
+	for _, tc := range []struct {
+		name string
+		p    *ReSharingParameters
+	}{
+		{"old party", NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 3, 1)},
+		{"unsorted own id", NewReSharingParameters(S256(), oldCtx, newCtx, unsorted, 3, 1, 3, 1)},
+		{"both committees", NewReSharingParameters(S256(), oldCtx, NewPeerContext(dualNew), oldIDs[1], 3, 1, 3, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.p.CheckCommittees(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	stranger := NewPartyID("s", "s", big.NewInt(12345))
+	stranger.Index = 0
+	withNil := NewPeerContext(SortedPartyIDs{newIDs[0], nil, newIDs[2]})
+	for _, tc := range []struct {
+		name string
+		p    *ReSharingParameters
+	}{
+		{"wrong new count", NewReSharingParameters(S256(), oldCtx, newCtx, oldIDs[0], 3, 1, 2, 1)},
+		{"nil old", NewReSharingParameters(S256(), nil, newCtx, oldIDs[0], 3, 1, 3, 1)},
+		{"nil new", NewReSharingParameters(S256(), oldCtx, nil, oldIDs[0], 3, 1, 3, 1)},
+		{"empty", NewReSharingParameters(S256(), oldCtx, newCtx, &PartyID{}, 3, 1, 3, 1)},
+		{"neither committee", NewReSharingParameters(S256(), oldCtx, newCtx, stranger, 3, 1, 3, 1)},
+		{"nil list entry", NewReSharingParameters(S256(), oldCtx, withNil, oldIDs[0], 3, 1, 3, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.p.CheckCommittees(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hemilabs/x/tss/v3/ecdsa/keygen"
 	"github.com/hemilabs/x/tss/v3/tss"
 )
 
@@ -173,4 +174,15 @@ func TestSignRound2ContextCancellation(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	t.Logf("correctly rejected cancelled context: %v", err)
+}
+
+// TestSignRound1RejectsBadOwnPartyID verifies that SignRound1 returns an
+// error when the own PartyID is not in the party list.
+func TestSignRound1RejectsBadOwnPartyID(t *testing.T) {
+	pIDs := tss.GenerateTestPartyIDs(3)
+	stray := tss.NewPartyID("x", "x", big.NewInt(99)) // Index stays -1
+	params := tss.NewParameters(tss.S256(), tss.NewPeerContext(pIDs), stray, 3, 1)
+	if _, _, err := SignRound1(params, keygen.LocalPartySaveData{}, big.NewInt(1), nil, 0); err == nil {
+		t.Fatal("SignRound1 accepted a PartyID that is not in the list")
+	}
 }

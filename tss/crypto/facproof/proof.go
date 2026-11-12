@@ -47,7 +47,10 @@ func NewProof(Session []byte, ec elliptic.Curve, N0, NCap, s, t, N0p, N0q *big.I
 	mu := common.GetRandomPositiveInt(rand, qNCap)
 	nu := common.GetRandomPositiveInt(rand, qNCap)
 	sigma := common.GetRandomPositiveInt(rand, qN0NCap)
-	r := common.GetRandomPositiveRelativelyPrimeInt(rand, q3N0NCap)
+	r, err := common.GetRandomPositiveRelativelyPrimeInt(rand, q3N0NCap)
+	if err != nil {
+		return nil, err
+	}
 	x := common.GetRandomPositiveInt(rand, q3NCap)
 	y := common.GetRandomPositiveInt(rand, q3NCap)
 

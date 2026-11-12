@@ -50,7 +50,11 @@ import "github.com/hemilabs/x/tss-lib/v3/ecdsa/keygen"
 preParams, _ := keygen.GeneratePreParams(5 * time.Minute)
 
 params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
-state, r1out, _ := keygen.Round1(ctx, params, *preParams)
+// Round1 returns an error if params fail CheckSelf.
+state, r1out, err := keygen.Round1(ctx, params, *preParams)
+if err != nil {
+    return err
+}
 r2out, _ := keygen.Round2(ctx, state, r1Msgs)
 r3out, _ := keygen.Round3(ctx, state, r2p2p, r2bcast)
 r4out, _ := keygen.Round4(ctx, state, r3Msgs)
@@ -63,7 +67,10 @@ r4out, _ := keygen.Round4(ctx, state, r3Msgs)
 import "github.com/hemilabs/x/tss-lib/v3/ecdsa/signing"
 
 m := new(big.Int).SetBytes(msgHash[:])
-sigState, r1out, _ := signing.SignRound1(params, keyShare, m, nil, 0)
+sigState, r1out, err := signing.SignRound1(params, keyShare, m, nil, 0)
+if err != nil {
+    return err
+}
 r2out, _ := signing.SignRound2(ctx, sigState, r1p2p, r1bcast)
 r3out, _ := signing.SignRound3(ctx, sigState, r2p2p)
 // Rounds 4-9 are all broadcast:
@@ -89,7 +96,11 @@ params := tss.NewReSharingParameters(
     tss.S256(), oldCtx, newCtx, myPID,
     oldN, oldT, newN, newT)
 
-state, r1out, _ := resharing.ReshareRound1(params, keyShare, newPreParams)
+// ReshareRound1 returns an error if params fail CheckCommittees.
+state, r1out, err := resharing.ReshareRound1(params, keyShare, newPreParams)
+if err != nil {
+    return err
+}
 r2out, _ := resharing.ReshareRound2(state, r1Msgs)
 r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
 r4out, _ := resharing.ReshareRound4(ctx, state, r2Msgs, r3p2p, r3bcast)
@@ -115,7 +126,10 @@ import "github.com/hemilabs/x/tss-lib/v3/eddsa/keygen"
 
 // No pre-parameters needed for EdDSA.
 params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
-state, r1out, _ := keygen.Round1(params)
+state, r1out, err := keygen.Round1(params)
+if err != nil {
+    return err
+}
 r2out, _ := keygen.Round2(state, r1Msgs)
 r3out, _ := keygen.Round3(state, r2p2p, r2bcast)
 // r3out.Save = LocalPartySaveData (key share)
@@ -127,7 +141,10 @@ r3out, _ := keygen.Round3(state, r2p2p, r2bcast)
 import "github.com/hemilabs/x/tss-lib/v3/eddsa/signing"
 
 m := new(big.Int).SetBytes(msgHash[:])
-sigState, r1out, _ := signing.SignRound1(params, keyShare, m, 0)
+sigState, r1out, err := signing.SignRound1(params, keyShare, m, 0)
+if err != nil {
+    return err
+}
 r2out, _ := signing.SignRound2(sigState, r1)
 r3out, _ := signing.SignRound3(sigState, r2)
 finalOut, _ := signing.SignFinalize(sigState, r3)
@@ -145,7 +162,10 @@ params := tss.NewReSharingParameters(
     tss.Edwards(), oldCtx, newCtx, myPID,
     oldN, oldT, newN, newT)
 
-state, r1out, _ := resharing.ReshareRound1(params, &keyShare)
+state, r1out, err := resharing.ReshareRound1(params, &keyShare)
+if err != nil {
+    return err
+}
 r2out, _ := resharing.ReshareRound2(state, r1Msgs)
 r3out, _ := resharing.ReshareRound3(state, r2AckMsgs)
 r4out, _ := resharing.ReshareRound4(state, r1Msgs, r3p2p, r3bcast)
