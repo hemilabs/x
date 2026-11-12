@@ -370,7 +370,7 @@ func (s *session) fillRecord(r *sessionRecord, snapshot bool) {
 		}
 
 		for level, ik := range s.stCompPtrs {
-			if ik != nil {
+			if ik != nil && !r.hasCompPtr(level) {
 				r.addCompPtr(level, ik)
 			}
 		}
@@ -427,15 +427,20 @@ func (s *session) newManifest(rec *sessionRecord, v *version) (err error) {
 			if s.manifestWriter != nil {
 				s.manifestWriter.Close()
 			}
+			// SetMeta made the new MANIFEST current, so the commit
+			// succeeded.  A failure to remove the old MANIFEST must
+			// not report it as failed; the next Open removes it.
 			if !s.manifestFd.Zero() {
-				err = s.stor.Remove(s.manifestFd)
+				if rerr := s.stor.Remove(s.manifestFd); rerr != nil {
+					s.logf("manifest@remove @%d: %v", s.manifestFd.Num, rerr)
+				}
 			}
 			s.manifestFd = fd
 			s.manifestWriter = writer
 			s.manifest = jw
 		} else {
 			writer.Close()
-			if rerr := s.stor.Remove(fd); err != nil {
+			if rerr := s.stor.Remove(fd); rerr != nil {
 				err = fmt.Errorf("newManifest error: %v, cleanup error (%v)", err, rerr)
 			}
 			s.reuseFileNum(fd.Num)

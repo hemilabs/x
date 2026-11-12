@@ -29,6 +29,11 @@ type Transaction struct {
 	rec       sessionRecord
 	stats     cStatStaging
 	closed    bool
+
+	// commitFailed is set when a MANIFEST commit failed.  The record
+	// can already be in the MANIFEST, so Discard first writes a fresh
+	// MANIFEST without it.
+	commitFailed bool
 }
 
 // Get gets the value for the given key. It returns ErrNotFound if the
@@ -208,41 +213,11 @@ func (tr *Transaction) Commit() error {
 		return err
 	}
 	if len(tr.tables) != 0 {
-		// Committing transaction.
-		tr.rec.setSeqNum(tr.seq)
-		tr.db.compCommitLk.Lock()
-		tr.stats.startTimer()
-		var cerr error
-		for retry := range 3 {
-			cerr = tr.db.s.commit(&tr.rec, false)
-			if cerr != nil {
-				tr.db.logf("transaction@commit error R·%d %q", retry, cerr)
-				select {
-				case <-time.After(time.Second):
-				case <-tr.db.closeC:
-					tr.db.logf("transaction@commit exiting")
-					tr.db.compCommitLk.Unlock()
-					return cerr
-				}
-			} else {
-				// Success. Set db.seq.
-				tr.db.setSeq(tr.seq)
-				break
-			}
-		}
-		tr.stats.stopTimer()
-		if cerr != nil {
+		if err := tr.commitRecord(); err != nil {
 			// Return error, lets user decide either to retry or discard
 			// transaction.
-			return cerr
+			return err
 		}
-
-		// Update compaction stats. This is safe as long as we hold compCommitLk.
-		tr.db.compStats.addStat(0, &tr.stats)
-
-		// Trigger table auto-compaction.
-		tr.db.compTrigger(tr.db.tcompCmdC)
-		tr.db.compCommitLk.Unlock()
 
 		// Additionally, wait compaction when certain threshold reached.
 		// Ignore error, returns error only if transaction can't be committed.
@@ -253,7 +228,59 @@ func (tr *Transaction) Commit() error {
 	return nil
 }
 
+// commitRecord writes the transaction record to the MANIFEST.  It holds
+// compCommitLk for the whole commit, so every return releases it.
+func (tr *Transaction) commitRecord() error {
+	tr.db.compCommitLk.Lock()
+	defer tr.db.compCommitLk.Unlock()
+
+	tr.rec.setSeqNum(tr.seq)
+	tr.stats.startTimer()
+	var cerr error
+	for retry := range 3 {
+		cerr = tr.db.s.commit(&tr.rec, false)
+		if cerr == nil {
+			break
+		}
+		tr.db.logf("transaction@commit error R·%d %q", retry, cerr)
+		select {
+		case <-time.After(time.Second):
+		case <-tr.db.closeC:
+			tr.db.logf("transaction@commit exiting")
+			tr.commitFailed = true
+			return cerr
+		}
+	}
+	tr.stats.stopTimer()
+	if cerr != nil {
+		tr.commitFailed = true
+		return cerr
+	}
+	tr.db.setSeq(tr.seq)
+
+	// Update compaction stats. This is safe as long as we hold compCommitLk.
+	tr.db.compStats.addStat(0, &tr.stats)
+
+	// Trigger table auto-compaction.
+	tr.db.compTrigger(tr.db.tcompCmdC)
+	return nil
+}
+
 func (tr *Transaction) discard() {
+	// A failed MANIFEST commit can have written the record.  Write a
+	// fresh MANIFEST from the current version, which does not have the
+	// record, before the tables are removed.  If that fails too, keep
+	// the tables: the next Open removes the tables that no version
+	// references.
+	if tr.commitFailed {
+		tr.db.compCommitLk.Lock()
+		err := tr.db.s.commit(&sessionRecord{}, false)
+		tr.db.compCommitLk.Unlock()
+		if err != nil {
+			tr.db.logf("transaction@discard keeps %d tables, MANIFEST rewrite failed: %v", len(tr.tables), err)
+			return
+		}
+	}
 	// Discard transaction.
 	for _, t := range tr.tables {
 		tr.db.logf("transaction@discard @%d", t.fd.Num)
@@ -317,26 +344,38 @@ func (db *DB) OpenTransaction() (*Transaction, error) {
 		panic("leveldb: has open transaction")
 	}
 
-	// Flush current memdb.
+	// Flush current memdb.  Release the write lock on each error
+	// return, or every later write and Close block.
 	if db.mem != nil && db.mem.Len() != 0 {
 		if _, err := db.rotateMem(0, true); err != nil {
+			<-db.writeLockC
 			return nil, err
 		}
 	}
 
 	// Wait compaction when certain threshold reached.
 	if err := db.waitCompaction(); err != nil {
+		<-db.writeLockC
 		return nil, err
 	}
 
+	// Check closeC in the same section that sets db.tr.  Close closes
+	// closeC before it reads db.tr, so either Close sees this
+	// transaction and discards it, or this sees the close.
+	db.trMu.Lock()
+	defer db.trMu.Unlock()
+	select {
+	case <-db.closeC:
+		<-db.writeLockC
+		return nil, ErrClosed
+	default:
+	}
 	tr := &Transaction{
 		db:  db,
 		seq: db.seq,
 		mem: db.mpoolGet(0),
 	}
 	tr.mem.incref()
-	db.trMu.Lock()
 	db.tr = tr
-	db.trMu.Unlock()
 	return tr, nil
 }
