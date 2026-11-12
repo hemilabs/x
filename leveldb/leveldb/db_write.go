@@ -7,6 +7,7 @@
 package leveldb
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -152,6 +153,11 @@ func (db *DB) unlockWrite(overflow bool, merged int, err error) {
 
 // ourBatch is batch that we can modify.
 func (db *DB) writeLocked(batch, ourBatch *Batch, merge, sync bool) error {
+	if db.journalErr != nil {
+		db.unlockWrite(false, 0, db.journalErr)
+		return db.journalErr
+	}
+
 	// Try to flush memdb. This method would also trying to throttle writes
 	// if it is too fast and compaction cannot catch-up.
 	mdb, mdbFree, err := db.flush(batch.internalLen)
@@ -229,6 +235,8 @@ func (db *DB) writeLocked(batch, ourBatch *Batch, merge, sync bool) error {
 
 	// Write journal.
 	if err := db.writeJournal(batches, seq, sync); err != nil {
+		err = fmt.Errorf("leveldb: journal write failed, reopen the DB: %w", err)
+		db.journalErr = err
 		db.unlockWrite(overflow, merged, err)
 		return err
 	}
