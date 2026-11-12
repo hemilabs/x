@@ -43,6 +43,8 @@ type localMessageStore struct {
 
 // ReshareState holds mutable state across all resharing rounds.
 type ReshareState struct {
+	life tss.Lifecycle // round order and failure latch
+
 	params *tss.ReSharingParameters
 	input  *keygen.LocalPartySaveData
 	save   *keygen.LocalPartySaveData

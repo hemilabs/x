@@ -51,6 +51,8 @@ type SignatureData struct {
 
 // SigningState holds mutable state across all signing rounds.
 type SigningState struct {
+	life tss.Lifecycle // round order and failure latch
+
 	params *tss.Parameters
 	key    *keygen.LocalPartySaveData
 	data   *SignatureData
@@ -61,4 +63,11 @@ type SigningState struct {
 type SignRoundOutput struct {
 	Messages  []*tss.Message
 	Signature *SignatureData
+}
+
+// wipeNonces clears the nonce secrets after a failed round, so that a
+// retry cannot use them again.
+func (s *SigningState) wipeNonces() {
+	s.temp.ri = new(big.Int)
+	s.temp.wi = new(big.Int)
 }
