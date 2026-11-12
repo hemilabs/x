@@ -221,3 +221,63 @@ func TestAuthPathEmpty(t *testing.T) {
 		t.Fatalf("Should have gotten nil")
 	}
 }
+
+// TestVerifyAuthPathMalformed checks that malformed input returns an
+// error and does not panic.
+func TestVerifyAuthPathMalformed(t *testing.T) {
+	leaves := make([]*[sha256.Size]byte, 0, 10)
+	for i := range 10 {
+		leaves = append(leaves, &[sha256.Size]byte{byte(i)})
+	}
+	mt := Sorted(leaves)
+	root := mt[len(mt)-1]
+	good := AuthPath(leaves, leaves[3])
+	if err := VerifyAuthPath(good, root, leaves[3]); err != nil {
+		t.Fatal(err)
+	}
+
+	h := [sha256.Size]byte{1}
+	tests := []struct {
+		name string
+		mb   *Branch
+		root *[sha256.Size]byte
+		leaf *[sha256.Size]byte
+		want error
+	}{
+		{"nil branch", nil, root, leaves[3], ErrEmpty},
+		{"nil root", good, nil, leaves[3], ErrMalformed},
+		{"nil leaf", good, root, nil, ErrMalformed},
+		{"no flags", &Branch{NumLeaves: 4, Hashes: good.Hashes[:1]}, root, leaves[3], ErrMalformed},
+		{"short flags", &Branch{NumLeaves: 1 << 20, Hashes: good.Hashes, Flags: []byte{0xff}}, root, leaves[3], ErrMalformed},
+		{"short hashes", &Branch{NumLeaves: 10, Hashes: good.Hashes[:1], Flags: good.Flags}, root, leaves[3], ErrMalformed},
+		{"too many hashes", &Branch{NumLeaves: 1, Hashes: good.Hashes, Flags: good.Flags}, root, leaves[3], ErrMalformed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := VerifyAuthPath(tt.mb, tt.root, tt.leaf)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("got %v, want %v", err, tt.want)
+			}
+		})
+	}
+	if mb := AuthPath(nil, &h); mb != nil {
+		t.Errorf("empty leaves: got a branch, want nil")
+	}
+	if mb := AuthPath(leaves, nil); mb != nil {
+		t.Errorf("nil hash: got a branch, want nil")
+	}
+}
+
+// FuzzVerifyAuthPath checks that VerifyAuthPath does not panic.
+func FuzzVerifyAuthPath(f *testing.F) {
+	f.Add(uint32(10), []byte{0xff, 0x01}, []byte{1, 2, 3})
+	f.Add(uint32(1<<20), []byte{0xff}, []byte{})
+	f.Fuzz(func(t *testing.T, n uint32, flags, hashes []byte) {
+		mb := &Branch{NumLeaves: n, Flags: flags}
+		for i := 0; i < len(hashes); i++ {
+			mb.Hashes = append(mb.Hashes, [sha256.Size]byte{hashes[i]})
+		}
+		var root, leaf [sha256.Size]byte
+		_ = VerifyAuthPath(mb, &root, &leaf)
+	})
+}
