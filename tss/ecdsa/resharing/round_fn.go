@@ -216,9 +216,10 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 
 	// Generate pre-params if not provided
 	var preParams *keygen.LocalPreParams
-	if save.Validate() && !save.ValidateWithProof() {
-		return nil, errors.New("preParams failed validation")
-	} else if save.ValidateWithProof() {
+	if save.Validate() {
+		if !save.ValidateWithProof() {
+			return nil, errors.New("preParams failed validation")
+		}
 		preParams = &save.LocalPreParams
 	} else {
 		var err error
