@@ -423,8 +423,13 @@ func (r *Cache) delete(n *Node) bool {
 
 // GetStats returns cache statistics.
 func (r *Cache) GetStats() Stats {
+	// Close sets mHead to nil.
+	var buckets int
+	if h := (*mHead)(atomic.LoadPointer(&r.mHead)); h != nil {
+		buckets = len(h.buckets)
+	}
 	return Stats{
-		Buckets:     len((*mHead)(atomic.LoadPointer(&r.mHead)).buckets),
+		Buckets:     buckets,
 		Nodes:       atomic.LoadInt64(&r.statNodes),
 		Size:        atomic.LoadInt64(&r.statSize),
 		GrowCount:   atomic.LoadInt32(&r.statGrow),
@@ -676,9 +681,10 @@ type Node struct {
 	hash    uint32
 	ns, key uint64
 
-	mu    sync.Mutex
-	size  int
-	value Value
+	mu        sync.Mutex
+	size      int
+	value     Value
+	finalized bool
 
 	ref      int32
 	delFuncs []func()
@@ -719,20 +725,27 @@ func (n *Node) GetHandle() *Handle {
 	return &Handle{unsafe.Pointer(n)}
 }
 
+// callFinalizer releases the value but keeps it in the node.  A force
+// Close calls it while handles can still read the value.  A released
+// value must fail its own calls, as table.Reader does.  A force Close
+// and the last Release after Close can both call it, so it runs once.
 func (n *Node) callFinalizer() {
-	// Call releaser.
-	if n.value != nil {
-		if r, ok := n.value.(util.Releaser); ok {
-			r.Release()
-		}
-		n.value = nil
+	n.mu.Lock()
+	if n.finalized {
+		n.mu.Unlock()
+		return
 	}
+	n.finalized = true
+	delFuncs := n.delFuncs
+	n.delFuncs = nil
+	n.mu.Unlock()
 
-	// Call delete funcs.
-	for _, f := range n.delFuncs {
+	if r, ok := n.value.(util.Releaser); ok {
+		r.Release()
+	}
+	for _, f := range delFuncs {
 		f()
 	}
-	n.delFuncs = nil
 }
 
 func (n *Node) unRefInternal(updateStat bool) {

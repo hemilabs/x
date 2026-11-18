@@ -550,3 +550,13 @@ func TestLRUCache_Close(t *testing.T) {
 	require.Equal(t, 3, relFuncCalled)
 	require.Equal(t, 1, delFuncCalled)
 }
+
+// TestGetStatsAfterClose verifies that GetStats does not panic after
+// Close and reports zero buckets.
+func TestGetStatsAfterClose(t *testing.T) {
+	c := NewCache(NewLRU(10))
+	c.Close(true)
+	if got := c.GetStats().Buckets; got != 0 {
+		t.Fatalf("Buckets after Close = %d, want 0", got)
+	}
+}
