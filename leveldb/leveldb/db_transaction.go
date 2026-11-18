@@ -308,6 +308,13 @@ func (db *DB) OpenTransaction() (*Transaction, error) {
 		return nil, ErrClosed
 	}
 
+	// A transaction would reuse the sequence numbers of a failed journal
+	// record.
+	if db.journalErr != nil {
+		<-db.writeLockC
+		return nil, db.journalErr
+	}
+
 	if db.tr != nil {
 		panic("leveldb: has open transaction")
 	}

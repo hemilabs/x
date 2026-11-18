@@ -72,6 +72,12 @@ type DB struct {
 	writeDelayN  int
 	tr           *Transaction
 
+	// journalErr is the first journal write or sync failure.  The record
+	// can already be in the journal, so a later write would reuse its
+	// sequence numbers.  Writes fail until the DB is reopened.  The
+	// holder of writeLockC owns it.
+	journalErr error
+
 	// Compaction.
 	compCommitLk     sync.Mutex
 	tcompCmdC        chan cCmd
