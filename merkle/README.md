@@ -24,6 +24,11 @@ where h(x) is a shas256 hash follows:
 
 As the above shows, the merkle root is always the last element in the array.
 
+Leaves and internal nodes hash with different prefixes, as in RFC 6962: a
+leaf hashes as sha256(0x00 || leaf), and a node as sha256(0x01 || left ||
+right).  For this reason, an internal node cannot pass as a leaf.  The roots
+are different from the roots of dcrtime.
+
 The number of inputs is not always a power of two which results in a balanced
 tree structure as above.  In that case, parent nodes with no children are also
 zero and parent nodes with only a single left node are calculated by
