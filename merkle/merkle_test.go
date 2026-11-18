@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"testing"
 )
 
@@ -146,15 +147,29 @@ func TestAuthPath(t *testing.T) {
 		mt := Sorted(hashes)
 
 		for find := 0; find < count; find++ {
+			root := mt[len(mt)-1]
 			mb := AuthPath(hashes, hashes[find])
-			merkleRoot, err := VerifyAuthPath(mb)
-			if err != nil {
+			if err := VerifyAuthPath(mb, root, hashes[find]); err != nil {
 				t.Fatal(err)
 			}
 
-			if *merkleRoot != *mt[len(mt)-1] {
-				t.Fatalf("invalid merkle root got %x, want %x",
-					*merkleRoot, *mt[len(mt)-1])
+			// The branch must not prove another leaf.
+			if count > 1 {
+				other := hashes[(find+1)%count]
+				err := VerifyAuthPath(mb, root, other)
+				if !errors.Is(err, ErrLeafNotFound) {
+					t.Fatalf("other leaf: got %v, want %v",
+						err, ErrLeafNotFound)
+				}
+			}
+
+			// The branch must not verify against another root.
+			bad := *root
+			bad[0] ^= 0xff
+			err := VerifyAuthPath(mb, &bad, hashes[find])
+			if !errors.Is(err, ErrRootMismatch) {
+				t.Fatalf("bad root: got %v, want %v",
+					err, ErrRootMismatch)
 			}
 		}
 	}
@@ -172,16 +187,22 @@ func TestAuthPathInvalid(t *testing.T) {
 
 	findHash := &[sha256.Size]byte{}
 	binary.LittleEndian.PutUint64(findHash[:], count)
-	mb := AuthPath(hashes, findHash)
+	root := mt[len(mt)-1]
 
-	if len(mb.Hashes) != 1 {
-		t.Fatalf("Should have gotten merkle root only, %v",
+	// No branch exists for a value that is not a leaf.
+	if mb := AuthPath(hashes, findHash); mb != nil {
+		t.Fatalf("Should have gotten nil, got %v hashes",
 			len(mb.Hashes))
 	}
 
-	if *mt[len(mt)-1] != mb.Hashes[0] {
-		t.Fatalf("got %x expected %x",
-			mb.Hashes[0], *mt[len(mt)-1])
+	// A branch that holds only the root matches no leaf.
+	mb := &Branch{
+		NumLeaves: uint32(count),
+		Hashes:    [][sha256.Size]byte{*root},
+		Flags:     []byte{0},
+	}
+	if err := VerifyAuthPath(mb, root, findHash); !errors.Is(err, ErrNoMatch) {
+		t.Fatalf("got %v, want %v", err, ErrNoMatch)
 	}
 }
 
