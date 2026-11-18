@@ -187,10 +187,10 @@ func TestRound4RejectsAllNilPaillierProof(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Round4 to reject all-nil Paillier proof, got nil error")
 	}
-	// The error may be "paillier verify failed" (culprit error) or contain
-	// an inner error about nil proof elements from paillier.Proof.Verify.
-	if !strings.Contains(err.Error(), "paillier") {
-		t.Fatalf("expected paillier-related error, got: %v", err)
+	// KGRound3Message.ValidateBasic rejects nil proof elements at round
+	// entry.
+	if !strings.Contains(err.Error(), "invalid message from party 1") {
+		t.Fatalf("expected an invalid message error, got: %v", err)
 	}
 
 	// Verify the culprit is party 1 (corruptIdx).
