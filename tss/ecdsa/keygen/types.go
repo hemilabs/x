@@ -39,6 +39,7 @@ type (
 		ssidNonce     *big.Int
 		shares        vss.Shares
 		deCommitPolyG cmt.HashDeCommitment
+		echo          []byte // round1Echo of the received round 1 broadcasts
 		// [FORK] Store VSS polynomial coefficients for SNARK witness extraction.
 		Poly []*big.Int
 	}

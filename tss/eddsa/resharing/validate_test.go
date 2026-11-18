@@ -67,7 +67,10 @@ func TestDGRound4MessageValidateBasic(t *testing.T) {
 	if (*DGRound4Message)(nil).ValidateBasic() {
 		t.Fatal("nil should fail")
 	}
-	if !(&DGRound4Message{}).ValidateBasic() {
+	if (&DGRound4Message{}).ValidateBasic() {
+		t.Fatal("missing echo should fail")
+	}
+	if !(&DGRound4Message{Echo: []byte{1}}).ValidateBasic() {
 		t.Fatal("valid should pass")
 	}
 }

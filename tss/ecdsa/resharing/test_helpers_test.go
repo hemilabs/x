@@ -466,7 +466,7 @@ func cloneDGRound4Message2(orig *tss.Message) *tss.Message {
 		To:                      orig.To,
 		IsBroadcast:             orig.IsBroadcast,
 		IsToOldAndNewCommittees: orig.IsToOldAndNewCommittees,
-		Content:                 &DGRound4Message2{},
+		Content:                 &DGRound4Message2{Echo: orig.Content.(*DGRound4Message2).Echo},
 	}
 }
 

@@ -60,9 +60,16 @@ func TestKGRound2Message2ValidateBasic(t *testing.T) {
 	if (&KGRound2Message2{DeCommitment: cmt.HashDeCommitment{big.NewInt(1)}}).ValidateBasic() {
 		t.Fatal("short decommitment should fail")
 	}
+	if (&KGRound2Message2{
+		DeCommitment: cmt.HashDeCommitment{big.NewInt(1), big.NewInt(2)},
+		ZKProof:      proof,
+	}).ValidateBasic() {
+		t.Fatal("missing echo should fail")
+	}
 	if !(&KGRound2Message2{
 		DeCommitment: cmt.HashDeCommitment{big.NewInt(1), big.NewInt(2)},
 		ZKProof:      proof,
+		Echo:         []byte{1},
 	}).ValidateBasic() {
 		t.Fatal("valid should pass")
 	}
