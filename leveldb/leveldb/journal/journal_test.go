@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/hemilabs/x/leveldb/leveldb/errors"
 )
 
 type dropper struct {
@@ -852,5 +854,78 @@ func TestCorrupt_MiddleChuckLengthOverflow(t *testing.T) {
 
 	if _, err := r.Next(); err != io.EOF {
 		t.Fatalf("last next: unexpected error: %v", err)
+	}
+}
+
+// TestTornTail checks the end of a strict journal with TornTailIsEOF.
+// A record cut at a block boundary must not read as complete.  A zero
+// tail ends the journal, and data after it is an error.
+func TestTornTail(t *testing.T) {
+	write := func(recs ...[]byte) []byte {
+		buf := new(bytes.Buffer)
+		w := NewWriter(buf)
+		for _, rec := range recs {
+			ww, err := w.Next()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ww.Write(rec); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return buf.Bytes()
+	}
+	// read returns the complete records and the final error.
+	read := func(data []byte) (n int, err error) {
+		r := NewReader(bytes.NewReader(data), nil, true, true)
+		r.TornTailIsEOF = true
+		for {
+			rr, err := r.Next()
+			if err != nil {
+				return n, err
+			}
+			if _, err := io.ReadAll(rr); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+
+	small := []byte("small")
+	big := bytes.Repeat([]byte("x"), 40000)
+	smallBig := write(small, big)
+	oneSmall := write(small)
+	twoSmall := write(small, small)
+	zeroBlock := append(append([]byte{}, oneSmall...), make([]byte, blockSize-len(oneSmall))...)
+
+	tests := []struct {
+		name    string
+		data    []byte
+		want    int
+		wantErr error // nil means corruption
+	}{
+		{"second block missing", smallBig[:blockSize], 1, ErrTornTail},
+		{"second chunk cut", smallBig[:blockSize+100], 1, ErrTornTail},
+		{"header cut at record start", append(append([]byte{}, oneSmall...), 1, 2, 3), 1, io.EOF},
+		{"payload cut at record start", twoSmall[:len(twoSmall)-2], 1, io.EOF},
+		{"zero tail", append(append([]byte{}, oneSmall...), make([]byte, 100)...), 1, io.EOF},
+		{"data after zero tail", append(zeroBlock, oneSmall...), 1, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n, err := read(tt.data)
+			if n != tt.want {
+				t.Errorf("got %d records, want %d", n, tt.want)
+			}
+			switch {
+			case tt.wantErr == nil && !errors.IsCorrupted(err):
+				t.Errorf("got %v, want corruption", err)
+			case tt.wantErr != nil && err != tt.wantErr:
+				t.Errorf("got %v, want %v", err, tt.wantErr)
+			}
+		})
 	}
 }

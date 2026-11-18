@@ -149,13 +149,15 @@ func (s *session) recover() (err error) {
 	defer reader.Close()
 
 	var (
-		// Options.
-		strict = s.o.GetStrict(opt.StrictManifest)
-
-		jr      = journal.NewReader(reader, dropper{s, fd}, strict, true)
+		// The MANIFEST is always read strictly.  A skipped block or
+		// record drops version edits, and the janitor of the same Open
+		// then deletes the tables they reference.  Only a torn last
+		// record, as a crash can leave, ends the log.
+		jr      = journal.NewReader(reader, dropper{s, fd}, true, true)
 		rec     = &sessionRecord{}
 		staging = s.stVersion.newStaging()
 	)
+	jr.TornTailIsEOF = true
 	for {
 		var r io.Reader
 		r, err = jr.Next()
@@ -167,21 +169,24 @@ func (s *session) recover() (err error) {
 			return errors.SetFd(err, fd)
 		}
 
+		// decode sets the fields of rec one by one.  Keep a copy, so a
+		// torn record does not change rec.
+		prev := *rec
 		err = rec.decode(r)
-		if err == nil {
-			// save compact pointers
-			for _, r := range rec.compPtrs {
-				s.setCompPtr(r.level, r.ikey)
-			}
-			// commit record to version staging
-			staging.commit(rec)
-		} else {
-			err = errors.SetFd(err, fd)
-			if strict || !errors.IsCorrupted(err) {
-				return
-			}
-			s.logf("manifest error: %v (skipped)", errors.SetFd(err, fd))
+		if err == journal.ErrTornTail {
+			*rec = prev
+			err = nil
+			break
 		}
+		if err != nil {
+			return errors.SetFd(err, fd)
+		}
+		// save compact pointers
+		for _, r := range rec.compPtrs {
+			s.setCompPtr(r.level, r.ikey)
+		}
+		// commit record to version staging
+		staging.commit(rec)
 		rec.resetCompPtrs()
 		rec.resetAddedTables()
 		rec.resetDeletedTables()

@@ -131,9 +131,9 @@ const (
 type Strict uint
 
 const (
-	// If present then a corrupted or invalid chunk or block in manifest
-	// journal will cause an error instead of being dropped.
-	// This will prevent database with corrupted manifest to be opened.
+	// StrictManifest has no effect.  The MANIFEST is always read
+	// strictly: a corrupted chunk, block or record fails Open.  Only a
+	// torn last record, as a crash can leave, ends the MANIFEST.
 	StrictManifest Strict = 1 << iota
 
 	// If present then journal chunk checksum will be verified.
