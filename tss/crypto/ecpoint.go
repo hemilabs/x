@@ -168,6 +168,14 @@ func isOnCurve(c elliptic.Curve, x, y *big.Int) bool {
 	if x == nil || y == nil {
 		return false
 	}
+	// A curve library can reduce a coordinate before it checks it, so
+	// a value outside [0, p) can pass.  Require the canonical range,
+	// so that each point has one encoding and Equals can compare the
+	// stored values.
+	P := c.Params().P
+	if x.Sign() < 0 || y.Sign() < 0 || x.Cmp(P) >= 0 || y.Cmp(P) >= 0 {
+		return false
+	}
 	return c.IsOnCurve(x, y)
 }
 
@@ -267,6 +275,9 @@ func (p *ECPoint) GobDecode(buf []byte) error {
 	n, err = reader.Read(y)
 	if n != int(length) || err != nil {
 		return fmt.Errorf("gob decode failed: %w", err)
+	}
+	if reader.Len() != 0 {
+		return errors.New("gob decode failed: trailing bytes")
 	}
 
 	X := new(big.Int)
