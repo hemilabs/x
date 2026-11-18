@@ -6,8 +6,11 @@ package tss
 
 import (
 	"bytes"
-	"crypto/rand"
+	"encoding/binary"
 	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -58,14 +61,15 @@ func TestParametersSetters(t *testing.T) {
 		t.Fatal("SetSafePrimeGenTimeout mismatch")
 	}
 
-	customRand := bytes.NewReader(nil)
-	params.SetRand(customRand)
-	if params.Rand() != customRand {
+	// The setters wrap the reader, so check that reads come from it.
+	buf := make([]byte, 1)
+	params.SetRand(bytes.NewReader([]byte{7}))
+	if _, err := params.Rand().Read(buf); err != nil || buf[0] != 7 {
 		t.Fatal("SetRand mismatch")
 	}
 
-	params.SetPartialKeyRand(rand.Reader)
-	if params.PartialKeyRand() != rand.Reader {
+	params.SetPartialKeyRand(bytes.NewReader([]byte{9}))
+	if _, err := params.PartialKeyRand().Read(buf); err != nil || buf[0] != 9 {
 		t.Fatal("SetPartialKeyRand mismatch")
 	}
 }
@@ -190,6 +194,65 @@ func TestOldAndNewPartiesLength(t *testing.T) {
 	// Verify no aliasing with OldParties
 	if len(params.OldParties().IDs()) != 3 {
 		t.Fatal("OldAndNewParties corrupted OldParties")
+	}
+}
+
+// counterReader is a reader with unsynchronized state, like a seeded
+// DRBG.  Each Read writes the next counter value.  It counts the reads
+// that overlap, so the test fails without the race detector too.
+type counterReader struct {
+	n        uint64
+	inRead   atomic.Int32
+	overlaps atomic.Int32
+}
+
+func (c *counterReader) Read(p []byte) (int, error) {
+	if c.inRead.Add(1) != 1 {
+		c.overlaps.Add(1)
+	}
+	defer c.inRead.Add(-1)
+	runtime.Gosched() // let another reader enter if the reads are not serialized
+	c.n++
+	binary.BigEndian.PutUint64(p, c.n)
+	return len(p), nil
+}
+
+// TestSetRandSerializesReads reads the SetRand reader from many
+// goroutines at once.  No two reads may overlap or get the same value.
+func TestSetRandSerializesReads(t *testing.T) {
+	pIDs := GenerateTestPartyIDs(2)
+	params := NewParameters(S256(), NewPeerContext(pIDs), pIDs[0], 2, 1)
+	cr := &counterReader{}
+	params.SetRand(cr)
+
+	const goroutines, reads = 8, 100
+	got := make(chan uint64, goroutines*reads)
+	var wg sync.WaitGroup
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, 8)
+			for i := 0; i < reads; i++ {
+				if _, err := params.Rand().Read(buf); err != nil {
+					t.Error(err)
+					return
+				}
+				got <- binary.BigEndian.Uint64(buf)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := cr.overlaps.Load(); n != 0 {
+		t.Fatalf("%d reads overlapped", n)
+	}
+	close(got)
+	seen := make(map[uint64]bool)
+	for v := range got {
+		if seen[v] {
+			t.Fatalf("value %d read twice", v)
+		}
+		seen[v] = true
 	}
 }
 
