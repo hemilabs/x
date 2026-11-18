@@ -616,3 +616,51 @@ func TestFacProofVerifyNonInvertibleT(test *testing.T) {
 		}
 	}()
 }
+
+// TestFacProofVerifyRejectsOversizedExponents moves W1, W2 and V out
+// of range, one at a time.  It adds a large multiple of phi(NCap), so
+// each equation still holds and only the range check can reject the
+// proof.  Sigma is in the challenge hash, so a large Sigma fails the
+// equations too; the test checks only that Verify rejects it.
+func TestFacProofVerifyRejectsOversizedExponents(test *testing.T) {
+	ec := tss.EC()
+	N0p := common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)
+	N0q := common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)
+	N0 := new(big.Int).Mul(N0p, N0q)
+	primes := [2]*big.Int{common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits), common.GetRandomPrimeInt(rand.Reader, testSafePrimeBits)}
+	NCap, s, t, err := crypto.GenerateNTildei(rand.Reader, primes)
+	if err != nil {
+		test.Fatal(err)
+	}
+	proof, err := NewProof(Session, ec, N0, NCap, s, t, N0p, N0q, rand.Reader)
+	if err != nil {
+		test.Fatal(err)
+	}
+	if !proof.Verify(Session, ec, N0, NCap, s, t) {
+		test.Fatal("honest proof must verify")
+	}
+
+	one := big.NewInt(1)
+	phi := new(big.Int).Mul(new(big.Int).Sub(primes[0], one), new(big.Int).Sub(primes[1], one))
+	shift := new(big.Int).Lsh(phi, 3072) // larger than each bound
+	for _, field := range []string{"W1", "W2", "V"} {
+		bad := *proof
+		f := reflect.ValueOf(&bad).Elem().FieldByName(field)
+		v := new(big.Int).Set(f.Interface().(*big.Int))
+		if v.Sign() < 0 {
+			v.Sub(v, shift)
+		} else {
+			v.Add(v, shift)
+		}
+		f.Set(reflect.ValueOf(v))
+		if bad.Verify(Session, ec, N0, NCap, s, t) {
+			test.Fatalf("%s: out of range proof must not verify", field)
+		}
+	}
+
+	bad := *proof
+	bad.Sigma = new(big.Int).Lsh(one, 1<<22)
+	if bad.Verify(Session, ec, N0, NCap, s, t) {
+		test.Fatal("Sigma: out of range proof must not verify")
+	}
+}
