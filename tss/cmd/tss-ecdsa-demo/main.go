@@ -337,7 +337,7 @@ func bcastRound(n int, states []*signing.SigningState, fn func(int) (*signing.Si
 // Round 2: new → Paillier/DLN params (broadcast to new) + ACK (to old)
 // Round 3: old → P2P shares + decommitment (to new)
 // Round 4: new → verify shares, FacProof P2P + ACK broadcast
-// Round 5: save new key material, zero old Xi
+// Round 5: save new key material; the caller destroys the old share
 // -------------------------------------------------------------------
 
 func ecdsaReshare(ctx context.Context, oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldPP, newPP []keygen.LocalPreParams, oldT, newT int) ([]keygen.LocalPartySaveData, error) {

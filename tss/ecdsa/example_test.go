@@ -103,8 +103,8 @@ func TestECDSAKeygenSignReshare(t *testing.T) {
 			t.Fatalf("new party %d: pub key changed", i)
 		}
 	}
-	if oldSaves[0].Xi.Sign() != 0 {
-		t.Fatal("P0 Xi not zeroed")
+	if oldSaves[0].Xi.Sign() == 0 {
+		t.Fatal("reshare changed the caller's Xi")
 	}
 	t.Log("reshare complete, pub key preserved")
 
