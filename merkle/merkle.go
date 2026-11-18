@@ -39,6 +39,13 @@ var (
 	// have the correct format.  An example is a branch with too few
 	// flag bits or hashes for NumLeaves.
 	ErrMalformed = errors.New("malformed merkle branch")
+
+	// ErrNilLeaf is returned by Sorted and Ordered when a leaf is nil.
+	ErrNilLeaf = errors.New("nil merkle leaf")
+
+	// ErrDuplicate is returned by Sorted and Ordered when two leaves
+	// are equal.
+	ErrDuplicate = errors.New("duplicate merkle leaf")
 )
 
 // XXX debate wrapping this in type and make the merkle tree opaque.
@@ -49,11 +56,43 @@ func (s sortableSlice) Len() int           { return len(s) }
 func (s sortableSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s sortableSlice) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
 
-// calcTreeWidth calculates the width of the tree at a given height.
-// calcTreeWidth calculates and returns the the number of nodes (width) or a
-// merkle tree at the given depth-first height.
+// calcTreeWidth returns the number of nodes (width) of a merkle tree with num
+// leaves at the given height.
 func calcTreeWidth(num, height uint32) uint32 {
-	return (num + (1 << height) - 1) >> height
+	// Use uint64, so a large num does not wrap.
+	return uint32((uint64(num) + (1 << height) - 1) >> height)
+}
+
+func treeHeight(num uint32) uint32 {
+	if num == 0 {
+		return 0
+	}
+	return uint32(bits.Len32(num - 1))
+}
+
+// checkLeaves returns an error if a leaf is nil or two leaves are equal.
+// Equal leaves let two lists share a root, for example [a b c] and
+// [a b c c], and make a proof fail on equal siblings.
+func checkLeaves(leaves []*[sha256.Size]byte) error {
+	seen := make(map[[sha256.Size]byte]struct{}, len(leaves))
+	for i, l := range leaves {
+		if l == nil {
+			return fmt.Errorf("%w: leaf %d", ErrNilLeaf, i)
+		}
+		if _, ok := seen[*l]; ok {
+			return fmt.Errorf("%w: leaf %d", ErrDuplicate, i)
+		}
+		seen[*l] = struct{}{}
+	}
+	return nil
+}
+
+// SortLeaves returns a sorted copy of leaves.  This is the leaf order of a
+// tree from Sorted, so give it to AuthPath for such a tree.
+func SortLeaves(leaves []*[sha256.Size]byte) []*[sha256.Size]byte {
+	s := slices.Clone(leaves)
+	sort.Sort(sortableSlice(s))
+	return s
 }
 
 // Leaves and internal nodes hash with different prefixes, as in RFC 6962.
@@ -125,16 +164,20 @@ func nextPowerOfTwo(n int) int {
 // Since this function uses nodes that are pointers to the hashes, empty nodes
 // will be nil.
 //
-// If the sorted flag is true we sort the incoming hashes array in order to
-// always generate the same merkle tree regardless of input order.
-func tree(hashes []*[sha256.Size]byte, sorted bool) []*[sha256.Size]byte {
+// If the sorted flag is true we sort a copy of the hashes in order to always
+// generate the same merkle tree regardless of input order.
+//
+// A nil or duplicate leaf is an error.
+func tree(hashes []*[sha256.Size]byte, sorted bool) ([]*[sha256.Size]byte, error) {
 	if len(hashes) == 0 {
-		return nil
+		return nil, nil
+	}
+	if err := checkLeaves(hashes); err != nil {
+		return nil, err
 	}
 
 	if sorted {
-		// Sort hashes.
-		sort.Sort(sortableSlice(hashes))
+		hashes = SortLeaves(hashes)
 	}
 
 	// Calculate how many entries are required to hold the binary merkle
@@ -171,22 +214,23 @@ func tree(hashes []*[sha256.Size]byte, sorted bool) []*[sha256.Size]byte {
 		offset++
 	}
 
-	return merkles
+	return merkles, nil
 }
 
 // Sorted returns a merkle tree from the hashes. The hashes will be sorted
 // prior to generating the tree.  Regardless of insertion order, given the same
 // hashes the merkle root will always be the same.  It returns the tree and the
-// last element is the merkle root.
-func Sorted(hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
+// last element is the merkle root.  It does not change the order of hashes.
+// A nil or duplicate leaf is an error.
+func Sorted(hashes []*[sha256.Size]byte) ([]*[sha256.Size]byte, error) {
 	return tree(hashes, true)
 }
 
 // Ordered returns a merkle tree from the hashes that maintains insertion
 // order. This function must be called to deal with with odd number of hashes
 // and other corner cases per the spec. it returns the tree and the last
-// element is the merkle root.
-func Ordered(hashes []*[sha256.Size]byte) []*[sha256.Size]byte {
+// element is the merkle root.  A nil or duplicate leaf is an error.
+func Ordered(hashes []*[sha256.Size]byte) ([]*[sha256.Size]byte, error) {
 	return tree(hashes, false)
 }
 
@@ -229,8 +273,11 @@ func (a *authPath) calcHash(height, pos uint32) *[sha256.Size]byte {
 // approach.
 func (a *authPath) traverseAndBuild(height, pos uint32) {
 	// Determine whether this node is a parent of a matched node.
+	// Use uint64, so the leaf range of a large tree does not wrap.
 	var isParent byte
-	for i := pos << height; i < (pos+1)<<height && i < a.numLeaves; i++ {
+	first := uint64(pos) << height
+	last := min(uint64(pos+1)<<height, uint64(a.numLeaves))
+	for i := first; i < last; i++ {
 		isParent |= a.matchedBits[i]
 	}
 	a.bits = append(a.bits, isParent)
@@ -272,13 +319,18 @@ type Branch struct {
 	Flags     []byte              // Bitmap of merkle tree
 }
 
-// AuthPath returns a Merkle tree authentication path for hash.  It returns
-// nil if hash is not a leaf.
+// AuthPath returns a Merkle tree authentication path for hash.  The leaves
+// must be in tree order: for a tree from Sorted, use SortLeaves.  It returns
+// nil if hash is not a leaf, if a leaf is nil or a duplicate, or if there
+// are more leaves than NumLeaves can hold.
 func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
-	numLeaves := uint32(len(leaves))
-	if numLeaves == 0 || hash == nil {
+	if len(leaves) == 0 || uint64(len(leaves)) > math.MaxUint32 {
 		return nil
 	}
+	if hash == nil || checkLeaves(leaves) != nil {
+		return nil
+	}
+	numLeaves := uint32(len(leaves))
 	ap := authPath{
 		numLeaves:   numLeaves,
 		matchedBits: make([]byte, 0, numLeaves),
@@ -287,7 +339,7 @@ func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 
 	var found bool
 	for _, v := range ap.allHashes {
-		if v != nil && *v == *hash {
+		if *v == *hash {
 			ap.matchedBits = append(ap.matchedBits, 0x01)
 			found = true
 		} else {
@@ -298,14 +350,8 @@ func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 		return nil
 	}
 
-	// Calculate the number of merkle branches (height) in the tree.
-	height := uint32(0)
-	for calcTreeWidth(ap.numLeaves, height) > 1 {
-		height++
-	}
-
 	// Build the depth-first partial merkle tree.
-	ap.traverseAndBuild(height, 0)
+	ap.traverseAndBuild(treeHeight(numLeaves), 0)
 
 	// Create merkle branch.
 	mb := &Branch{
@@ -404,7 +450,7 @@ func VerifyAuthPath(mb *Branch, root, leaf *[sha256.Size]byte) error {
 		numLeaves: mb.NumLeaves,
 	}
 
-	height := uint32(math.Ceil(math.Log2(float64(mb.NumLeaves))))
+	height := treeHeight(mb.NumLeaves)
 	merkleRoot, err := m.extract(height, 0)
 	if err != nil {
 		return err

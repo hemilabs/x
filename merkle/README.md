@@ -35,8 +35,13 @@ zero and parent nodes with only a single left node are calculated by
 concatenating the left node with itself before hashing.  Since this function
 uses nodes that are pointers to the hashes, empty nodes will be nil.
 
-If the sorted flag is true we sort the incoming hashes array in order to always
-generate the same merkle tree regardless of input order.
+`Sorted` sorts a copy of the leaves, so the same leaves always give the same
+tree, in any input order.  `Ordered` keeps the input order.  To get a proof
+for a tree from `Sorted`, give the leaves from `SortLeaves` to `AuthPath`.
+
+`Sorted`, `Ordered` and `AuthPath` reject a nil leaf and a duplicate leaf.
+Duplicate leaves let two lists share a root, for example `[a b c]` and
+`[a b c c]`.
 
 
 # Origin
