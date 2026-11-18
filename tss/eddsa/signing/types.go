@@ -8,6 +8,7 @@ package signing
 import (
 	"math/big"
 
+	"github.com/hemilabs/x/tss/v3/crypto"
 	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
 	"github.com/hemilabs/x/tss/v3/tss"
 )
@@ -29,6 +30,8 @@ type localTempData struct {
 	cjs      []*big.Int
 
 	// round 3
+	rjs          []*crypto.ECPoint // Rj of each party, to check its sj
+	lambda       *big.Int          // challenge, to check each sj
 	si           *big.Int
 	r            *big.Int
 	m            *big.Int
