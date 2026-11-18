@@ -113,12 +113,8 @@ func run() error {
 	if !newPubKey.Equals(pubKey) {
 		return fmt.Errorf("public key changed after reshare")
 	}
-	if saves[0].Xi.Sign() != 0 {
-		return fmt.Errorf("P0 Xi not zeroed after reshare")
-	}
 	fmt.Printf("  public key preserved: (%x, %x)\n",
 		newPubKey.X(), newPubKey.Y())
-	fmt.Println("  old P0 Xi zeroed:     OK")
 
 	// ================================================================
 	// SIGN AGAIN — with new committee
@@ -265,7 +261,8 @@ func eddsaSign(n, threshold int, pIDs tss.SortedPartyIDs, ctx *tss.PeerContext, 
 // Round 2: new committee validates pub key consistency, ACKs old
 // Round 3: old committee sends P2P shares + decommitment to new
 // Round 4: new committee verifies shares and commitments, ACKs both
-// Round 5: new committee saves new key material, old zeros Xi
+// Round 5: new committee saves new key material; the caller destroys
+//          the old share
 // -------------------------------------------------------------------
 
 func eddsaReshare(oldPIDs, newPIDs tss.SortedPartyIDs, oldCtx, newCtx *tss.PeerContext, oldSaves []keygen.LocalPartySaveData, oldT, newT int) ([]keygen.LocalPartySaveData, error) {

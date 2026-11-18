@@ -98,9 +98,8 @@ func TestEdDSAKeygenSignReshare(t *testing.T) {
 	}
 	t.Log("reshare complete, pub key preserved")
 
-	// Verify: old-only party (P0) had Xi zeroed.
-	if oldSaves[0].Xi.Sign() != 0 {
-		t.Fatal("P0 Xi not zeroed after reshare")
+	if oldSaves[0].Xi.Sign() == 0 {
+		t.Fatal("reshare changed the caller's Xi")
 	}
 
 	// ------------------------------------------------------------------
