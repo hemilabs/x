@@ -304,10 +304,11 @@ func (p *ECPoint) MarshalJSON() ([]byte, error) {
 }
 
 func (p *ECPoint) UnmarshalJSON(payload []byte) error {
-	aux := &struct {
+	// A value, not a pointer: JSON null would set a pointer to nil.
+	var aux struct {
 		Curve  string
 		Coords [2]*big.Int
-	}{}
+	}
 	if err := json.Unmarshal(payload, &aux); err != nil {
 		return err
 	}
