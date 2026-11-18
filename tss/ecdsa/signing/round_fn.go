@@ -46,12 +46,13 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 	ssidList = append(ssidList, big.NewInt(int64(params.Threshold())))
 	ssidList = append(ssidList, big.NewInt(int64(roundNumber)))
 	ssidList = append(ssidList, temp.ssidNonce)
-	if cid := params.CeremonyID(); len(cid) > 0 {
-		ssidList = append(ssidList, new(big.Int).SetBytes(cid))
+	cid, err := params.CeremonySSID()
+	if err != nil {
+		return nil, err
 	}
-	if temp.m != nil {
-		ssidList = append(ssidList, temp.m)
-	}
+	ssidList = append(ssidList, cid...)
+	ssidList = append(ssidList, tss.SSIDOptional(temp.m)...)
+	ssidList = append(ssidList, tss.SSIDOptional(temp.keyDerivationDelta)...)
 	return common.SHA512_256i(ssidList...).Bytes(), nil
 }
 
@@ -63,6 +64,10 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 // fullBytesLen is the byte length for message padding (0 for default).
 func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.Int, keyDerivationDelta *big.Int, fullBytesLen int) (*SigningState, *SignRoundOutput, error) {
 	if err := params.CheckSelf(); err != nil {
+		return nil, nil, err
+	}
+	// Fail before any work when the ceremony ID is missing.
+	if _, err := params.CeremonySSID(); err != nil {
 		return nil, nil, err
 	}
 	n := params.PartyCount()

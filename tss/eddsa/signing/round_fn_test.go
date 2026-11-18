@@ -34,6 +34,7 @@ func TestRoundFnEdDSASignThreeParties(t *testing.T) {
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := SignRound1(params, saves[i], m, 0)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
@@ -92,6 +93,7 @@ func doKeygen(t *testing.T, n, threshold int, pIDs tss.SortedPartyIDs, peerCtx *
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.Edwards(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(params)
 		if err != nil {
 			t.Fatalf("keygen.Round1[%d]: %v", i, err)

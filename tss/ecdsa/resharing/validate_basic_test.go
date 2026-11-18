@@ -30,6 +30,7 @@ func TestDGRound1Message_ValidateBasic(t *testing.T) {
 		ECDSAPub:    testECPoint(),
 		VCommitment: big.NewInt(1),
 		SSID:        []byte("ssid"),
+		KeyHash:     []byte("key"),
 	}
 
 	tests := []struct {
@@ -68,6 +69,11 @@ func TestDGRound1Message_ValidateBasic(t *testing.T) {
 			ECDSAPub:    testECPoint(),
 			VCommitment: big.NewInt(1),
 			SSID:        []byte{},
+		}, false},
+		{"KeyHash_empty", &DGRound1Message{
+			ECDSAPub:    testECPoint(),
+			VCommitment: big.NewInt(1),
+			SSID:        []byte("ssid"),
 		}, false},
 		{"all_zero_value", &DGRound1Message{}, false},
 	}

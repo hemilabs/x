@@ -89,6 +89,7 @@ func doKeygen(t *testing.T, n, threshold int) ([]keygen.LocalPartySaveData, tss.
 	r1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("doKeygen: Round1[%d]: %v", i, err)
@@ -171,6 +172,7 @@ func setupReshareRound1(t *testing.T) *ReshareFixture {
 	// Old committee: Round1 produces DGRound1Message broadcasts.
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -187,6 +189,7 @@ func setupReshareRound1(t *testing.T) *ReshareFixture {
 	// New committee: Round1 is a no-op, just creates state.
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -368,6 +371,7 @@ func cloneDGRound1Message(orig *tss.Message) *tss.Message {
 			ECDSAPub:    c.ECDSAPub, // immutable ECPoint, no need to deep-copy
 			VCommitment: new(big.Int).Set(c.VCommitment),
 			SSID:        ssid,
+			KeyHash:     c.KeyHash,
 		},
 	}
 }
@@ -644,6 +648,7 @@ func setupThroughRound3WithModProof(t *testing.T) *ReshareFixture {
 
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -658,6 +663,7 @@ func setupThroughRound3WithModProof(t *testing.T) *ReshareFixture {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		// NOTE: SetNoProofMod() is NOT called — ModProof will be generated in Round2.
 		params.SetNoProofFac()

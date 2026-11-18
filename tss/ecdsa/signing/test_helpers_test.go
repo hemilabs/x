@@ -60,6 +60,7 @@ func doKeygen(t *testing.T) []keygen.LocalPartySaveData {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, testThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("doKeygen: Round1[%d]: %v", i, err)
@@ -189,6 +190,7 @@ func setupSignRound1(t *testing.T, keys []keygen.LocalPartySaveData) *SignFixtur
 
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), peerCtx, pIDs[i], n, testThreshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := SignRound1(params, keys[i], m, nil, 0)
 		if err != nil {
 			t.Fatalf("setupSignRound1: SignRound1[%d]: %v", i, err)

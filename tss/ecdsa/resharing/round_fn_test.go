@@ -32,6 +32,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("keygen Round1[%d]: %v", i, err)
@@ -99,6 +100,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	oldR1Msgs := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := ReshareRound1(params, oldKeys[i], keygen.LocalPreParams{})
 		if err != nil {
 			t.Fatalf("ReshareRound1(old)[%d]: %v", i, err)
@@ -111,6 +113,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	// New committee: Round1 is a no-op, just creates state
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofMod()
 		params.SetNoProofFac()
 		st, _, err := ReshareRound1(params, keygen.NewLocalPartySaveData(n), preParamsNew[i])
@@ -267,6 +270,7 @@ func TestRoundFnReshareAndSign(t *testing.T) {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), newCtx, newPIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := signing.SignRound1(params, newKeys[i], m, nil, 0)
 		if err != nil {
 			t.Fatalf("SignRound1[%d]: %v", i, err)
@@ -390,6 +394,7 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 	kgR1 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewParameters(tss.S256(), oldCtx, oldPIDs[i], n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		st, out, err := keygen.Round1(context.Background(), params, preParamsOld[i])
 		if err != nil {
 			t.Fatalf("kg R1[%d]: %v", i, err)
@@ -440,6 +445,7 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 	oldR1Msgs := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, oldPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
@@ -454,6 +460,7 @@ func TestRoundFnReshareNoProofDLN(t *testing.T) {
 	}
 	for i := 0; i < n; i++ {
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
+		params.SetCeremonyID([]byte("test-ceremony"))
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
