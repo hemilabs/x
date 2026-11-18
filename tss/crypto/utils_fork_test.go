@@ -14,7 +14,7 @@ import (
 )
 
 func TestGenerateNTildeiRejectsEqualPrimes(t *testing.T) {
-	// [FORK] Equal primes make NTilde = p^2, trivially factorable
+	// Equal primes make NTilde = p^2, trivially factorable
 	// Use a small safe prime for speed
 	p := common.GetRandomPrimeInt(rand.Reader, 512)
 	primes := [2]*big.Int{p, p} // same prime twice

@@ -30,7 +30,8 @@ type (
 
 var one = big.NewInt(1)
 
-// [FORK] Session parameter added for SSID domain separation (prevents cross-ceremony replay).
+// NewDLNProof creates a DLN proof. Session gives SSID domain separation, which
+// prevents cross-ceremony replay.
 func NewDLNProof(Session []byte, h1, h2, x, p, q, N *big.Int, rand io.Reader) *Proof {
 	pMulQ := new(big.Int).Mul(p, q)
 	modN, modPQ := common.ModInt(N), common.ModInt(pMulQ)
@@ -59,8 +60,8 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	if N == nil || N.Sign() != 1 {
 		return false
 	}
-	// [FORK] Reject undersized moduli — DLN proofs are only sound when N is the
-	// product of two large safe primes (>= 2048-bit modulus). Upstream does not check.
+	// Reject undersized moduli — DLN proofs are only sound when N is the
+	// product of two large safe primes (>= 2048-bit modulus).
 	if N.BitLen() < 2048 {
 		return false
 	}
@@ -76,10 +77,8 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	if h1_.Cmp(h2_) == 0 {
 		return false
 	}
-	// [FORK] Upstream validates proof elements with range checks in separate loops and nil
-	// checks inside the verification loop. We consolidate all validation (nil checks, bit-length
-	// bounds, and range checks) into pre-verification loops to prevent computational DoS via
-	// oversized exponents before modular reduction.
+	// Do all validation (nil checks, bit-length bounds, and range checks) before
+	// verification. This prevents computational DoS via oversized exponents.
 	maxBits := N.BitLen() + 2
 	for i := range p.T {
 		if p.T[i] == nil || p.T[i].BitLen() > maxBits {
@@ -99,8 +98,7 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 			return false
 		}
 	}
-	// [FORK] Uses SHA512_256i_TAGGED with Session for SSID domain separation.
-	// Upstream uses SHA512_256i without any session tag.
+	// SHA512_256i_TAGGED with Session gives SSID domain separation.
 	msg := append([]*big.Int{h1, h2, N}, p.Alpha[:]...)
 	c := common.SHA512_256i_TAGGED(Session, msg...)
 	cIBI := new(big.Int)

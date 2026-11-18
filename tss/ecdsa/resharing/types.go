@@ -34,7 +34,7 @@ type (
 		// temp data (thrown away after rounds)
 		NewVs     vss.Vs
 		NewShares vss.Shares
-		// [FORK] Store VSS polynomial coefficients for SNARK witness extraction.
+		// Poly stores the VSS polynomial coefficients for SNARK witness extraction.
 		Poly []*big.Int
 		VD   cmt.HashDeCommitment
 

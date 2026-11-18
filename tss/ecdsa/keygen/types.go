@@ -39,7 +39,7 @@ type (
 		ssidNonce     *big.Int
 		shares        vss.Shares
 		deCommitPolyG cmt.HashDeCommitment
-		// [FORK] Store VSS polynomial coefficients for SNARK witness extraction.
+		// Poly stores the VSS polynomial coefficients for SNARK witness extraction.
 		Poly []*big.Int
 	}
 )

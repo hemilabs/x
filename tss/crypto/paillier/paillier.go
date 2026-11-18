@@ -212,8 +212,8 @@ func (privateKey *PrivateKey) Proof(k *big.Int, ecdsaPub *crypto2.ECPoint) Proof
 	iters := ProofIters
 	xs := GenerateXs(iters, k, privateKey.N, ecdsaPub)
 	M := new(big.Int).ModInverse(privateKey.N, privateKey.PhiN)
-	// [FORK] Upstream does not check for nil ModInverse. If N is not coprime
-	// with PhiN (degenerate key), ModInverse returns nil and Exp panics.
+	// If N is not coprime with PhiN (degenerate key), ModInverse returns nil and
+	// Exp would panic.
 	if M == nil {
 		return pi // N not coprime with PhiN, degenerate key
 	}
@@ -224,9 +224,8 @@ func (privateKey *PrivateKey) Proof(k *big.Int, ecdsaPub *crypto2.ECPoint) Proof
 }
 
 func (pf Proof) Verify(pkN, k *big.Int, ecdsaPub *crypto2.ECPoint) (bool, error) {
-	// [FORK] Defense-in-depth: reject proofs with nil elements to prevent
+	// Defense-in-depth: reject proofs with nil elements to prevent
 	// nil-pointer panics from degenerate keys or malformed messages.
-	// Upstream does not validate proof elements before use.
 	for i := 0; i < ProofIters; i++ {
 		if pf[i] == nil {
 			return false, fmt.Errorf("paillier proof element %d is nil", i)
