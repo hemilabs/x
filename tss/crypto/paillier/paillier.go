@@ -114,7 +114,9 @@ func (publicKey *PublicKey) EncryptAndReturnRandomness(rand io.Reader, m *big.In
 	if m.Cmp(zero) == -1 || m.Cmp(publicKey.N) != -1 { // m < 0 || m >= N ?
 		return nil, nil, ErrMessageTooLong
 	}
-	x = common.GetRandomPositiveRelativelyPrimeInt(rand, publicKey.N)
+	if x, err = common.GetRandomPositiveRelativelyPrimeInt(rand, publicKey.N); err != nil {
+		return nil, nil, err
+	}
 	N2 := publicKey.NSquare()
 	// 1. gamma^m mod N2
 	Gm := new(big.Int).Exp(publicKey.Gamma(), m, N2)

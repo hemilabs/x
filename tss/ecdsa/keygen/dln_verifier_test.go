@@ -59,10 +59,16 @@ func generateDLNTestParams(t *testing.T) *dlnTestParams {
 	pMulQ := new(big.Int).Mul(p, q)
 	modPQ := common.ModInt(pMulQ)
 
-	f := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	f, err := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	if err != nil {
+		t.Fatal(err)
+	}
 	h1 := modN.Mul(f, f)
 
-	alpha := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	alpha, err := common.GetRandomPositiveRelativelyPrimeInt(rand.Reader, N)
+	if err != nil {
+		t.Fatal(err)
+	}
 	alphaModPQ := new(big.Int).Mod(alpha, pMulQ)
 	beta := modPQ.ModInverse(alphaModPQ)
 	if beta == nil {
@@ -83,27 +89,63 @@ func generateDLNTestParams(t *testing.T) *dlnTestParams {
 	}
 }
 
-// TestNewDlnProofVerifierZeroConcurrencyPanics verifies that constructing a
-// DlnProofVerifier with concurrency=0 panics, as documented.
-func TestNewDlnProofVerifierZeroConcurrencyPanics(t *testing.T) {
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatal("concurrency=0 must panic")
-			}
-		}()
-		NewDlnProofVerifier(0)
-	}()
+// TestNewDlnProofVerifierBadConcurrency verifies that a concurrency
+// below 1 gives an error.
+func TestNewDlnProofVerifierBadConcurrency(t *testing.T) {
+	for _, c := range []int{0, -1} {
+		if _, err := NewDlnProofVerifier(c); err == nil {
+			t.Fatalf("concurrency %d: expected an error", c)
+		}
+	}
 }
 
 // TestNewDlnProofVerifierValidConcurrency verifies that concurrency values
-// 1 and greater succeed without panic.
+// 1 and greater give a verifier.
 func TestNewDlnProofVerifierValidConcurrency(t *testing.T) {
 	for _, c := range []int{1, 2, 4, 128} {
-		dpv := NewDlnProofVerifier(c)
-		if dpv == nil {
-			t.Fatalf("concurrency=%d should create valid verifier", c)
+		if _, err := NewDlnProofVerifier(c); err != nil {
+			t.Fatalf("concurrency %d: %v", c, err)
 		}
+	}
+}
+
+// newTestDlnVerifier returns a verifier or fails the test.
+func newTestDlnVerifier(t *testing.T, concurrency int) *DlnProofVerifier {
+	t.Helper()
+	dpv, err := NewDlnProofVerifier(concurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dpv
+}
+
+// TestVerifyDLNProofReturnsOnDoneContext fills the only slot of the
+// verifier and calls VerifyDLNProof with a done context.  The call must
+// return and report false, not wait for the slot.
+func TestVerifyDLNProofReturnsOnDoneContext(t *testing.T) {
+	dpv := newTestDlnVerifier(t, 1)
+	release := make(chan struct{})
+	defer close(release)
+	held := make(chan struct{})
+	dpv.VerifyDLNProof(t.Context(), nil, nil, nil, nil, nil, func(bool) {
+		close(held)
+		<-release
+	})
+	<-held
+
+	cctx, ccancel := context.WithCancel(t.Context())
+	ccancel()
+	result := make(chan bool, 1)
+	wctx, wcancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer wcancel()
+	go dpv.VerifyDLNProof(cctx, nil, nil, nil, nil, nil, func(ok bool) { result <- ok })
+	select {
+	case ok := <-result:
+		if ok {
+			t.Fatal("done context: got true, want false")
+		}
+	case <-wctx.Done():
+		t.Fatal("VerifyDLNProof waited for a slot after its context was done")
 	}
 }
 
@@ -120,11 +162,11 @@ func TestVerifyDLNProofSuccess(t *testing.T) {
 		t.Fatal("expected non-nil")
 	}
 
-	dpv := NewDlnProofVerifier(1)
+	dpv := newTestDlnVerifier(t, 1)
 	var result atomic.Bool
 	var wg sync.WaitGroup
 	wg.Add(1)
-	dpv.VerifyDLNProof(proof, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), proof, params.Session, params.H1, params.H2, params.N, func(ok bool) {
 		result.Store(ok)
 		wg.Done()
 	})
@@ -150,12 +192,12 @@ func TestVerifyDLNProofIncorrectH1(t *testing.T) {
 	// Tamper: H1 + 2 (still odd, still in range, but wrong)
 	badH1 := new(big.Int).Add(params.H1, big.NewInt(2))
 
-	dpv := NewDlnProofVerifier(1)
+	dpv := newTestDlnVerifier(t, 1)
 	var result atomic.Bool
 	result.Store(true) // pre-set to true to detect false negative
 	var wg sync.WaitGroup
 	wg.Add(1)
-	dpv.VerifyDLNProof(proof, params.Session, badH1, params.H2, params.N, func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), proof, params.Session, badH1, params.H2, params.N, func(ok bool) {
 		result.Store(ok)
 		wg.Done()
 	})
@@ -181,12 +223,12 @@ func TestVerifyDLNProofIncorrectH2(t *testing.T) {
 	// Tamper: H2 + 2
 	badH2 := new(big.Int).Add(params.H2, big.NewInt(2))
 
-	dpv := NewDlnProofVerifier(1)
+	dpv := newTestDlnVerifier(t, 1)
 	var result atomic.Bool
 	result.Store(true)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	dpv.VerifyDLNProof(proof, params.Session, params.H1, badH2, params.N, func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), proof, params.Session, params.H1, badH2, params.N, func(ok bool) {
 		result.Store(ok)
 		wg.Done()
 	})
@@ -212,12 +254,12 @@ func TestVerifyDLNProofWrongSession(t *testing.T) {
 
 	wrongSession := []byte("wrong-session-id")
 
-	dpv := NewDlnProofVerifier(1)
+	dpv := newTestDlnVerifier(t, 1)
 	var result atomic.Bool
 	result.Store(true)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	dpv.VerifyDLNProof(proof, wrongSession, params.H1, params.H2, params.N, func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), proof, wrongSession, params.H1, params.H2, params.N, func(ok bool) {
 		result.Store(ok)
 		wg.Done()
 	})
@@ -230,12 +272,12 @@ func TestVerifyDLNProofWrongSession(t *testing.T) {
 // TestVerifyDLNProofNilProof passes a nil proof pointer and verifies that
 // onDone(false) is called (SNARK mode path).
 func TestVerifyDLNProofNilProof(t *testing.T) {
-	dpv := NewDlnProofVerifier(1)
+	dpv := newTestDlnVerifier(t, 1)
 	var result atomic.Bool
 	result.Store(true)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	dpv.VerifyDLNProof(nil, []byte("session"), big.NewInt(3), big.NewInt(5), big.NewInt(15), func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), nil, []byte("session"), big.NewInt(3), big.NewInt(5), big.NewInt(15), func(ok bool) {
 		result.Store(ok)
 		wg.Done()
 	})
@@ -248,14 +290,14 @@ func TestVerifyDLNProofNilProof(t *testing.T) {
 // TestVerifyDLNProofNilProofCallbackInvoked ensures that with a nil proof the
 // callback is always invoked exactly once (no deadlock, no double-call).
 func TestVerifyDLNProofNilProofCallbackInvoked(t *testing.T) {
-	dpv := NewDlnProofVerifier(2)
+	dpv := newTestDlnVerifier(t, 2)
 	var count atomic.Int32
 	var wg sync.WaitGroup
 
 	const iterations = 10
 	wg.Add(iterations)
 	for i := 0; i < iterations; i++ {
-		dpv.VerifyDLNProof(nil, []byte("s"), big.NewInt(3), big.NewInt(5), big.NewInt(15), func(ok bool) {
+		dpv.VerifyDLNProof(t.Context(), nil, []byte("s"), big.NewInt(3), big.NewInt(5), big.NewInt(15), func(ok bool) {
 			if ok {
 				t.Fatal("expected false")
 			}
@@ -287,14 +329,14 @@ func TestVerifyDLNProofConcurrencyBound(t *testing.T) {
 	const concurrency = 2
 	const numVerifications = 20
 
-	dpv := NewDlnProofVerifier(concurrency)
+	dpv := newTestDlnVerifier(t, concurrency)
 	var successCount atomic.Int32
 	var failCount atomic.Int32
 	var wg sync.WaitGroup
 	wg.Add(numVerifications)
 
 	for i := 0; i < numVerifications; i++ {
-		dpv.VerifyDLNProof(proof, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+		dpv.VerifyDLNProof(t.Context(), proof, params.Session, params.H1, params.H2, params.N, func(ok bool) {
 			if ok {
 				successCount.Add(1)
 			} else {
@@ -332,7 +374,7 @@ func TestVerifyDLNProofConcurrencyBoundMixed(t *testing.T) {
 	const numNil = 10
 	const total = numValid + numNil
 
-	dpv := NewDlnProofVerifier(concurrency)
+	dpv := newTestDlnVerifier(t, concurrency)
 	var successCount atomic.Int32
 	var failCount atomic.Int32
 	var wg sync.WaitGroup
@@ -344,7 +386,7 @@ func TestVerifyDLNProofConcurrencyBoundMixed(t *testing.T) {
 		if i%2 == 0 {
 			p = proof
 		}
-		dpv.VerifyDLNProof(p, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+		dpv.VerifyDLNProof(t.Context(), p, params.Session, params.H1, params.H2, params.N, func(ok bool) {
 			if ok {
 				successCount.Add(1)
 			} else {
@@ -369,21 +411,21 @@ func TestVerifyDLNProofConcurrencyBoundMixed(t *testing.T) {
 func TestVerifyDLNProofSemaphoreReleasedOnNilProof(t *testing.T) {
 	// concurrency=1: if the semaphore is not released after nil proof,
 	// the second call will block forever.
-	dpv := NewDlnProofVerifier(1)
+	dpv := newTestDlnVerifier(t, 1)
 
 	done := make(chan struct{})
 	go func() {
 		var wg sync.WaitGroup
 		// First: nil proof
 		wg.Add(1)
-		dpv.VerifyDLNProof(nil, nil, nil, nil, nil, func(bool) {
+		dpv.VerifyDLNProof(t.Context(), nil, nil, nil, nil, nil, func(bool) {
 			wg.Done()
 		})
 		wg.Wait()
 
 		// Second: also nil — should not deadlock
 		wg.Add(1)
-		dpv.VerifyDLNProof(nil, nil, nil, nil, nil, func(bool) {
+		dpv.VerifyDLNProof(t.Context(), nil, nil, nil, nil, nil, func(bool) {
 			wg.Done()
 		})
 		wg.Wait()
@@ -412,13 +454,13 @@ func TestVerifyDLNProofSwappedH1H2(t *testing.T) {
 		t.Fatal("expected non-nil")
 	}
 
-	dpv := NewDlnProofVerifier(1)
+	dpv := newTestDlnVerifier(t, 1)
 	var result atomic.Bool
 	result.Store(true)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	// Swap H1 and H2
-	dpv.VerifyDLNProof(proof, params.Session, params.H2, params.H1, params.N, func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), proof, params.Session, params.H2, params.H1, params.N, func(ok bool) {
 		result.Store(ok)
 		wg.Done()
 	})
@@ -453,16 +495,16 @@ func TestVerifyDLNProofBothProofDirections(t *testing.T) {
 		t.Fatal("expected non-nil")
 	}
 
-	dpv := NewDlnProofVerifier(2)
+	dpv := newTestDlnVerifier(t, 2)
 
 	var result1, result2 atomic.Bool
 	var wg sync.WaitGroup
 	wg.Add(2)
-	dpv.VerifyDLNProof(proof1, params.Session, params.H1, params.H2, params.N, func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), proof1, params.Session, params.H1, params.H2, params.N, func(ok bool) {
 		result1.Store(ok)
 		wg.Done()
 	})
-	dpv.VerifyDLNProof(proof2, params.Session, params.H2, params.H1, params.N, func(ok bool) {
+	dpv.VerifyDLNProof(t.Context(), proof2, params.Session, params.H2, params.H1, params.N, func(ok bool) {
 		result2.Store(ok)
 		wg.Done()
 	})

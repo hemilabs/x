@@ -42,6 +42,7 @@ func getSigningSSID(params *tss.Parameters, key *keygen.LocalPartySaveData, temp
 
 // SignRound1 initializes signing state and broadcasts a commitment
 // to the signing nonce Ri.
+// It returns an error if params fail CheckSelf.
 func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.Int, fullBytesLen int) (*SigningState, *SignRoundOutput, error) {
 	if err := params.CheckSelf(); err != nil {
 		return nil, nil, err

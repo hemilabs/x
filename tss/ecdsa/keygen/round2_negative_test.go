@@ -465,12 +465,36 @@ func TestRound2LeavesNoDLNGoroutine(t *testing.T) {
 	r1[victimIdx] = bad
 
 	// A DLN verification takes far longer than the return, so a
-	// started one is still running when the test counts.
-	before := runtime.NumGoroutine()
+	// started one is still running when the test looks.
 	if _, err := Round2(t.Context(), states[0], r1); err == nil {
 		t.Fatal("Round2 accepted h1 == h2")
 	}
-	if after := runtime.NumGoroutine(); after > before {
-		t.Fatalf("%d goroutines still running after Round2 returned", after-before)
+	if n := goroutinesIn("VerifyDLNProof.func"); n != 0 {
+		t.Fatalf("%d verifier goroutines still running after Round2 returned", n)
 	}
+}
+
+// goroutinesIn returns the number of goroutines whose stack contains one
+// of fns.  Unlike a count of all goroutines, it does not change when an
+// unrelated goroutine starts or exits.
+func goroutinesIn(fns ...string) int {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	count := 0
+	for _, g := range strings.Split(string(buf), "\n\n") {
+		for _, fn := range fns {
+			if strings.Contains(g, fn) {
+				count++
+				break
+			}
+		}
+	}
+	return count
 }

@@ -251,3 +251,14 @@ func TestSignFinalizeOutOfRangeS(t *testing.T) {
 		t.Fatal("expected error for out-of-range s")
 	}
 }
+
+// TestSignRound1RejectsBadOwnPartyID verifies that SignRound1 returns an
+// error when the own PartyID is not in the party list.
+func TestSignRound1RejectsBadOwnPartyID(t *testing.T) {
+	pIDs := tss.GenerateTestPartyIDs(3)
+	stray := tss.NewPartyID("x", "x", big.NewInt(99)) // Index stays -1
+	params := tss.NewParameters(tss.Edwards(), tss.NewPeerContext(pIDs), stray, 3, 1)
+	if _, _, err := SignRound1(params, keygen.LocalPartySaveData{}, big.NewInt(1), 0); err == nil {
+		t.Fatal("SignRound1 accepted a PartyID that is not in the list")
+	}
+}
