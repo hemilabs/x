@@ -107,7 +107,12 @@ func SignRound1(params *tss.Parameters, key keygen.LocalPartySaveData, msg *big.
 
 // SignRound2 stores round 1 commitments and broadcasts the
 // decommitment + Schnorr proof.
-func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, error) {
+func SignRound2(state *SigningState, r1Msgs []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(2); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params := state.params
 	temp := &state.temp
 	i := params.PartyID().Index
@@ -138,7 +143,12 @@ func SignRound2(state *SigningState, r1Msgs []*tss.Message) (*SignRoundOutput, e
 // SignRound3 verifies all decommitments and Schnorr proofs,
 // computes the aggregate nonce R, and produces the partial
 // signature si.
-func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, error) {
+func SignRound3(state *SigningState, r2Msgs []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(3); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params := state.params
 	temp := &state.temp
 	i := params.PartyID().Index
@@ -222,7 +232,12 @@ func SignRound3(state *SigningState, r2Msgs []*tss.Message) (*SignRoundOutput, e
 }
 
 // SignFinalize sums partial signatures and verifies the EdDSA signature.
-func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (*SignRoundOutput, error) {
+func SignFinalize(state *SigningState, r3Msgs []*tss.Message) (_ *SignRoundOutput, rerr error) {
+	if err := state.life.Begin(4); err != nil {
+		return nil, err
+	}
+	defer state.life.End(&rerr, state.wipeNonces)
+
 	params := state.params
 	temp := &state.temp
 	i := params.PartyID().Index
