@@ -31,9 +31,9 @@ const (
 // GeneratePreParams finds two safe primes and computes the Paillier secret required for the protocol.
 // This can be a time consuming process so it is recommended to do it out-of-band.
 // If not specified, a concurrency value equal to the number of available CPU cores will be used.
-// If pre-parameters could not be generated before the timeout, an error is returned.
-func GeneratePreParams(timeout time.Duration, optionalConcurrency ...int) (*LocalPreParams, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+// If pre-parameters could not be generated before ctx is done or the timeout ends, an error is returned.
+func GeneratePreParams(ctx context.Context, timeout time.Duration, optionalConcurrency ...int) (*LocalPreParams, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return GeneratePreParamsWithContext(ctx, optionalConcurrency...)
 }
@@ -105,6 +105,8 @@ func GeneratePreParamsWithContextAndRandom(ctx context.Context, rand io.Reader, 
 consumer:
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("generate pre-params: %w", ctx.Err())
 		case <-logProgressTicker.C:
 			common.Logger.Info("still generating primes...")
 		case sgps = <-sgpCh:

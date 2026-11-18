@@ -5,7 +5,6 @@
 package resharing
 
 import (
-	"context"
 	"math/big"
 	"runtime"
 	"strings"
@@ -19,7 +18,7 @@ import (
 // and that the culprit has the expected index.
 func expectRound4ParamError(t *testing.T, fix *ReshareFixture, msgs []*tss.Message, wantErrSubstr string, wantCulpritIdx int) {
 	t.Helper()
-	_, err := ReshareRound4(context.Background(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
+	_, err := ReshareRound4(t.Context(), fix.NewStates[0], msgs, fix.OldR3P2P[0], fix.OldR3Bcast)
 	if err == nil {
 		t.Fatalf("expected error containing %q, got nil", wantErrSubstr)
 	}

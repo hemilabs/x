@@ -14,7 +14,7 @@ import (
 
 func TestGeneratePreParamsTimeout(t *testing.T) {
 	start := time.Now()
-	preParams, err := GeneratePreParams(5*time.Millisecond, 1)
+	preParams, err := GeneratePreParams(t.Context(), 5*time.Millisecond, 1)
 
 	if preParams != nil {
 		t.Fatalf("expected nil, got %v", preParams)
@@ -28,7 +28,7 @@ func TestGeneratePreParamsTimeout(t *testing.T) {
 }
 
 func TestGeneratePreParamsWithContextTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
 	defer cancel()
 
 	start := time.Now()
@@ -46,7 +46,7 @@ func TestGeneratePreParamsWithContextTimeout(t *testing.T) {
 }
 
 func TestGenerateWithContext(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Minute)
 	defer cancel()
 
 	preParams, err := GeneratePreParamsWithContext(ctx, 1)

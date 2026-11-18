@@ -44,7 +44,7 @@ func setupRound1Through3(t *testing.T) *fullKeygenFixture {
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
 		params.SetNoProofFac()
-		st, out, err := Round1(context.Background(), params, preParams[i])
+		st, out, err := Round1(t.Context(), params, preParams[i])
 		if err != nil {
 			t.Fatalf("Round1[%d]: %v", i, err)
 		}
@@ -59,7 +59,7 @@ func setupRound1Through3(t *testing.T) *fullKeygenFixture {
 		r2P2P[i] = make([]*tss.Message, n)
 	}
 	for i := 0; i < n; i++ {
-		out, err := Round2(context.Background(), states[i], allR1)
+		out, err := Round2(t.Context(), states[i], allR1)
 		if err != nil {
 			t.Fatalf("Round2[%d]: %v", i, err)
 		}
@@ -81,7 +81,7 @@ func setupRound1Through3(t *testing.T) *fullKeygenFixture {
 	// -- Round 3 --
 	allR3 := make([]*tss.Message, n)
 	for i := 0; i < n; i++ {
-		out, err := Round3(context.Background(), states[i], r2P2P[i], r2Bcast)
+		out, err := Round3(t.Context(), states[i], r2P2P[i], r2Bcast)
 		if err != nil {
 			t.Fatalf("Round3[%d]: %v", i, err)
 		}
@@ -132,7 +132,7 @@ func TestRound4RejectsBadPaillierProof(t *testing.T) {
 	}
 
 	// Run Round4 as party 0.
-	_, err := Round4(context.Background(), fix.states[0], msgs)
+	_, err := Round4(t.Context(), fix.states[0], msgs)
 	if err == nil {
 		t.Fatal("expected Round4 to reject corrupted Paillier proof, got nil error")
 	}
@@ -183,7 +183,7 @@ func TestRound4RejectsAllNilPaillierProof(t *testing.T) {
 		},
 	}
 
-	_, err := Round4(context.Background(), fix.states[0], msgs)
+	_, err := Round4(t.Context(), fix.states[0], msgs)
 	if err == nil {
 		t.Fatal("expected Round4 to reject all-nil Paillier proof, got nil error")
 	}
@@ -219,7 +219,7 @@ func TestRound4RejectsAllNilPaillierProof(t *testing.T) {
 func TestRound4ContextCancellation(t *testing.T) {
 	fix := setupRound1Through3(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // pre-cancel
 
 	_, err := Round4(ctx, fix.states[0], fix.allR3)
@@ -237,7 +237,7 @@ func TestRound4HonestPassesForAllParties(t *testing.T) {
 	fix := setupRound1Through3(t)
 
 	for i := 0; i < fix.n; i++ {
-		out, err := Round4(context.Background(), fix.states[i], fix.allR3)
+		out, err := Round4(t.Context(), fix.states[i], fix.allR3)
 		if err != nil {
 			t.Fatalf("Round4[%d]: %v", i, err)
 		}

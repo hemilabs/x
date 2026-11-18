@@ -36,7 +36,7 @@ type dlnTestParams struct {
 // using safe primes, mirroring the logic in GeneratePreParamsWithContextAndRandom.
 func generateDLNTestParams(t *testing.T) *dlnTestParams {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 
 	concurrency := runtime.NumCPU()
