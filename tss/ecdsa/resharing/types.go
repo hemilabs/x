@@ -25,7 +25,8 @@ type (
 		dgRound3Message1s,
 		dgRound3Message2s,
 		dgRound4Message1s,
-		dgRound4Message2s []*tss.Message
+		dgRound4Message2s,
+		dgRound5Messages []*tss.Message
 	}
 
 	localTempData struct {
@@ -36,6 +37,7 @@ type (
 		NewShares vss.Shares
 		// [FORK] Store VSS polynomial coefficients for SNARK witness extraction.
 		Poly []*big.Int
+		VC   cmt.HashCommitment
 		VD   cmt.HashDeCommitment
 
 		// temporary storage of data that is persisted by the new party

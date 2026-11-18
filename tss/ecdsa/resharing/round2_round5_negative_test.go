@@ -933,3 +933,75 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 		newStates: newStates,
 	}
 }
+
+// TestReshareConfirmQuorum verifies that an old party may retire its
+// share only after min(2t+1, n) matching confirmations for this
+// ceremony, and that Round 5 does not touch the old share.
+func TestReshareConfirmQuorum(t *testing.T) {
+	fix := buildReshareFixture(t)
+	oldXi := new(big.Int).Set(fix.oldKeys[0].Xi)
+
+	r5 := make([]*tss.Message, fix.n)
+	for i := 0; i < fix.n; i++ {
+		out, err := ReshareRound5(fix.newStates[i], fix.newR4P2P[i], fix.newR4Bcast)
+		if err != nil {
+			t.Fatalf("ReshareRound5(new)[%d]: %v", i, err)
+		}
+		r5[i] = out.Messages[0]
+	}
+	if _, err := ReshareRound5(fix.oldStates[0], nil, fix.newR4Bcast); err != nil {
+		t.Fatalf("ReshareRound5(old): %v", err)
+	}
+	if fix.oldKeys[0].Xi.Cmp(oldXi) != 0 {
+		t.Fatal("Round 5 modified the old share")
+	}
+
+	edit := func(m *tss.Message, f func(c *DGRound5Message)) *tss.Message {
+		c := *m.Content.(*DGRound5Message)
+		c.VCommitments = append([]*big.Int(nil), c.VCommitments...)
+		f(&c)
+		return &tss.Message{From: m.From, Content: &c}
+	}
+	stale := edit(r5[1], func(c *DGRound5Message) {
+		c.VCommitments[0] = new(big.Int).Add(c.VCommitments[0], big.NewInt(1))
+	})
+	otherKey := edit(r5[1], func(c *DGRound5Message) {
+		c.ECDSAPub = crypto.ScalarBaseMult(tss.S256(), big.NewInt(2))
+	})
+	noDigest := edit(r5[1], func(c *DGRound5Message) { c.Digest = nil })
+	foreign := &tss.Message{From: r5[0].From, Content: r5[2].Content}
+
+	// The checks run in order: ReshareConfirm keeps earlier messages.
+	steps := []struct {
+		name string
+		msgs []*tss.Message
+		want bool
+	}{
+		{"none", []*tss.Message{nil, nil, nil}, false},
+		{"one", []*tss.Message{r5[0], nil, nil}, false},
+		{"stale commitments", []*tss.Message{nil, stale, nil}, false},
+		{"other key", []*tss.Message{nil, otherKey, nil}, false},
+		{"no digest", []*tss.Message{nil, noDigest, nil}, false},
+		{"wrong sender", []*tss.Message{nil, nil, foreign}, false},
+		{"t+1", []*tss.Message{nil, r5[1], nil}, false},
+		{"2t+1", []*tss.Message{nil, nil, r5[2]}, true},
+	}
+	for _, s := range steps {
+		ok, err := ReshareConfirm(fix.oldStates[0], s.msgs)
+		if err != nil {
+			t.Fatalf("%s: %v", s.name, err)
+		}
+		if ok != s.want {
+			t.Fatalf("%s: ReshareConfirm = %v, want %v", s.name, ok, s.want)
+		}
+	}
+	if _, err := ReshareConfirm(fix.oldStates[0], r5[:fix.n-1]); err == nil {
+		t.Fatal("ReshareConfirm with a short message list: want error")
+	}
+	if _, err := ReshareConfirm(fix.newStates[0], r5); err == nil {
+		t.Fatal("ReshareConfirm on a new-only party: want error")
+	}
+	if fix.oldKeys[0].Xi.Cmp(oldXi) != 0 {
+		t.Fatal("ReshareConfirm modified the old share")
+	}
+}

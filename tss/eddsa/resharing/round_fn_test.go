@@ -11,6 +11,7 @@ import (
 
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 
+	"github.com/hemilabs/x/tss/v3/crypto"
 	"github.com/hemilabs/x/tss/v3/eddsa/keygen"
 	"github.com/hemilabs/x/tss/v3/eddsa/signing"
 	"github.com/hemilabs/x/tss/v3/tss"
@@ -136,23 +137,71 @@ func TestRoundFnEdDSAReshareAndSign(t *testing.T) {
 
 	// --- Reshare Round 5 (save) ---
 	newSaves := make([]keygen.LocalPartySaveData, newN)
+	r5Msgs := make([]*tss.Message, newN)
 	for i := 0; i < newN; i++ {
 		out, err := ReshareRound5(newStates[i], r4Msgs)
 		if err != nil {
 			t.Fatalf("ReshareRound5[new %d]: %v", i, err)
 		}
 		newSaves[i] = *out.Save
+		r5Msgs[i] = out.Messages[0]
 	}
 	for i := 0; i < oldN; i++ {
-		out, err := ReshareRound5(oldStates[i], nil)
-		if err != nil {
+		if _, err := ReshareRound5(oldStates[i], nil); err != nil {
 			t.Fatalf("ReshareRound5[old %d]: %v", i, err)
 		}
-		// Old Xi should be zeroed.
-		if oldSaves[i].Xi.Sign() != 0 {
-			t.Fatalf("old party %d Xi not zeroed", i)
+		// Round 5 must not touch the old share.
+		if oldSaves[i].Xi.Sign() == 0 {
+			t.Fatalf("old party %d Xi zeroed before confirmation", i)
 		}
-		_ = out
+	}
+
+	// --- Confirm: old parties retire only with min(2t+1, n) confirmations ---
+	edit := func(m *tss.Message, f func(c *DGRound5Message)) *tss.Message {
+		c := *m.Content.(*DGRound5Message)
+		c.VCommitments = append([]*big.Int(nil), c.VCommitments...)
+		f(&c)
+		return &tss.Message{From: m.From, Content: &c}
+	}
+	last := r5Msgs[newN-1]
+	only := func(m *tss.Message) []*tss.Message {
+		msgs := make([]*tss.Message, newN)
+		msgs[newN-1] = m
+		return msgs
+	}
+	partial := make([]*tss.Message, newN)
+	copy(partial, r5Msgs[:newN-1])
+	// The checks run in order: ReshareConfirm keeps earlier messages.
+	steps := []struct {
+		name string
+		msgs []*tss.Message
+	}{
+		{"t+1", partial},
+		{"stale commitments", only(edit(last, func(c *DGRound5Message) {
+			c.VCommitments[0] = new(big.Int).Add(c.VCommitments[0], big.NewInt(1))
+		}))},
+		{"other key", only(edit(last, func(c *DGRound5Message) {
+			c.EDDSAPub = crypto.ScalarBaseMult(tss.Edwards(), big.NewInt(2))
+		}))},
+		{"no digest", only(edit(last, func(c *DGRound5Message) { c.Digest = nil }))},
+		{"wrong sender", only(&tss.Message{From: r5Msgs[0].From, Content: last.Content})},
+	}
+	for _, s := range steps {
+		if ok, err := ReshareConfirm(oldStates[0], s.msgs); err != nil || ok {
+			t.Fatalf("%s: ReshareConfirm = %v, %v; want false", s.name, ok, err)
+		}
+	}
+	if _, err := ReshareConfirm(oldStates[0], r5Msgs[:newN-1]); err == nil {
+		t.Fatal("ReshareConfirm with a short message list: want error")
+	}
+	if _, err := ReshareConfirm(newStates[0], r5Msgs); err == nil {
+		t.Fatal("ReshareConfirm on a new-only party: want error")
+	}
+	for i := 0; i < oldN; i++ {
+		ok, err := ReshareConfirm(oldStates[i], r5Msgs)
+		if err != nil || !ok {
+			t.Fatalf("ReshareConfirm[old %d] = %v, %v; want true", i, ok, err)
+		}
 	}
 
 	// Verify new saves: same pub key, valid data.
