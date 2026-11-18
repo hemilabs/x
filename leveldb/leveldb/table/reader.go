@@ -813,7 +813,12 @@ func (r *Reader) NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.It
 func (r *Reader) find(key []byte, filtered bool, ro *opt.ReadOptions, noValue bool) (rkey, value []byte, err error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.findLocked(key, filtered, ro, noValue)
+}
 
+// findLocked is find for a caller that holds r.mu for reading.  A second
+// RLock can deadlock against a waiting Release.
+func (r *Reader) findLocked(key []byte, filtered bool, ro *opt.ReadOptions, noValue bool) (rkey, value []byte, err error) {
 	if r.err != nil {
 		err = r.err
 		return
@@ -944,7 +949,7 @@ func (r *Reader) Get(key []byte, ro *opt.ReadOptions) (value []byte, err error) 
 		return
 	}
 
-	rkey, value, err := r.find(key, false, ro, false)
+	rkey, value, err := r.findLocked(key, false, ro, false)
 	if err == nil && r.cmp.Compare(rkey, key) != 0 {
 		value = nil
 		err = ErrNotFound
