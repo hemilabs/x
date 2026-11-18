@@ -9,6 +9,7 @@ package leveldb
 import (
 	"bytes"
 	"container/list"
+	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -3024,4 +3025,229 @@ func TestDB_ConcurrentTransactionClose(t *testing.T) {
 		}
 		wg.Wait()
 	}
+}
+
+// within fails the test if fn does not return within d.
+func within(t *testing.T, d time.Duration, what string, fn func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	ctx, cancel := context.WithTimeout(t.Context(), d)
+	defer cancel()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatalf("%s did not return within %v", what, d)
+	}
+}
+
+// TestDB_TransactionCommitFailureReleasesLocks fails the MANIFEST sync
+// during Commit.  A retry of Commit and a later compaction must not
+// block.  A Discard after the failure must keep the database openable.
+func TestDB_TransactionCommitFailureReleasesLocks(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+
+	tr, err := h.db.OpenTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Put([]byte("k"), []byte("v"), nil); err != nil {
+		t.Fatal(err)
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, errors.New("manifest sync error"))
+	if err := tr.Commit(); err == nil {
+		t.Fatal("Commit with a failed MANIFEST sync: expected an error")
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, nil)
+	within(t, 10*time.Second, "Commit retry", func() {
+		if err := tr.Commit(); err != nil {
+			t.Error(err)
+		}
+	})
+	within(t, 10*time.Second, "CompactRange", func() {
+		if err := h.db.CompactRange(util.Range{}); err != nil {
+			t.Error(err)
+		}
+	})
+
+	// A failed commit followed by Discard must not delete tables that
+	// the MANIFEST can reference.
+	tr, err = h.db.OpenTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Put([]byte("k2"), []byte("v2"), nil); err != nil {
+		t.Fatal(err)
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, errors.New("manifest sync error"))
+	if err := tr.Commit(); err == nil {
+		t.Fatal("second Commit: expected an error")
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, nil)
+	tr.Discard()
+	h.reopenDB()
+}
+
+// TestDB_OpenTransactionErrorReleasesWriteLock fails the memdb flush in
+// OpenTransaction.  A later write must not block.
+func TestDB_OpenTransactionErrorReleasesWriteLock(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+
+	h.put("a", "1")
+	h.stor.EmulateError(testutil.ModeCreate, storage.TypeJournal, errors.New("journal create error"))
+	if _, err := h.db.OpenTransaction(); err == nil {
+		t.Fatal("OpenTransaction with a failed flush: expected an error")
+	}
+	h.stor.EmulateError(testutil.ModeCreate, storage.TypeJournal, nil)
+	within(t, 10*time.Second, "Put", func() {
+		if err := h.db.Put([]byte("b"), []byte("2"), nil); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+// TestDB_CloseWhileOpenTransaction runs Close against OpenTransaction.
+// Close must not hang.
+func TestDB_CloseWhileOpenTransaction(t *testing.T) {
+	for range 200 {
+		db, err := Open(storage.NewMemStorage(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			// A transaction that opens before Close is discarded by it.
+			if _, err := db.OpenTransaction(); err != nil && err != ErrClosed {
+				t.Errorf("OpenTransaction: %v", err)
+			}
+		})
+		within(t, 10*time.Second, "Close", func() {
+			if err := db.Close(); err != nil {
+				t.Errorf("Close: %v", err)
+			}
+		})
+		wg.Wait()
+	}
+}
+
+// TestDB_DiscardAfterFailedCommitStaysDiscarded fails the MANIFEST sync
+// of a transaction after its record is written, discards it, and then
+// commits a new value for the same key.  After reopen the key must have
+// the committed value and not the discarded one.
+func TestDB_DiscardAfterFailedCommitStaysDiscarded(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+
+	tr, err := h.db.OpenTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Put([]byte("k"), []byte("discarded"), nil); err != nil {
+		t.Fatal(err)
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, errors.New("manifest sync error"))
+	if err := tr.Commit(); err == nil {
+		t.Fatal("Commit with a failed MANIFEST sync: expected an error")
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, nil)
+	tr.Discard()
+
+	h.put("k", "committed")
+	if err := h.db.CompactRange(util.Range{}); err != nil {
+		t.Fatal(err)
+	}
+	h.reopenDB()
+	v, err := h.db.Get([]byte("k"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(v) != "committed" {
+		t.Fatalf("k = %q after reopen, want \"committed\"", v)
+	}
+}
+
+// TestDB_TransactionCommitRetryKeepsSeq fails the MANIFEST sync of a
+// transaction and then commits it again.  The retry writes a fresh
+// MANIFEST, which must carry the sequence number of the transaction.
+// Without it the committed value is hidden after reopen.
+func TestDB_TransactionCommitRetryKeepsSeq(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+
+	tr, err := h.db.OpenTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Put([]byte("k"), []byte("v"), nil); err != nil {
+		t.Fatal(err)
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, errors.New("manifest sync error"))
+	if err := tr.Commit(); err == nil {
+		t.Fatal("Commit with a failed MANIFEST sync: expected an error")
+	}
+	h.stor.EmulateError(testutil.ModeSync, storage.TypeManifest, nil)
+	if err := tr.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	h.reopenDB()
+	h.getVal("k", "v")
+}
+
+// TestDB_ManifestRotationKeepsCompPtr rotates the MANIFEST on every
+// commit.  The rotated MANIFEST must carry the compaction pointer of the
+// commit that rotates it, and that pointer must win over the older one.
+func TestDB_ManifestRotationKeepsCompPtr(t *testing.T) {
+	h := newDbHarnessWopt(t, &opt.Options{
+		DisableLargeBatchTransaction: true,
+		MaxManifestFileSize:          1,
+	})
+	defer h.close()
+
+	check := func(want string) {
+		t.Helper()
+		ptr := h.db.s.getCompPtr(0)
+		if ptr == nil || string(ptr.ukey()) != want {
+			t.Fatalf("level 0 compaction pointer = %v, want key %q", ptr, want)
+		}
+	}
+	for _, k := range []string{"a", "b"} {
+		h.put(k, "v")
+		h.compactMem()
+		h.compactRangeAt(0, "", "")
+		check(k)
+	}
+	h.reopenDB()
+	check("b")
+}
+
+// TestDB_TransactionCommitManifestRemoveError rotates the MANIFEST on
+// every commit and fails the removal of the old one.  The new MANIFEST
+// is current, so Commit must succeed and the value must survive reopen.
+func TestDB_TransactionCommitManifestRemoveError(t *testing.T) {
+	h := newDbHarnessWopt(t, &opt.Options{
+		DisableLargeBatchTransaction: true,
+		MaxManifestFileSize:          1,
+	})
+	defer h.close()
+
+	tr, err := h.db.OpenTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Put([]byte("k"), []byte("v"), nil); err != nil {
+		t.Fatal(err)
+	}
+	h.stor.EmulateError(testutil.ModeRemove, storage.TypeManifest, errors.New("manifest remove error"))
+	if err := tr.Commit(); err != nil {
+		tr.Discard()
+		t.Fatalf("Commit with a failed old MANIFEST removal: %v", err)
+	}
+	h.stor.EmulateError(testutil.ModeRemove, storage.TypeManifest, nil)
+	h.reopenDB()
+	h.getVal("k", "v")
 }
