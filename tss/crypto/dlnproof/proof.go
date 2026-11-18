@@ -76,6 +76,12 @@ func (p *Proof) Verify(Session []byte, h1, h2, N *big.Int) bool {
 	if h1_.Cmp(h2_) == 0 {
 		return false
 	}
+	// h1 and h2 must be units mod N.  Direct callers of Verify do
+	// not check this.
+	if new(big.Int).GCD(nil, nil, h1_, N).Cmp(one) != 0 ||
+		new(big.Int).GCD(nil, nil, h2_, N).Cmp(one) != 0 {
+		return false
+	}
 	// [FORK] Upstream validates proof elements with range checks in separate loops and nil
 	// checks inside the verification loop. We consolidate all validation (nil checks, bit-length
 	// bounds, and range checks) into pre-verification loops to prevent computational DoS via

@@ -193,7 +193,7 @@ based state machine entirely:
 Low-impact items carried from the v2 audit that don't affect
 correctness or security in practice:
 
-1. MtA inverted lower-bound checks — don't reject honest proofs
+1. MtA lower-bound checks (S1/S2/T1/T2 >= q) — correct and required; they guard against negative values in MtA, so do not remove them
 2. ProofIters=13 — matches GG18 spec
 3. BuildLocalSaveDataSubset panic — changing signature breaks callers
 4. NSquare() caching — performance optimization only
