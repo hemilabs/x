@@ -379,6 +379,9 @@ func TestTreeLeafChecks(t *testing.T) {
 	if mb := AuthPath([]*[sha256.Size]byte{a, b, a}, a); mb != nil {
 		t.Fatal("duplicate: got a branch, want nil")
 	}
+	if mb := AuthPath([]*[sha256.Size]byte{a, nil, b}, b); mb != nil {
+		t.Fatal("nil: got a branch, want nil")
+	}
 
 	leaves := []*[sha256.Size]byte{a, b, c}
 	mt := mustSorted(t, leaves)

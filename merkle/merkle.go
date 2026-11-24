@@ -39,12 +39,14 @@ var (
 	// have the correct format.  An example is a branch with too few
 	// flag bits or hashes for NumLeaves.
 	ErrMalformed = errors.New("malformed merkle branch")
+)
 
-	// ErrNilLeaf is returned by Sorted and Ordered when a leaf is nil.
+// Errors that Sorted and Ordered return.
+var (
+	// ErrNilLeaf is returned when a leaf is nil.
 	ErrNilLeaf = errors.New("nil merkle leaf")
 
-	// ErrDuplicate is returned by Sorted and Ordered when two leaves
-	// are equal.
+	// ErrDuplicate is returned when two leaves are equal.
 	ErrDuplicate = errors.New("duplicate merkle leaf")
 )
 
@@ -321,13 +323,16 @@ type Branch struct {
 
 // AuthPath returns a Merkle tree authentication path for hash.  The leaves
 // must be in tree order: for a tree from Sorted, use SortLeaves.  It returns
-// nil if hash is not a leaf, if a leaf is nil or a duplicate, or if there
-// are more leaves than NumLeaves can hold.
+// nil if hash is not a leaf, if a leaf is nil, if hash is in leaves more
+// than one time, or if there are more leaves than NumLeaves can hold.
+//
+// AuthPath does not look for other duplicate leaves.  Sorted and Ordered
+// reject them, so no root exists that a branch from such leaves can prove.
 func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 	if len(leaves) == 0 || uint64(len(leaves)) > math.MaxUint32 {
 		return nil
 	}
-	if hash == nil || checkLeaves(leaves) != nil {
+	if hash == nil {
 		return nil
 	}
 	numLeaves := uint32(len(leaves))
@@ -339,7 +344,13 @@ func AuthPath(leaves []*[sha256.Size]byte, hash *[sha256.Size]byte) *Branch {
 
 	var found bool
 	for _, v := range ap.allHashes {
+		if v == nil {
+			return nil
+		}
 		if *v == *hash {
+			if found {
+				return nil
+			}
 			ap.matchedBits = append(ap.matchedBits, 0x01)
 			found = true
 		} else {

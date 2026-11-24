@@ -39,9 +39,10 @@ uses nodes that are pointers to the hashes, empty nodes will be nil.
 tree, in any input order.  `Ordered` keeps the input order.  To get a proof
 for a tree from `Sorted`, give the leaves from `SortLeaves` to `AuthPath`.
 
-`Sorted`, `Ordered` and `AuthPath` reject a nil leaf and a duplicate leaf.
-Duplicate leaves let two lists share a root, for example `[a b c]` and
-`[a b c c]`.
+`Sorted` and `Ordered` reject a nil leaf and a duplicate leaf.  Duplicate
+leaves let two lists share a root, for example `[a b c]` and `[a b c c]`.
+`AuthPath` rejects a nil leaf and a hash that is in the leaves more than one
+time.
 
 
 # Origin
