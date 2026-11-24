@@ -180,32 +180,61 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 	Pi := params.PartyID()
 	i := newIndex(params)
 
+	// A party in both committees computed the SSID and has the public
+	// key in its own key data, so it can name each old party that sends
+	// a different value.  A party only in the new committee cannot tell
+	// which value is correct, so it names no culprit.
+	var ownSSID []byte
+	var ownPub *crypto.ECPoint
+	if params.IsOldCommittee() {
+		ownSSID, ownPub = temp.ssid, state.input.ECDSAPub
+	}
+
 	// Validate SSID consistency across old committee
 	r1msg0 := r1Msgs[0].Content.(*DGRound1Message)
 	SSID := r1msg0.SSID
-	for j := range params.OldParties().IDs() {
-		if j == 0 {
-			continue
-		}
+	if ownSSID != nil {
+		SSID = ownSSID
+	}
+	var culprits []*tss.PartyID
+	for j, Pj := range params.OldParties().IDs() {
 		r1msg := r1Msgs[j].Content.(*DGRound1Message)
-		SSIDj := r1msg.SSID
-		if !bytes.Equal(SSID, SSIDj) {
-			return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi, params.OldParties().IDs()[j])
+		if !bytes.Equal(SSID, r1msg.SSID) {
+			if ownSSID == nil {
+				return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi)
+			}
+			culprits = append(culprits, Pj)
 		}
+	}
+	if len(culprits) > 0 {
+		return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi, culprits...)
 	}
 	temp.ssid = SSID
 
 	// Save ECDSAPub from old committee
-	for j := range params.OldParties().IDs() {
+	for j, Pj := range params.OldParties().IDs() {
 		r1msg := r1Msgs[j].Content.(*DGRound1Message)
 		candidate := r1msg.ECDSAPub
 		if candidate == nil {
 			return nil, fmt.Errorf("round 2: ecdsa pub nil from party %d", j)
 		}
+		if ownPub != nil {
+			if !candidate.Equals(ownPub) {
+				culprits = append(culprits, Pj)
+			}
+			continue
+		}
 		if save.ECDSAPub != nil && !candidate.Equals(save.ECDSAPub) {
 			return nil, errors.New("ecdsa pub key mismatch from old committee")
 		}
 		save.ECDSAPub = candidate
+	}
+	if len(culprits) > 0 {
+		return nil, tss.NewError(errors.New("ecdsa pub key mismatch from old committee"),
+			TaskName, 2, Pi, culprits...)
+	}
+	if ownPub != nil {
+		save.ECDSAPub = ownPub
 	}
 
 	// ACK to old committee
@@ -330,73 +359,75 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 	wg := new(sync.WaitGroup)
 	gctx, gcancel := context.WithCancel(ctx)
 	defer gcancel()
-	for _, msg := range r2NewMsgs {
+	for j, msg := range r2NewMsgs {
+		Pj := params.NewParties().IDs()[j]
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
 			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
 		if H1j.Cmp(H2j) == 0 {
-			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("h1j == h2j"), TaskName, 4, Pi, Pj)
 		}
 		if H1j.Cmp(reshareOne) == 0 || H2j.Cmp(reshareOne) == 0 {
-			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("h1j or h2j is 1"), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.BitLen() != keygen.PaillierBitsLen {
-			return nil, tss.NewError(fmt.Errorf("paillier N is not %d bits", keygen.PaillierBitsLen), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(fmt.Errorf("paillier N is not %d bits", keygen.PaillierBitsLen), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even paillier N"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("even paillier N"), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime paillier N"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("prime paillier N"), TaskName, 4, Pi, Pj)
 		}
 		sqrtN := new(big.Int).Sqrt(paiPK.N)
 		if new(big.Int).Mul(sqrtN, sqrtN).Cmp(paiPK.N) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square paillier N"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("perfect-square paillier N"), TaskName, 4, Pi, Pj)
 		}
 		if NTildej.BitLen() != keygen.PaillierBitsLen {
-			return nil, tss.NewError(fmt.Errorf("NTildej is not %d bits", keygen.PaillierBitsLen), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(fmt.Errorf("NTildej is not %d bits", keygen.PaillierBitsLen), TaskName, 4, Pi, Pj)
 		}
 		if NTildej.Bit(0) == 0 {
-			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("even NTildej"), TaskName, 4, Pi, Pj)
 		}
 		if NTildej.ProbablyPrime(20) {
-			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("prime NTildej"), TaskName, 4, Pi, Pj)
 		}
 		sqrtNT := new(big.Int).Sqrt(NTildej)
 		if new(big.Int).Mul(sqrtNT, sqrtNT).Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("perfect-square NTildej"), TaskName, 4, Pi, Pj)
 		}
 		if paiPK.N.Cmp(NTildej) == 0 {
-			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("paillier N == NTilde"), TaskName, 4, Pi, Pj)
 		}
 		if new(big.Int).GCD(nil, nil, H1j, NTildej).Cmp(reshareOne) != 0 {
-			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("h1j not coprime with NTildej"), TaskName, 4, Pi, Pj)
 		}
 		if new(big.Int).GCD(nil, nil, H2j, NTildej).Cmp(reshareOne) != 0 {
-			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("h2j not coprime with NTildej"), TaskName, 4, Pi, Pj)
 		}
 		h1Hex, h2Hex := hex.EncodeToString(H1j.Bytes()), hex.EncodeToString(H2j.Bytes())
 		if _, found := h1H2Map[h1Hex]; found {
-			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("duplicate h1j"), TaskName, 4, Pi, Pj)
 		}
 		if _, found := h1H2Map[h2Hex]; found {
-			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("duplicate h2j"), TaskName, 4, Pi, Pj)
 		}
 		h1H2Map[h1Hex], h1H2Map[h2Hex] = struct{}{}, struct{}{}
 		paiNHex := hex.EncodeToString(paiPK.N.Bytes())
 		if _, found := modulusMap[paiNHex]; found {
-			return nil, tss.NewError(errors.New("duplicate modulus (paillier N)"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("duplicate modulus (paillier N)"), TaskName, 4, Pi, Pj)
 		}
 		modulusMap[paiNHex] = struct{}{}
 		ntHex := hex.EncodeToString(NTildej.Bytes())
 		if _, found := modulusMap[ntHex]; found {
-			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 4, Pi, msg.From)
+			return nil, tss.NewError(errors.New("duplicate modulus (NTilde)"), TaskName, 4, Pi, Pj)
 		}
 		modulusMap[ntHex] = struct{}{}
 	}
 
 	// An early return above must leave no goroutine.
 	for j, msg := range r2NewMsgs {
+		Pj := params.NewParties().IDs()[j]
 		r2msg1 := msg.Content.(*DGRound2Message1)
 		paiPK, NTildej, H1j, H2j := r2msg1.PaillierPK,
 			r2msg1.NTilde, r2msg1.H1, r2msg1.H2
@@ -405,7 +436,7 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 			nTasks = 3
 		}
 		wg.Add(nTasks)
-		go func(j int, msg *tss.Message, r2msg1 *DGRound2Message1) {
+		go func(j int, r2msg1 *DGRound2Message1) {
 			defer wg.Done()
 			if gctx.Err() != nil {
 				return
@@ -415,29 +446,29 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 			}
 			modProof := r2msg1.ModProof
 			if modProof == nil {
-				paiProofCulprits[j] = msg.From
+				paiProofCulprits[j] = Pj
 				gcancel()
 				return
 			}
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
 			if ok := modProof.Verify(ContextJ, paiPK.N); !ok {
-				paiProofCulprits[j] = msg.From
+				paiProofCulprits[j] = Pj
 				gcancel()
 			}
-		}(j, msg, r2msg1)
+		}(j, r2msg1)
 		if !params.NoProofDLN() {
-			_j, _msg := j, msg
+			_j := j
 			ContextJ := common.AppendBigIntToBytesSlice(temp.ssid, big.NewInt(int64(j)))
 			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof1, ContextJ, H1j, H2j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof1FailCulprits[_j] = _msg.From
+					dlnProof1FailCulprits[_j] = Pj
 					gcancel()
 				}
 				wg.Done()
 			})
 			dlnVerifier.VerifyDLNProof(r2msg1.DLNProof2, ContextJ, H2j, H1j, NTildej, func(isValid bool) {
 				if !isValid {
-					dlnProof2FailCulprits[_j] = _msg.From
+					dlnProof2FailCulprits[_j] = Pj
 					gcancel()
 				}
 				wg.Done()
@@ -487,8 +518,7 @@ func ReshareRound4(ctx context.Context, state *ReshareState, r2NewMsgs []*tss.Me
 		vjc[j] = vj
 
 		r3msg1 := r3P2P[j].Content.(*DGRound3Message1)
-		myKey := Pi.KeyInt().Bytes()
-		if !bytes.Equal(r3msg1.ReceiverID, myKey) {
+		if !Pi.KeyEquals(r3msg1.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"), TaskName, 4, Pi, params.OldParties().IDs()[j])
 		}
 		sharej := &vss.Share{
@@ -615,7 +645,7 @@ func ReshareRound5(state *ReshareState, r4P2P, r4Bcast []*tss.Message) (*Reshare
 			}
 			r4msg1 := msg.Content.(*DGRound4Message1)
 			receiverId := r4msg1.ReceiverID
-			if !bytes.Equal(receiverId, Pi.Key) {
+			if !Pi.KeyEquals(receiverId) {
 				return nil, tss.NewError(errors.New("DGRound4Message1 receiverId mismatch"),
 					TaskName, 5, Pi, params.NewParties().IDs()[j])
 			}

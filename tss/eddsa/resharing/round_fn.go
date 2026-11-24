@@ -6,7 +6,6 @@
 package resharing
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -146,20 +145,39 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 		return &ReshareRoundOutput{}, nil
 	}
 
+	// A party in both committees has the correct key in its own key
+	// data, so it can name each old party that sends a different key.
+	var ownPub *crypto.ECPoint
+	if params.IsOldCommittee() && state.input != nil {
+		ownPub = state.input.EDDSAPub
+	}
+
 	// Validate all old parties agree on the same EdDSA pub key.
+	var culprits []*tss.PartyID
 	for j, msg := range r1Msgs {
+		Pj := params.OldParties().IDs()[j]
 		r1msg := msg.Content.(*DGRound1Message)
 		if !r1msg.ValidateBasic() {
 			return nil, tss.NewError(errors.New("invalid round 1 message"), TaskName, 2,
-				params.PartyID(), msg.From)
+				params.PartyID(), Pj)
 		}
 		candidate := r1msg.EDDSAPub
-		if state.save.EDDSAPub != nil && !candidate.Equals(state.save.EDDSAPub) {
+		if ownPub != nil {
+			if !candidate.Equals(ownPub) {
+				culprits = append(culprits, Pj)
+			}
+		} else if state.save.EDDSAPub != nil && !candidate.Equals(state.save.EDDSAPub) {
+			// A party only in the new committee cannot tell which
+			// key is correct, so it names no culprit.
 			return nil, tss.NewError(errors.New("eddsa pub key mismatch"), TaskName, 2,
-				params.PartyID(), msg.From)
+				params.PartyID())
 		}
 		state.save.EDDSAPub = candidate
 		state.temp.dgRound1Messages[j] = msg
+	}
+	if len(culprits) > 0 {
+		return nil, tss.NewError(errors.New("eddsa pub key mismatch"), TaskName, 2,
+			params.PartyID(), culprits...)
 	}
 
 	Pi := params.PartyID()
@@ -248,7 +266,7 @@ func ReshareRound4(state *ReshareState, r1Msgs []*tss.Message, r3p2p []*tss.Mess
 
 		// Verify receiver binding + share.
 		r3msg1 := r3p2p[j].Content.(*DGRound3Message1)
-		if !bytes.Equal(r3msg1.ReceiverID, Pi.Key) {
+		if !Pi.KeyEquals(r3msg1.ReceiverID) {
 			return nil, tss.NewError(errors.New("receiverId mismatch"),
 				TaskName, 4, Pi, params.OldParties().IDs()[j])
 		}

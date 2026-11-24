@@ -56,6 +56,12 @@ func NewPartyID(id, moniker string, key *big.Int) *PartyID {
 	}
 }
 
+// KeyEquals reports whether key encodes the same integer as d.Key.
+// Two encodings of one key can differ in leading zero bytes.
+func (d *PartyIDData) KeyEquals(key []byte) bool {
+	return new(big.Int).SetBytes(key).Cmp(d.KeyInt()) == 0
+}
+
 // String returns a human-readable representation of the party ID.
 func (pid PartyID) String() string {
 	return fmt.Sprintf("{%d,%s}", pid.Index, pid.Moniker)
