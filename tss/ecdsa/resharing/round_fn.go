@@ -180,33 +180,61 @@ func ReshareRound2(state *ReshareState, r1Msgs []*tss.Message) (*ReshareRoundOut
 	Pi := params.PartyID()
 	i := newIndex(params)
 
+	// A party in both committees computed the SSID and has the public
+	// key in its own key data, so it can name each old party that sends
+	// a different value.  A party only in the new committee cannot tell
+	// which value is correct, so it names no culprit.
+	var ownSSID []byte
+	var ownPub *crypto.ECPoint
+	if params.IsOldCommittee() {
+		ownSSID, ownPub = temp.ssid, state.input.ECDSAPub
+	}
+
 	// Validate SSID consistency across old committee
 	r1msg0 := r1Msgs[0].Content.(*DGRound1Message)
 	SSID := r1msg0.SSID
-	for j := range params.OldParties().IDs() {
-		if j == 0 {
-			continue
-		}
+	if ownSSID != nil {
+		SSID = ownSSID
+	}
+	var culprits []*tss.PartyID
+	for j, Pj := range params.OldParties().IDs() {
 		r1msg := r1Msgs[j].Content.(*DGRound1Message)
-		SSIDj := r1msg.SSID
-		// A mismatch does not show which party is wrong, so name no culprit.
-		if !bytes.Equal(SSID, SSIDj) {
-			return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi)
+		if !bytes.Equal(SSID, r1msg.SSID) {
+			if ownSSID == nil {
+				return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi)
+			}
+			culprits = append(culprits, Pj)
 		}
+	}
+	if len(culprits) > 0 {
+		return nil, tss.NewError(errors.New("ssid mismatch"), TaskName, 2, Pi, culprits...)
 	}
 	temp.ssid = SSID
 
 	// Save ECDSAPub from old committee
-	for j := range params.OldParties().IDs() {
+	for j, Pj := range params.OldParties().IDs() {
 		r1msg := r1Msgs[j].Content.(*DGRound1Message)
 		candidate := r1msg.ECDSAPub
 		if candidate == nil {
 			return nil, fmt.Errorf("round 2: ecdsa pub nil from party %d", j)
 		}
+		if ownPub != nil {
+			if !candidate.Equals(ownPub) {
+				culprits = append(culprits, Pj)
+			}
+			continue
+		}
 		if save.ECDSAPub != nil && !candidate.Equals(save.ECDSAPub) {
 			return nil, errors.New("ecdsa pub key mismatch from old committee")
 		}
 		save.ECDSAPub = candidate
+	}
+	if len(culprits) > 0 {
+		return nil, tss.NewError(errors.New("ecdsa pub key mismatch from old committee"),
+			TaskName, 2, Pi, culprits...)
+	}
+	if ownPub != nil {
+		save.ECDSAPub = ownPub
 	}
 
 	// ACK to old committee

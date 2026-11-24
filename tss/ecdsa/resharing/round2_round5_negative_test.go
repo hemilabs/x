@@ -828,13 +828,15 @@ func TestReshareRound2RejectsStalePreParams(t *testing.T) {
 
 // round2SetupFixture holds state for Round2 negative tests.
 type round2SetupFixture struct {
+	oldPIDs   tss.SortedPartyIDs
 	oldR1Msgs []*tss.Message
-	newStates []*ReshareState
+	newStates []*ReshareState // parties only in the new committee
+	dualState *ReshareState   // old party 0, also in the new committee
 }
 
 // setupThroughRound1ForRound2 runs keygen(3) + reshare Round1 for 3 old → 3
 // new parties and returns the R1 messages + new-committee states ready for
-// Round2 corruption tests.
+// Round2 corruption tests.  Old party 0 is also in the new committee.
 func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	t.Helper()
 	const n = 3
@@ -899,11 +901,14 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 	}
 
 	// Reshare Round 1
-	newPIDs := tss.GenerateTestPartyIDs(n)
+	shared := tss.NewPartyID(oldPIDs[0].Id, oldPIDs[0].Moniker, oldPIDs[0].KeyInt())
+	newOnly := tss.GenerateTestPartyIDs(n - 1)
+	newPIDs := tss.SortPartyIDs(tss.UnSortedPartyIDs{shared, newOnly[0], newOnly[1]})
 	newCtx := tss.NewPeerContext(newPIDs)
 	preParamsNew := testutil.LoadPreParamsFrom(t, n, n)
 
-	newStates := make([]*ReshareState, n)
+	var newStates []*ReshareState
+	var dualState *ReshareState
 	oldR1Msgs := make([]*tss.Message, n)
 
 	for i := 0; i < n; i++ {
@@ -915,12 +920,17 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 		if err != nil {
 			t.Fatalf("ReshareRound1(old)[%d]: %v", i, err)
 		}
-		_ = st
+		if i == 0 {
+			dualState = st
+		}
 		if len(out.Messages) > 0 {
 			oldR1Msgs[i] = out.Messages[0]
 		}
 	}
 	for i := 0; i < n; i++ {
+		if newPIDs[i] == shared {
+			continue
+		}
 		params := tss.NewReSharingParameters(tss.S256(), oldCtx, newCtx, newPIDs[i], n, threshold, n, threshold)
 		params.SetNoProofDLN()
 		params.SetNoProofMod()
@@ -929,11 +939,71 @@ func setupThroughRound1ForRound2(t *testing.T) *round2SetupFixture {
 		if err != nil {
 			t.Fatalf("ReshareRound1(new)[%d]: %v", i, err)
 		}
-		newStates[i] = st
+		newStates = append(newStates, st)
 	}
 
 	return &round2SetupFixture{
+		oldPIDs:   oldPIDs,
 		oldR1Msgs: oldR1Msgs,
 		newStates: newStates,
+		dualState: dualState,
+	}
+}
+
+// corruptR1 returns a copy of msgs where message j has the given SSID
+// or ECDSAPub.  A nil value keeps the original field.
+func corruptR1(msgs []*tss.Message, j int, ssid []byte, pub *crypto.ECPoint) []*tss.Message {
+	out := make([]*tss.Message, len(msgs))
+	copy(out, msgs)
+	orig := msgs[j].Content.(*DGRound1Message)
+	c := *orig
+	if ssid != nil {
+		c.SSID = ssid
+	}
+	if pub != nil {
+		c.ECDSAPub = pub
+	}
+	out[j] = &tss.Message{From: msgs[j].From, To: msgs[j].To, IsBroadcast: msgs[j].IsBroadcast, Content: &c}
+	return out
+}
+
+// TestReshareRound2CulpritsFromDualParty checks that a party in both
+// committees names the old party that sends a wrong SSID or public key,
+// and that a party only in the new committee names no culprit.
+func TestReshareRound2CulpritsFromDualParty(t *testing.T) {
+	fix := setupThroughRound1ForRound2(t)
+	fakePub := crypto.ScalarBaseMult(tss.S256(), big.NewInt(42))
+
+	tests := []struct {
+		name string
+		msgs []*tss.Message
+	}{
+		{"ssid", corruptR1(fix.oldR1Msgs, 2, []byte("wrong-ssid-value"), nil)},
+		{"pub", corruptR1(fix.oldR1Msgs, 2, nil, fakePub)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ReshareRound2(fix.dualState, tt.msgs)
+			var tssErr *tss.Error
+			if !errors.As(err, &tssErr) {
+				t.Fatalf("got %v, want a *tss.Error", err)
+			}
+			c := tssErr.Culprits()
+			if len(c) != 1 {
+				t.Fatalf("culprits: got %v, want one", c)
+			}
+			want := fix.oldPIDs[2]
+			if c[0].KeyInt().Cmp(want.KeyInt()) != 0 {
+				t.Fatalf("culprit: got %v, want %v", c[0], want)
+			}
+
+			_, err = ReshareRound2(fix.newStates[0], tt.msgs)
+			if err == nil {
+				t.Fatal("new-only party: got nil error")
+			}
+			if errors.As(err, &tssErr) && len(tssErr.Culprits()) != 0 {
+				t.Fatalf("new-only party: got culprits %v, want none", tssErr.Culprits())
+			}
+		})
 	}
 }

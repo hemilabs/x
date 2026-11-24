@@ -5,6 +5,7 @@
 package resharing
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -174,5 +175,49 @@ func TestReshareRound1RejectsBadCommittees(t *testing.T) {
 	params := tss.NewReSharingParameters(tss.Edwards(), nil, tss.NewPeerContext(newIDs), newIDs[0], 3, 1, 3, 1)
 	if _, _, err := ReshareRound1(params, nil); err == nil {
 		t.Fatal("ReshareRound1 accepted an old committee with no party list")
+	}
+}
+
+// TestReshareRound2PubKeyMismatchCulprit checks that a party in both
+// committees names the old party that sends a wrong public key.
+func TestReshareRound2PubKeyMismatchCulprit(t *testing.T) {
+	saves, oldPIDs := runKeygenForReshare(t)
+	shared := tss.NewPartyID(oldPIDs[0].Id, oldPIDs[0].Moniker, oldPIDs[0].KeyInt())
+	newOnly := tss.GenerateTestPartyIDs(2)
+	newPIDs := tss.SortPartyIDs(tss.UnSortedPartyIDs{shared, newOnly[0], newOnly[1]})
+
+	oldCtx := tss.NewPeerContext(oldPIDs)
+	newCtx := tss.NewPeerContext(newPIDs)
+	oldN, newN := len(oldPIDs), len(newPIDs)
+
+	r1Msgs := make([]*tss.Message, oldN)
+	var dual *ReshareState
+	for i := 0; i < oldN; i++ {
+		params := tss.NewReSharingParameters(
+			tss.Edwards(), oldCtx, newCtx, oldPIDs[i], oldN, 1, newN, 1)
+		st, out, err := ReshareRound1(params, &saves[i])
+		if err != nil {
+			t.Fatalf("ReshareRound1[%d]: %v", i, err)
+		}
+		if i == 0 {
+			dual = st
+		}
+		r1Msgs[i] = out.Messages[0]
+	}
+
+	badR1 := make([]*tss.Message, oldN)
+	copy(badR1, r1Msgs)
+	badContent := *r1Msgs[2].Content.(*DGRound1Message)
+	badContent.EDDSAPub = crypto.ScalarBaseMult(tss.Edwards(), big.NewInt(99999))
+	badR1[2] = &tss.Message{From: r1Msgs[2].From, Content: &badContent}
+
+	_, err := ReshareRound2(dual, badR1)
+	var tssErr *tss.Error
+	if !errors.As(err, &tssErr) {
+		t.Fatalf("got %v, want a *tss.Error", err)
+	}
+	c := tssErr.Culprits()
+	if len(c) != 1 || c[0].KeyInt().Cmp(oldPIDs[2].KeyInt()) != 0 {
+		t.Fatalf("culprits: got %v, want [%v]", c, oldPIDs[2])
 	}
 }
